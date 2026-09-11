@@ -636,9 +636,16 @@ static void update_ui_display(double progress_percent, uint32_t current_sector_s
 static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, char *dst_file) {
 	double percent;
 	file_t hnd;
-	uint32_t secbyte, count_old = count, cdstat, readi;
+	uint32_t secbyte, count_old = count, bad = 0, cdstat;
 	bool dma;
 	uint8_t *buffer;
+	FILE *bad_fp = NULL;
+	char bad_file[NAME_MAX];
+	int max_attempts = atoi(GUI_TextEntryGetText(self.num_read));
+
+	/* The setting is the total number of one-sector read attempts. */
+	if (max_attempts < 1) max_attempts = 1;
+	if (max_attempts > 50) max_attempts = 50;
 
 	get_sector_info(type, &secbyte);
 	dma = secbyte == 2048;
@@ -661,6 +668,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 
 	while(count) {
 		if(!self.rip_active || !(self.app->state & APP_STATE_OPENED)) {
+			if (bad_fp) fclose(bad_fp);
 			free(buffer);
 			fs_close(hnd);
 			return CMD_ERROR;
@@ -671,49 +679,103 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 
 		cdstat = cdrom_read_sectors_ex(buffer, first, nsects, dma);
 
-		while(cdstat != ERR_OK) {
-			if(!self.rip_active || !(self.app->state & APP_STATE_OPENED)) {
-				ds_printf("DS_INFO: Sector reading cancelled\n");
+		if (cdstat == ERR_OK) {
+			size_t bytes_to_write = nsects * secbyte;
+
+			if(fs_write(hnd, buffer, bytes_to_write) != (ssize_t)bytes_to_write) {
+				ds_printf("DS_ERROR: Write error to file\n");
+				if (bad_fp) fclose(bad_fp);
 				free(buffer);
 				fs_close(hnd);
 				return CMD_ERROR;
 			}
-
-			if (atoi(GUI_TextEntryGetText(self.num_read)) == 0) break;
-			readi++;
-
-			if (readi > 5) break;
-
-			if (readi == 3) {
-				ds_printf("DS_INFO: Reinitializing CDROM for sector read\n");
-				cdrom_reinit();
-				cdrom_set_sector_size(secbyte);
-			}
-
-			thd_sleep(100);
-			cdstat = cdrom_read_sectors_ex(buffer, first, nsects, dma);
 		}
+		else {
+			/*
+			 * A failed bulk read only tells us that at least one sector in the
+			 * chunk is troublesome. Read the chunk sector-by-sector so one bad
+			 * sector cannot cause all SEC_BUF_SIZE sectors to be zero-filled.
+			 */
+			ds_printf("DS_WARN: Bulk read failed at LBA %lu (%d sectors); retrying individually\n",
+					  (unsigned long)first, nsects);
 
-		readi = 0;
+			for (int s = 0; s < nsects; s++) {
+				uint32_t lba = first + s;
+				int attempt;
 
-		if (cdstat != ERR_OK) {
-			memset(buffer, 0, nsects * secbyte);
-			ds_printf("DS_ERROR: Can't read sector %ld\n", first);
+				for (attempt = 1; attempt <= max_attempts; attempt++) {
+					if(!self.rip_active || !(self.app->state & APP_STATE_OPENED)) {
+						ds_printf("DS_INFO: Sector reading cancelled\n");
+						if (bad_fp) fclose(bad_fp);
+						free(buffer);
+						fs_close(hnd);
+						return CMD_ERROR;
+					}
+
+					cdstat = cdrom_read_sectors_ex(buffer, lba, 1, dma);
+					if (cdstat == ERR_OK) break;
+
+					if (attempt == 3 && attempt < max_attempts) {
+						ds_printf("DS_INFO: Reinitializing CDROM for LBA %lu\n",
+								  (unsigned long)lba);
+						cdrom_reinit();
+						cdrom_set_sector_size(secbyte);
+					}
+
+					if (attempt < max_attempts) thd_sleep(100);
+				}
+
+				if (cdstat != ERR_OK) {
+					int path_len;
+
+					memset(buffer, 0, secbyte);
+					bad++;
+
+					if (!bad_fp) {
+						path_len = snprintf(bad_file, sizeof(bad_file), "%s.bad", dst_file);
+						if (path_len < 0 || path_len >= (int)sizeof(bad_file)) {
+							ds_printf("DS_WARN: Bad-sector map path is too long\n");
+						}
+						else {
+							bad_fp = fopen(bad_file, "w");
+							if (!bad_fp) {
+								ds_printf("DS_WARN: Can't create bad-sector map %s\n", bad_file);
+							}
+						}
+					}
+
+					if (bad_fp) {
+						fprintf(bad_fp, "%lu\n", (unsigned long)lba);
+						fflush(bad_fp);
+					}
+
+					ds_printf("DS_ERROR: Can't read LBA %lu after %d attempts\n",
+							  (unsigned long)lba, max_attempts);
+				}
+
+				if(fs_write(hnd, buffer, secbyte) != (ssize_t)secbyte) {
+					ds_printf("DS_ERROR: Write error to file\n");
+					if (bad_fp) fclose(bad_fp);
+					free(buffer);
+					fs_close(hnd);
+					return CMD_ERROR;
+				}
+			}
 		}
 
 		first += nsects;
-
-		if(fs_write(hnd, buffer, nsects * secbyte) < 0) {
-			ds_printf("DS_ERROR: Write error to file\n");
-			free(buffer);
-			fs_close(hnd);
-			return CMD_ERROR;
-		}
 
 		self.processed_sectors += nsects;
 
 		percent = 1-(float)(count) / count_old;
 		update_ui_display(percent, secbyte);
+	}
+
+	if (bad_fp) fclose(bad_fp);
+
+	if (bad) {
+		ds_printf("DS_WARN: Track %lu completed with %lu unrecoverable sector(s)\n",
+				  (unsigned long)tn, (unsigned long)bad);
 	}
 
 	free(buffer);
