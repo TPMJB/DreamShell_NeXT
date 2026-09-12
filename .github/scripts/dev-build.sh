@@ -39,6 +39,10 @@ prepare)
 	fi
 	git -C "${KOS_BASE}" checkout --detach "${KOS_SHA}"
 
+	log "Apply DreamShell KallistiOS fixes"
+	git -C "${KOS_BASE}" apply \
+		"${DS_SRC}/sdk/kos-patches/cdrom-timeout-deadlock.patch"
+
 	ln -sfn "${DS_SRC}" "${KOS_BASE}/ds"
 	cp "${DS_SRC}/sdk/toolchain/environ.sh" "${KOS_BASE}/environ.sh"
 	cp "${DS_SRC}/sdk/toolchain/Makefile.cfg" "${KOS_BASE}/utils/kos-chain/Makefile.cfg"
