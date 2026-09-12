@@ -1,11 +1,11 @@
 diff --git a/kernel/arch/dreamcast/hardware/cdrom.c b/kernel/arch/dreamcast/hardware/cdrom.c
-index 116c5005..51aff154 100644
+index 116c5005..3f01b57b 100644
 --- a/kernel/arch/dreamcast/hardware/cdrom.c
 +++ b/kernel/arch/dreamcast/hardware/cdrom.c
 @@ -167,6 +167,29 @@ static int cdrom_check_transfer(void *d) {
      return cdrom_stream_progress(&data->size) == 0;
  }
- 
+
 +/* Abort a command while the caller owns _g1_ata_sem. */
 +static int cdrom_abort_cmd_locked(uint32_t timeout) {
 +    int rv = ERR_OK;
@@ -32,8 +32,21 @@ index 116c5005..51aff154 100644
  /* Command execution sequence */
  int cdrom_exec_cmd(cd_cmd_code_t cmd, void *param) {
      return cdrom_exec_cmd_timed(cmd, param, 0);
-@@ -183,7 +206,12 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
- 
+@@ -174,7 +197,11 @@ int cdrom_exec_cmd(cd_cmd_code_t cmd, void *param) {
+
+ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
+
+-    sem_wait_scoped(&_g1_ata_sem);
++    /* Include bus ownership in the bounded wait. A stalled owner must not
++       strand a timed PIO caller before it even submits its command. */
++    if(sem_wait_timed(&_g1_ata_sem, timeout))
++        return ERR_TIMEOUT;
++    semaphore_t *guard __attribute__((cleanup(__sem_scoped_cleanup))) = &_g1_ata_sem;
+     cmd_hnd = cdrom_req_cmd(cmd, param);
+
+     if(cmd_hnd <= 0) {
+@@ -183,7 +210,12 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
+
      /* Start the process of executing the command. */
      if(cdrom_poll(&cmd_hnd, timeout, cdrom_check_cmd_done) == ERR_TIMEOUT) {
 -        cdrom_abort_cmd(1000, true);
@@ -45,19 +58,19 @@ index 116c5005..51aff154 100644
 +        cdrom_abort_cmd_locked(1000);
          return ERR_TIMEOUT;
      }
- 
-@@ -208,7 +236,7 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
+
+@@ -208,7 +240,7 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
  }
- 
+
  int cdrom_abort_cmd(uint32_t timeout, bool abort_dma) {
 -    int rv = ERR_OK;
 +    int rv;
      irq_mask_t old = irq_disable();
- 
+
      if(cmd_hnd <= 0) {
-@@ -227,22 +255,7 @@ int cdrom_abort_cmd(uint32_t timeout, bool abort_dma) {
+@@ -227,22 +259,7 @@ int cdrom_abort_cmd(uint32_t timeout, bool abort_dma) {
      }
- 
+
      irq_restore(old);
 -    syscall_gdrom_abort_command(cmd_hnd);
 -
@@ -79,3 +92,26 @@ index 116c5005..51aff154 100644
      sem_signal(&_g1_ata_sem);
      return rv;
  }
+@@ -255,9 +272,8 @@ int cdrom_get_status(int *status, int *disc_type) {
+     /* We might be called in an interrupt to check for ISO cache
+        flushing, so make sure we're not interrupting something
+        already in progress. */
+-    if(sem_wait_irqsafe(&_g1_ata_sem))
+-        /* DH: Figure out a better return to signal error */
+-        return -1;
++    if(irq_inside_int() ? sem_trywait(&_g1_ata_sem) : sem_wait_timed(&_g1_ata_sem, 8000))
++        return ERR_TIMEOUT;
+
+     rv = syscall_gdrom_check_drive(&stat);
+
+@@ -288,7 +304,9 @@ int cdrom_change_datatype(cd_read_sec_part_t sector_part, int track_type, int se
+     cd_check_drive_status_t status;
+     cd_sec_mode_params_t params;
+
+-    sem_wait_scoped(&_g1_ata_sem);
++    if(sem_wait_timed(&_g1_ata_sem, 8000))
++        return ERR_TIMEOUT;
++    semaphore_t *guard __attribute__((cleanup(__sem_scoped_cleanup))) = &_g1_ata_sem;
+
+     /* Check if we are using default params */
+     if(sector_size == 2352) {

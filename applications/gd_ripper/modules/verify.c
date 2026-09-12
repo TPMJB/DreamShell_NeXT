@@ -6,6 +6,7 @@
  */
 
 #include "verify.h"
+#include "checksum.h"
 #include <zlib/zlib.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -16,11 +17,12 @@
 #define VERIFY_STATE_HEADER "DreamShell GD Ripper state v1"
 #define VERIFY_DB_HEADER "DREAMSHELL_REDUMP_CRC_V1"
 #define VERIFY_MAX_TRACKS 99
-#define VERIFY_BUFFER_SIZE (64 * 1024)
+#define VERIFY_BUFFER_SIZE (2352 * 16)
 #define VERIFY_LINE_SIZE 512
 
 typedef struct {
 	uint32_t number;
+	uint32_t start;
 	uint32_t sector_count;
 	uint32_t control;
 	uint32_t sector_size;
@@ -37,6 +39,7 @@ typedef struct {
 	uint32_t exact_tracks;
 	uint32_t exact_data_tracks;
 	uint32_t represented_data_tracks;
+	bool listed[100];
 } db_candidate_t;
 
 typedef struct {
@@ -121,14 +124,17 @@ static int load_rip_state(const char *folder, verify_track_t *tracks,
 		if (!fgets(line, sizeof(line), fp) ||
 			sscanf(line, "%lu %lu %lu %lu %lu %255s", &number, &start, &count,
 				&control, &sector_size, tracks[index].filename) != 6 ||
-			!number || !count || !sector_size ||
+			!number || number > 99 || !count || start > 1000000 || count > 1000000 ||
+            (sector_size != 2048 && sector_size != 2352) ||
+            strchr(tracks[index].filename, '/') || strchr(tracks[index].filename, '\\') ||
+            strstr(tracks[index].filename, "..") ||
 			find_track(tracks, index, (uint32_t)number)) {
 			fclose(fp);
 			ds_printf("DS_ERROR: Invalid track row in %s\n", path);
 			return CMD_ERROR;
 		}
 
-		(void)start;
+		tracks[index].start = start;
 		tracks[index].number = (uint32_t)number;
 		tracks[index].sector_count = (uint32_t)count;
 		tracks[index].control = (uint32_t)control;
@@ -199,11 +205,14 @@ static bool completion_marker_is_valid(const char *folder,
 static int hash_track(const char *folder, verify_track_t *track, uint8_t *buffer,
 		uint64_t *processed_bytes, uint64_t total_bytes, uint32_t track_index,
 		uint32_t track_count, volatile int *active,
-		gd_verify_progress_cb_t progress_cb, void *progress_data) {
+		gd_verify_progress_cb_t progress_cb, void *progress_data,
+        bool scan, gd_verify_summary_t *summary) {
 	char path[NAME_MAX];
 	file_t hnd;
 	uLong crc = crc32(0L, Z_NULL, 0);
 	uint64_t track_bytes = 0;
+	file_t suspects = FILEHND_INVALID;
+	char suspect_path[NAME_MAX];
 
 	if (snprintf(path, sizeof(path), "%s/%s", folder, track->filename) >=
 			(int)sizeof(path)) {
@@ -215,23 +224,57 @@ static int hash_track(const char *folder, verify_track_t *track, uint8_t *buffer
 		return CMD_ERROR;
 	}
 
+    if (scan && track->control == 4 && track->sector_size == 2352) {
+        if (snprintf(suspect_path, sizeof(suspect_path), "%s.suspect", path) >=
+                (int)sizeof(suspect_path)) {
+            fs_close(hnd);
+            return CMD_ERROR;
+        }
+        suspects = fs_open(suspect_path, O_WRONLY | O_CREAT | O_TRUNC);
+        if (suspects == FILEHND_INVALID) {
+            fs_close(hnd);
+            return CMD_ERROR;
+        }
+    }
+
 	while (true) {
 		ssize_t bytes;
 
 		if (!*active) {
+			if (suspects != FILEHND_INVALID) fs_close(suspects);
 			fs_close(hnd);
 			return 1;
 		}
 		bytes = fs_read(hnd, buffer, VERIFY_BUFFER_SIZE);
 		if (bytes < 0) {
 			ds_printf("DS_ERROR: Read-back failed for %s\n", path);
+			if (suspects != FILEHND_INVALID) fs_close(suspects);
 			fs_close(hnd);
 			return CMD_ERROR;
 		}
 		if (!bytes) {
 			break;
 		}
-		crc = crc32(crc, buffer, (uInt)bytes);
+        if (suspects != FILEHND_INVALID) {
+            if (bytes % 2352) {
+                fs_close(suspects); fs_close(hnd); return CMD_ERROR;
+            }
+            for (ssize_t offset = 0; offset < bytes; offset += 2352) {
+                uint32_t sector = (uint32_t)((track_bytes + offset) / 2352);
+                unsigned flags = gd_check_sector(buffer + offset, track->start + sector);
+                if (flags == GD_SECTOR_UNSUPPORTED) { summary->unsupported_sectors++; continue; }
+                if (flags) {
+                    char row[96];
+                    int n = snprintf(row, sizeof(row), "%lu %lu %u\n",
+                        (unsigned long)sector, (unsigned long)(track->start + sector), flags);
+                    summary->suspect_sectors++;
+                    if (fs_write(suspects, row, n) != n) {
+                        fs_close(suspects); fs_close(hnd); return CMD_ERROR;
+                    }
+                }
+            }
+        }
+        crc = crc32(crc, buffer, (uInt)bytes);
 		track_bytes += (uint64_t)bytes;
 		*processed_bytes += (uint64_t)bytes;
 		if (progress_cb) {
@@ -241,7 +284,11 @@ static int hash_track(const char *folder, verify_track_t *track, uint8_t *buffer
 		thd_pass();
 	}
 
-	fs_close(hnd);
+	if (suspects != FILEHND_INVALID && fs_close(suspects) < 0) {
+		fs_close(hnd);
+        return CMD_ERROR;
+    }
+    fs_close(hnd);
 	if (track_bytes != track->actual_size) {
 		ds_printf("DS_ERROR: Verification read %llu of %llu bytes from %s\n",
 			(unsigned long long)track_bytes,
@@ -379,8 +426,13 @@ static gd_verify_result_t search_database(const char *database_path,
 			if (sscanf(line, "T\t%lu\t%llu\t%lx", &number, &size, &crc) != 3) {
 				continue;
 			}
-			candidate.seen_tracks++;
-			track = find_track(tracks, track_count, (uint32_t)number);
+            if (!number || number > 99 || crc > UINT32_MAX || candidate.listed[number]) {
+                in_game = false;
+                continue;
+            }
+            candidate.listed[number] = true;
+            candidate.seen_tracks++;
+            track = find_track(tracks, track_count, (uint32_t)number);
 			if (!track) {
 				continue;
 			}
@@ -458,11 +510,19 @@ static int write_report(const char *folder, const char *database_path,
 		return CMD_ERROR;
 	}
 
-	status |= report_printf(hnd, "DreamShell GD verification v1\n");
+	status |= report_printf(hnd, "DreamShell GD verification v2\n");
 	status |= report_printf(hnd, "result %s\n", gd_verify_result_text(summary->result));
 	status |= report_printf(hnd, "catalog_result %s\n",
 		gd_verify_result_text(summary->catalog_result));
 	status |= report_printf(hnd, "clean %d\n", summary->clean);
+    status |= report_printf(hnd, "hash_origin %s\n", summary->streaming ?
+        "disc stream / saved checkpoint (no storage read-back)" : "storage read-back");
+    status |= report_printf(hnd, "catalog %s\n", summary->catalog);
+    status |= report_printf(hnd, "suspect_sectors %lu\nunsupported_sectors %lu\n",
+        (unsigned long)summary->suspect_sectors, (unsigned long)summary->unsupported_sectors);
+    if (summary->catalog_result == GD_VERIFY_NO_MATCH) {
+        status |= report_printf(hnd, "note No match is inconclusive: revision, catalog coverage, track boundaries, or read errors. Whole-track CRC cannot locate bad sectors. Use the sector scan or compare independent dumps.\n");
+    }
 	status |= report_printf(hnd, "bad_sectors %lu\n",
 		(unsigned long)summary->bad_sector_count);
 	status |= report_printf(hnd, "database %s\n", database_path);
@@ -489,9 +549,9 @@ static int write_report(const char *folder, const char *database_path,
 	return status == CMD_OK ? CMD_OK : CMD_ERROR;
 }
 
-gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
+gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_path,
 		bool sync_report, volatile int *active, gd_verify_progress_cb_t progress_cb,
-		void *progress_data, gd_verify_summary_t *summary) {
+		void *progress_data, gd_verify_summary_t *summary, bool streaming, bool scan) {
 	verify_track_t *tracks = NULL;
 	uint8_t *buffer = NULL;
 	uint32_t track_count = 0;
@@ -503,6 +563,7 @@ gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
 	gd_verify_result_t catalog_result;
 
 	memset(summary, 0, sizeof(*summary));
+	summary->streaming = streaming;
 	summary->result = GD_VERIFY_ERROR;
 	summary->catalog_result = GD_VERIFY_ERROR;
 	tracks = calloc(VERIFY_MAX_TRACKS, sizeof(*tracks));
@@ -553,19 +614,27 @@ gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
 		return summary->result;
 	}
 	for (uint32_t index = 0; index < track_count; index++) {
-		int hash_status = hash_track(folder, &tracks[index], buffer, &processed_bytes,
-			total_bytes, index + 1, track_count, active, progress_cb, progress_data);
-		if (hash_status == 1) {
-			free(buffer);
-			free(tracks);
-			summary->result = GD_VERIFY_CANCELLED;
-			return summary->result;
-		}
-		if (hash_status != CMD_OK) {
-			free(buffer);
-			free(tracks);
-			return summary->result;
-		}
+		int hash_status;
+        if (streaming) {
+            char path[NAME_MAX];
+            uint64_t saved_bytes = 0;
+            verify_track_t *t = &tracks[index];
+            hash_status = CMD_ERROR;
+            if (snprintf(path, sizeof(path), "%s/%s", folder, t->filename) < (int)sizeof(path) &&
+                gd_crc_restore(path, gd_crc_tag(t->number, t->start, t->sector_count,
+                    t->sector_size), t->actual_size, t->sector_size, &saved_bytes, &t->crc32) &&
+                    saved_bytes == t->actual_size) hash_status = CMD_OK;
+        } else {
+            hash_status = hash_track(folder, &tracks[index], buffer, &processed_bytes,
+                total_bytes, index + 1, track_count, active, progress_cb, progress_data,
+                scan, summary);
+        }
+        if (hash_status != CMD_OK) {
+            summary->result = hash_status == 1 ? GD_VERIFY_CANCELLED : GD_VERIFY_ERROR;
+            summary->report_written = write_report(folder, database_path, tracks, summary, sync_report) == CMD_OK;
+            free(buffer); free(tracks);
+            return summary->result;
+        }
 	}
 	free(buffer);
 
@@ -573,8 +642,31 @@ gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
 		catalog_result = GD_VERIFY_INCOMPATIBLE;
 	}
 	else {
-		catalog_result = search_database(database_path, tracks, track_count,
-			summary->game_name, sizeof(summary->game_name), active);
+		char tosec_path[NAME_MAX], tosec_name[192] = {0};
+        gd_verify_result_t tosec_result = GD_VERIFY_NO_DATABASE;
+        snprintf(summary->catalog, sizeof(summary->catalog), "Redump");
+        catalog_result = search_database(database_path, tracks, track_count,
+            summary->game_name, sizeof(summary->game_name), active);
+        if (snprintf(tosec_path, sizeof(tosec_path), "%s", database_path) < (int)sizeof(tosec_path)) {
+            char *slash = strrchr(tosec_path, '/');
+            if (slash && (size_t)(slash - tosec_path) + sizeof("/tosec.db") <= sizeof(tosec_path)) {
+                strcpy(slash, "/tosec.db");
+                tosec_result = search_database(tosec_path, tracks, track_count,
+                    tosec_name, sizeof(tosec_name), active);
+            }
+        }
+        if (tosec_result == GD_VERIFY_CANCELLED) catalog_result = tosec_result;
+        else if ((catalog_result == GD_VERIFY_NO_DATABASE || catalog_result == GD_VERIFY_ERROR) &&
+                tosec_result == GD_VERIFY_NO_MATCH) {
+            catalog_result = tosec_result;
+            snprintf(summary->catalog, sizeof(summary->catalog), "TOSEC");
+        }
+        else if (tosec_result >= GD_VERIFY_PARTIAL_MATCH && tosec_result <= GD_VERIFY_FULL_MATCH &&
+                (catalog_result < tosec_result || catalog_result > GD_VERIFY_FULL_MATCH)) {
+            catalog_result = tosec_result;
+            snprintf(summary->game_name, sizeof(summary->game_name), "%s", tosec_name);
+            snprintf(summary->catalog, sizeof(summary->catalog), "TOSEC");
+        }
 	}
 	if (catalog_result == GD_VERIFY_CANCELLED) {
 		summary->result = GD_VERIFY_CANCELLED;
@@ -582,6 +674,7 @@ gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
 		return summary->result;
 	}
 	summary->catalog_result = catalog_result;
+	if (summary->suspect_sectors) summary->clean = false;
 	summary->result = summary->clean ? catalog_result : GD_VERIFY_INTEGRITY_FAILED;
 	summary->report_written = write_report(folder, database_path, tracks, summary,
 		sync_report) == CMD_OK;
@@ -593,4 +686,12 @@ gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
 	}
 	free(tracks);
 	return summary->result;
+}
+
+/* Compatibility entry point: a requested manual verify reads storage. */
+gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
+        bool sync_report, volatile int *active, gd_verify_progress_cb_t progress_cb,
+        void *progress_data, gd_verify_summary_t *summary) {
+    return gd_verify_dump_ex(folder, database_path, sync_report, active,
+        progress_cb, progress_data, summary, false, true);
 }

@@ -10,6 +10,9 @@
 #include "ds.h"
 #include "isofs/isofs.h"
 #include "verify.h"
+#include "checksum.h"
+#include "app_module.h"
+#include <zlib/zlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -25,10 +28,20 @@ DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 #define MAX_TRACKS 99
 #define RIP_STATE_HEADER "DreamShell GD Ripper state v1"
 
+static void *service_thread(void *arg);
+static void input_event(void *event, void *param, int action);
+static void video_event(void *event, void *param, int action);
+static void refresh_controls(void);
+static void set_message(const char *text);
+static bool claim_worker(void);
+static void select_page(int page);
+static int check_disc_identity(const char *folder, bool resume, int disc_type);
+static int retire_repaired_bad_map(const char *path, uint32_t first, uint32_t count);
+static int repair_suspects(const char *path, uint32_t first, uint32_t count);
 static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, char *dst_file);
 static void* gd_ripper_thread(void *arg);
 static void* gd_verify_thread(void *arg);
-static int create_gdi_file(char *dst_folder, char *dst_file, char *text, int disc_type);
+int create_gdi_file(char *dst_folder, char *dst_file, char *text, int disc_type);
 static int get_disc_status_and_type(int *status, int *disc_type);
 static int safe_cdrom_read_toc(cd_toc_t *toc, bool high_density);
 static int safe_cdrom_reinit(void);
@@ -65,9 +78,14 @@ static struct self {
 	GUI_Widget *num_read;
 	GUI_Widget *start_btn;
 	GUI_Widget *cancel_btn;
-	GUI_Widget *read_name_btn;
+	GUI_Widget *message;
+	GUI_Widget *disc_label;
+	GUI_Widget *advanced_btn;
+	GUI_Widget *exit_btn;
+	GUI_Widget *browse_btn;
+	GUI_Widget *edc_btn;
 	GUI_Widget *verify_btn;
-	GUI_Widget *verify_after_btn;
+
 	GUI_Widget *speed_label;
 	GUI_Widget *time_label;
 	GUI_Widget *progress_percent_label;
@@ -91,7 +109,28 @@ static struct self {
 	int max_attempts;
 	bool zero_fill;
 	bool use_bin;
-	bool verify_after;
+    bool advanced;
+    volatile int busy;
+    volatile int request;
+    volatile int shutdown;
+    volatile int drive_command;
+    volatile uint32_t command_started;
+    volatile uint32_t io_started;
+    char io_operation[24];
+    uint32_t heartbeat_second;
+    bool disc_ready;
+    bool media_seen;
+    bool auto_named;
+    uint8_t disc_header[2048] __attribute__((aligned(32)));
+    bool disc_header_valid;
+    kthread_t *worker;
+    Event_t *input_event, *video_event;
+    int page, focus;
+    uint32_t current_crc, crc_tag;
+    uint64_t crc_bytes;
+    char crc_path[NAME_MAX];
+    bool crc_failed;
+    int analog_x, analog_y;
 	track_info_t tracks[MAX_TRACKS];
 	char selected_path[NAME_MAX];
 	char rip_name[NAME_MAX];
@@ -213,7 +252,11 @@ static int timed_cdrom_read(void *buffer, uint32_t first, size_t count) {
 	params.is_test = 0;
 
 	/* PIO is used because KOS's DMA helper has no bounded wait path. */
-	return cdrom_exec_cmd_timed(CD_CMD_PIOREAD, &params, GD_COMMAND_TIMEOUT_MS);
+	self.command_started = (uint32_t)timer_ms_gettime64();
+    self.drive_command = 1;
+    int rv = cdrom_exec_cmd_timed(CD_CMD_PIOREAD, &params, GD_COMMAND_TIMEOUT_MS);
+    self.drive_command = 0;
+    return rv;
 }
 
 static int safe_cdrom_reinit(void) {
@@ -250,11 +293,13 @@ static void reset_rip_state(void) {
 	self.rip_active = 0;
 	GUI_WidgetSetEnabled(self.start_btn, 1);
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
-	GUI_WidgetSetEnabled(self.read_name_btn, 1);
+
 	GUI_WidgetSetEnabled(self.verify_btn, 1);
 	GUI_LabelSetText(self.speed_label, " ");
 	GUI_LabelSetText(self.time_label, " ");
-	GUI_LabelSetText(self.track_label, "GD Ripper");
+    GUI_LabelSetTextColor(self.track_label, 231, 238, 244);
+    GUI_LabelSetText(self.track_label, "GD Ripper");
+    self.io_started = 0;
 	GUI_LabelSetText(self.progress_percent_label, " ");
 	GUI_LabelSetText(self.current_lba_label, " ");
 	GUI_LabelSetText(self.sectors_total_label, " ");
@@ -280,24 +325,13 @@ static void wait_for_drive_settle(void) {
 	self.drive_ready_after = 0;
 }
 
-void gd_ripper_Number_read()
-{
-	char name[4];
-	int attempts = atoi(GUI_TextEntryGetText(self.num_read));
-
-	if (attempts > 50)
-	{
-		GUI_TextEntrySetText(self.num_read, "50");
-	}
-	else if (attempts < 1)
-	{
-		GUI_TextEntrySetText(self.num_read, "1");
-	}
-	else
-	{
-		snprintf(name, sizeof(name), "%d", attempts);
-		GUI_TextEntrySetText(self.num_read, name);
-	}
+void gd_ripper_Number_read(void) {
+    char label[64];
+    if (self.busy) return;
+    self.max_attempts = self.max_attempts == 1 ? 5 : self.max_attempts == 5 ? 10 :
+        self.max_attempts == 10 ? 20 : self.max_attempts == 20 ? 50 : 1;
+    snprintf(label, sizeof(label), "Read attempts per sector: %d", self.max_attempts);
+    GUI_LabelSetText(GUI_ButtonGetCaption(self.num_read), label);
 }
 
 void gd_ripper_Gamename()
@@ -312,6 +346,7 @@ void gd_ripper_ipbin_name()
 {
 	cd_toc_t toc;
 	int status = 0, disc_type = 0;
+	self.disc_header_valid = false;
 	uint8_t *pbuff;
 	char text[NAME_MAX];
 	uint32_t lba = 0;
@@ -325,9 +360,9 @@ void gd_ripper_ipbin_name()
 		lba = 45150;
 	}
 	else {
-		if(safe_cdrom_read_toc(&toc, false)) { 
-			ds_printf("DS_ERROR: Toc read error\n"); 
-			return; 
+		if(safe_cdrom_read_toc(&toc, false)) {
+			ds_printf("DS_ERROR: Toc read error\n");
+			return;
 		}
 		lba = cdrom_locate_data_track(&toc);
 
@@ -356,31 +391,33 @@ void gd_ripper_ipbin_name()
 	int read_rv = timed_cdrom_read(pbuff, lba, 1);
 	self.drive_ready_after = timer_ms_gettime64() + DRIVE_SETTLE_MS;
 	if (read_rv != ERR_OK) {
-		ds_printf("DS_ERROR: GD read error\n"); 
+		ds_printf("DS_ERROR: GD read error\n");
 		free(pbuff);
 		return;
 	}
 
 	ipbin_meta_t *meta = (ipbin_meta_t*) pbuff;
 
-	if(meta->boot_file[0] != '0' && meta->boot_file[0] != '1') {
+	if(memcmp(meta->hardware_ID, "SEGA SEGAKATANA ", 15)) {
 		free(pbuff);
 		GUI_TextEntrySetText(self.gname, "ripped_disc");
 		return;
 	}
 
-	char *p;
-	char *o;
-	
+    memcpy(self.disc_header, pbuff, 2048);
+    self.disc_header_valid = true;
+    char *p;
+    char *o;
+
 	p = meta->title;
 	o = text;
 
 	// skip any spaces at the beginning
-	while(*p == ' ' && meta->title + 29 > p) 
+	while(*p == ' ' && meta->title + sizeof(meta->title) > p)
 		p++;
 
 	// copy rest to output buffer
-	while(meta->title + 29 > p) { 
+	while(meta->title + sizeof(meta->title) > p) {
 		*o++ = *p++;
 	}
 
@@ -390,22 +427,23 @@ void gd_ripper_ipbin_name()
 
 	if (strlen(text) == 0) {
 		GUI_TextEntrySetText(self.gname, "ripped_disc");
-	} 
+	}
 	else {
 		sanitize_rip_name(text, sizeof(text), text);
 		GUI_TextEntrySetText(self.gname, text);
 	}
+	GUI_LabelSetText(self.disc_label, GUI_TextEntryGetText(self.gname));
 	free(pbuff);
 }
 
-void gd_ripper_Init(App_t *app, const char* fileName) 
+void gd_ripper_Init(App_t *app, const char* fileName)
 {
 	(void)fileName;
 
-	if(app != NULL) 
+	if(app != NULL)
 	{
 		memset(&self, 0, sizeof(self));
-		
+
 		self.app = app;
 		self.bad = APP_GET_WIDGET("bad_btn");
 		self.gname = APP_GET_WIDGET("gname-text");
@@ -414,9 +452,14 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 		self.num_read = APP_GET_WIDGET("num-read");
 		self.start_btn = APP_GET_WIDGET("start_btn");
 		self.cancel_btn = APP_GET_WIDGET("cancel_btn");
-		self.read_name_btn = APP_GET_WIDGET("Read-name");
+        self.message = APP_GET_WIDGET("message");
+        self.disc_label = APP_GET_WIDGET("disc-label");
+        self.advanced_btn = APP_GET_WIDGET("advanced-btn");
+        self.exit_btn = APP_GET_WIDGET("exit-btn");
+        self.browse_btn = APP_GET_WIDGET("browse-btn");
+        self.edc_btn = APP_GET_WIDGET("edc-btn");
 		self.verify_btn = APP_GET_WIDGET("verify-btn");
-		self.verify_after_btn = APP_GET_WIDGET("verify-after-btn");
+
 		self.speed_label = APP_GET_WIDGET("speed-label");
 		self.time_label = APP_GET_WIDGET("time-label");
 		self.progress_percent_label = APP_GET_WIDGET("progress-percent-label");
@@ -424,9 +467,11 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 		self.sectors_total_label = APP_GET_WIDGET("sectors-total-label");
 		self.sectors_processed_label = APP_GET_WIDGET("sectors-processed-label");
 		self.destination_path = APP_GET_WIDGET("destination-path");
-		self.file_browser = APP_GET_WIDGET("file-browser");
+
 		self.pages = APP_GET_WIDGET("pages");
 		self.use_bin_btn = APP_GET_WIDGET("use_bin_btn");
+        self.max_attempts = 10;
+        GUI_WidgetSetState(self.use_bin_btn, 1);
 
 		char app_path[NAME_MAX];
 		GetAppPath(app_path, sizeof(app_path), app->fn);
@@ -450,104 +495,52 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 
 		GUI_LabelSetText(self.destination_path, self.selected_path);
 		GUI_WidgetSetEnabled(self.cancel_btn, 0);
-		GUI_LabelSetText(self.track_label, "Insert disc / Read name");
-	} 
-	else 
+        GUI_LabelSetText(self.track_label, "Waiting for disc");
+        self.input_event = AddEvent("GDRipperInput", EVENT_TYPE_INPUT, EVENT_PRIO_DEFAULT, input_event, NULL);
+        self.video_event = AddEvent("GDRipperStatus", EVENT_TYPE_VIDEO, EVENT_PRIO_DEFAULT, video_event, NULL);
+        if (self.input_event) SetEventActive(self.input_event, 0);
+        self.worker = thd_create(0, service_thread, NULL);
+        if (!self.worker) set_message("Could not start drive worker. Reopen GD Ripper.");
+	}
+	else
 	{
-		ds_printf("DS_ERROR: %s: Attempting to call %s is not by the app initiate.\n", 
+		ds_printf("DS_ERROR: %s: Attempting to call %s is not by the app initiate.\n",
 					lib_get_name(), __func__);
 	}
 }
 
 
-void gd_ripper_StartRip(GUI_Widget *widget) 
-{
-	(void)widget;
-	if(self.app->thd)
-	{
-		self.rip_active = 0;
-		thd_join(self.app->thd, NULL);
-		self.app->thd = NULL;
-	}
-
-	reset_rip_state();
-	self.max_attempts = atoi(GUI_TextEntryGetText(self.num_read));
-	if (self.max_attempts < 1) self.max_attempts = 1;
-	if (self.max_attempts > 50) self.max_attempts = 50;
-	self.zero_fill = !!GUI_WidgetGetState(self.bad);
-	self.use_bin = !!GUI_WidgetGetState(self.use_bin_btn);
-	self.verify_after = !!GUI_WidgetGetState(self.verify_after_btn);
-	sanitize_rip_name(self.rip_name, sizeof(self.rip_name),
-		GUI_TextEntryGetText(self.gname));
-	GUI_TextEntrySetText(self.gname, self.rip_name);
-	snprintf(self.rip_destination, sizeof(self.rip_destination), "%s",
-		self.selected_path);
-	self.rip_active = 1;
-
-	GUI_WidgetSetEnabled(self.start_btn, 0);
-	GUI_WidgetSetEnabled(self.cancel_btn, 1);
-	GUI_WidgetSetEnabled(self.read_name_btn, 0);
-	GUI_WidgetSetEnabled(self.verify_btn, 0);
-	
-	GUI_LabelSetText(self.track_label, "Starting...");
-	GUI_LabelSetText(self.speed_label, "Preparing...");
-	GUI_LabelSetText(self.time_label, "Please wait");
-
-	self.app->thd = thd_create(0, gd_ripper_thread, NULL);
-	if (!self.app->thd) {
-		reset_rip_state();
-		GUI_LabelSetText(self.track_label, "Thread start failed");
-	}
+static void queue_operation(int operation) {
+    if (!self.worker || (operation == 1 && !self.disc_ready) || !claim_worker()) return;
+    reset_rip_state();
+    if (self.max_attempts < 1) self.max_attempts = 1;
+    if (self.max_attempts > 50) self.max_attempts = 50;
+    self.zero_fill = !!GUI_WidgetGetState(self.bad);
+    self.use_bin = !!GUI_WidgetGetState(self.use_bin_btn);
+    self.advanced = !!GUI_WidgetGetState(self.edc_btn);
+    sanitize_rip_name(self.rip_name, sizeof(self.rip_name), GUI_TextEntryGetText(self.gname));
+    GUI_TextEntrySetText(self.gname, self.rip_name);
+    snprintf(self.rip_destination, sizeof(self.rip_destination), "%s", self.selected_path);
+    self.rip_active = 1;
+    self.busy = 1;
+    self.request = operation;
+    select_page(0);
+    refresh_controls();
+    GUI_LabelSetText(self.track_label, operation == 1 ? "Starting rip..." : "Reading saved dump...");
+    set_message(operation == 1 ? "CRC is calculated while ripping." :
+        "Advanced CRC: storage read-back + data-sector scan. This can take 30 minutes on SD.");
 }
 
-void gd_ripper_Verify(GUI_Widget *widget)
-{
-	(void)widget;
-	if (self.app->thd) {
-		self.rip_active = 0;
-		thd_join(self.app->thd, NULL);
-		self.app->thd = NULL;
-	}
+void gd_ripper_StartRip(GUI_Widget *widget) { (void)widget; queue_operation(1); }
+void gd_ripper_Verify(GUI_Widget *widget) { (void)widget; queue_operation(2); }
 
-	reset_rip_state();
-	sanitize_rip_name(self.rip_name, sizeof(self.rip_name),
-		GUI_TextEntryGetText(self.gname));
-	GUI_TextEntrySetText(self.gname, self.rip_name);
-	snprintf(self.rip_destination, sizeof(self.rip_destination), "%s",
-		self.selected_path);
-	self.rip_active = 1;
-	self.start_time = timer_ms_gettime64();
-
-	GUI_WidgetSetEnabled(self.start_btn, 0);
-	GUI_WidgetSetEnabled(self.cancel_btn, 1);
-	GUI_WidgetSetEnabled(self.read_name_btn, 0);
-	GUI_WidgetSetEnabled(self.verify_btn, 0);
-	GUI_LabelSetText(self.track_label, "Starting verify...");
-	GUI_LabelSetText(self.speed_label, "Reading SD...");
-	GUI_LabelSetText(self.time_label, "Please wait");
-
-	self.app->thd = thd_create(0, gd_verify_thread, NULL);
-	if (!self.app->thd) {
-		reset_rip_state();
-		GUI_LabelSetText(self.track_label, "Thread start failed");
-	}
-}
-
-void gd_ripper_CancelRip(GUI_Widget *widget)
-{
-	(void)widget;
-	ds_printf("DS_PROCESS: Cancelling GD Ripper operation\n");
-	self.rip_active = 0;
-
-	if(self.app->thd)
-	{
-		thd_join(self.app->thd, NULL);
-		self.app->thd = NULL;
-		ds_printf("DS_INFO: Ripping cancelled\n");
-	}
-
-	reset_rip_state();
-	GUI_LabelSetText(self.track_label, "Cancelled");
+void gd_ripper_CancelRip(GUI_Widget *widget) {
+    (void)widget;
+    if (!self.busy) return;
+    self.rip_active = 0;
+    GUI_LabelSetText(self.track_label, "Stopping...");
+    set_message("Stop requested. Waiting for I/O to return, then saving the checkpoint.");
+    GUI_WidgetSetEnabled(self.cancel_btn, 0);
 }
 
 static int get_disc_status_and_type(int *status, int *disc_type)
@@ -601,7 +594,7 @@ static int safe_cdrom_read_toc(cd_toc_t *toc, bool high_density)
 			ds_printf("DS_INFO: TOC reading cancelled\n");
 			return CMD_ERROR;
 		}
-		
+
 		terr++;
 		if (terr == 3) {
 			ds_printf("DS_INFO: Reinitializing CDROM for TOC read\n");
@@ -610,16 +603,16 @@ static int safe_cdrom_read_toc(cd_toc_t *toc, bool high_density)
 				return CMD_ERROR;
 			}
 		}
-		
+
 		if (terr > 8) {
 			ds_printf("DS_ERROR: Failed to read TOC after %d attempts (error %d)\n",
 				terr, rv);
 			return CMD_ERROR;
 		}
-		
+
 		thd_sleep(200);
 	}
-	
+
 	return CMD_OK;
 }
 
@@ -863,6 +856,7 @@ static int get_track_info(int area, int disc_type, track_info_t *tracks,
 	uint32_t first = TOC_TRACK(toc.first);
 	uint32_t last = TOC_TRACK(toc.last);
 	uint32_t count = 0;
+    if (!first || first > last || last > MAX_TRACKS) return CMD_ERROR;
 
 	for (uint32_t tn = first; tn <= last; tn++) {
 		if (count >= capacity) {
@@ -873,11 +867,16 @@ static int get_track_info(int area, int disc_type, track_info_t *tracks,
 		uint32_t type = TOC_CTRL(toc.entry[tn-1]);
 		uint32_t start = TOC_LBA(toc.entry[tn-1]);
 		uint32_t s_end = TOC_LBA((tn == last ? toc.leadout_sector : toc.entry[tn]));
-		uint32_t nsec = s_end - start;
+		uint32_t nsec;
+        if (start < 150 || s_end <= start || s_end > 1000000) return CMD_ERROR;
+        nsec = s_end - start;
 
-		if (disc_type != CD_GDROM && type == 4) nsec -= 2;
-		else if (area == 1 && tn != last && type != TOC_CTRL(toc.entry[tn])) nsec -= 150;
-		else if (area == 0 && type == 4) nsec -= 150;
+        uint32_t gap = 0;
+        if (disc_type != CD_GDROM && type == 4) gap = 2;
+        else if (area == 1 && tn != last && type != TOC_CTRL(toc.entry[tn])) gap = 150;
+        else if (area == 0 && type == 4) gap = 150;
+        if (nsec <= gap) return CMD_ERROR;
+        nsec -= gap;
 
 		tracks[count].track_num = tn;
 		tracks[count].start_lba = start;
@@ -1047,7 +1046,11 @@ static void* gd_ripper_thread(void *arg) {
 		failure_label = "Name/options conflict";
 		goto out;
 	}
-	destination_ready = true;
+    if (check_disc_identity(dst_folder, resume, disc_type) != CMD_OK) {
+        failure_label = "Disc identity mismatch / unreadable";
+        goto out;
+    }
+    destination_ready = true;
 
 	if (snprintf(self.log_path, sizeof(self.log_path), "%s/rip.log", dst_folder) >=
 			(int)sizeof(self.log_path)) {
@@ -1090,21 +1093,22 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	rip_log("Rip completed successfully: %llu sectors",
+    update_ui_display(2352, true);
+    rip_log("Rip completed successfully: %llu sectors",
 		(unsigned long long)self.processed_sectors);
 	success = true;
 
-	if (self.verify_after && self.rip_active) {
+	if (self.rip_active) {
 		verification_ran = true;
 		safe_cdrom_spin_down();
-		GUI_LabelSetText(self.track_label, "Read-back verify...");
-		GUI_LabelSetText(self.speed_label, "Reading SD...");
+		GUI_LabelSetText(self.track_label, "Checking stream CRC...");
+		GUI_LabelSetText(self.speed_label, "Catalog lookup...");
 		GUI_LabelSetText(self.time_label, "Please wait");
 		self.start_time = timer_ms_gettime64();
 		self.last_ui_update = 0;
-		verification_result = gd_verify_dump(dst_folder, self.database_path,
+		verification_result = gd_verify_dump_ex(dst_folder, self.database_path,
 			self.sync_mount[0] != '\0', &self.rip_active, update_verify_display,
-			NULL, &verification_summary);
+			NULL, &verification_summary, true, false);
 	}
 
 out:
@@ -1117,7 +1121,7 @@ out:
 	self.rip_active = 0;
 	GUI_WidgetSetEnabled(self.start_btn, 1);
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
-	GUI_WidgetSetEnabled(self.read_name_btn, 1);
+
 	GUI_WidgetSetEnabled(self.verify_btn, 1);
 	if (success && verification_ran) {
 		show_verify_result(&verification_summary, verification_result,
@@ -1141,15 +1145,20 @@ out:
 		set_io_status("Finished", 0);
 	}
 	else if (cancelled) {
-		GUI_LabelSetText(self.track_label, "Cancelled");
+		GUI_LabelSetText(self.track_label, "Stopped - progress saved");
+		set_message("Keep the same disc and folder; select Start / Resume to continue.");
 		set_io_status("Stopped", self.current_fad);
 	}
 	else if (destination_ready) {
-		GUI_LabelSetText(self.track_label, "Paused - retry");
+		GUI_LabelSetText(self.track_label, "Stopped - read/write error");
+        GUI_LabelSetTextColor(self.track_label, 255, 154, 136);
+        set_message("Partial dump preserved. Check rip.log, then select Start / Resume to retry.");
 		set_io_status("Paused", self.current_fad);
 	}
 	else {
-		GUI_LabelSetText(self.track_label, failure_label);
+        GUI_LabelSetTextColor(self.track_label, 255, 154, 136);
+        GUI_LabelSetText(self.track_label, failure_label);
+		set_message("Check the disc and destination folder, then select Start / Resume.");
 	}
 	safe_cdrom_spin_down();
 	self.start_time = 0;
@@ -1158,9 +1167,12 @@ out:
 
 static void set_io_status(const char *operation, uint32_t fad) {
 	char status_text[64];
-	self.current_fad = fad;
+    self.current_fad = fad;
+    self.io_started = (uint32_t)timer_ms_gettime64();
+    self.heartbeat_second = 0;
+    snprintf(self.io_operation, sizeof(self.io_operation), "%s", operation);
 
-	if (fad) {
+    if (fad) {
 		snprintf(status_text, sizeof(status_text), "%s FAD %lu",
 			operation, (unsigned long)fad);
 	}
@@ -1208,7 +1220,7 @@ static void update_ui_display(uint32_t current_sector_size, bool force) {
 	else {
 		snprintf(total_sectors_text, sizeof(total_sectors_text), "Total: --");
 	}
-	
+
 	snprintf(processed_sectors_text, sizeof(processed_sectors_text), "Done: %llu",
 		(unsigned long long)self.processed_sectors);
 
@@ -1274,7 +1286,7 @@ static void update_verify_display(void *data, const char *filename,
 		return;
 	}
 	GUI_ProgressBarSetPosition(self.pbar, percent / 100.0);
-	if (now - self.last_ui_update < UI_UPDATE_INTERVAL) {
+    if (now - self.last_ui_update < UI_UPDATE_INTERVAL && processed_bytes != total_bytes) {
 		return;
 	}
 
@@ -1318,25 +1330,48 @@ static void update_verify_display(void *data, const char *filename,
 static void show_verify_result(const gd_verify_summary_t *summary,
 		gd_verify_result_t result, const char *rip_label) {
 	const char *label;
-	char game_text[64];
+	char game_text[256];
 
 	switch (result) {
-		case GD_VERIFY_FULL_MATCH: label = "Redump FULL match"; break;
-		case GD_VERIFY_DATA_MATCH: label = "Redump data match"; break;
+		case GD_VERIFY_FULL_MATCH: label = "All track CRCs match"; break;
+		case GD_VERIFY_DATA_MATCH: label = "Data track CRCs match"; break;
 		case GD_VERIFY_IDENTIFIED: label = "Known data match"; break;
 		case GD_VERIFY_PARTIAL_MATCH: label = "Partial match only"; break;
-		case GD_VERIFY_NO_MATCH: label = "No Redump match"; break;
+		case GD_VERIFY_NO_MATCH: label = "No catalog match"; break;
 		case GD_VERIFY_NO_DATABASE: label = "Hashed - no database"; break;
 		case GD_VERIFY_INCOMPATIBLE: label = "Verify needs BIN tracks"; break;
 		case GD_VERIFY_INTEGRITY_FAILED: label = "Dump integrity FAILED"; break;
 		case GD_VERIFY_CANCELLED: label = rip_label ? rip_label : "Verify cancelled"; break;
 		default: label = "Verification failed"; break;
 	}
-	GUI_LabelSetText(self.track_label, label);
+    GUI_LabelSetTextColor(self.track_label,
+        result == GD_VERIFY_NO_MATCH || result == GD_VERIFY_PARTIAL_MATCH || result == GD_VERIFY_INTEGRITY_FAILED ? 255 : 83,
+        result == GD_VERIFY_INTEGRITY_FAILED ? 154 : 225,
+        result == GD_VERIFY_INTEGRITY_FAILED ? 136 : 227);
+    GUI_LabelSetText(self.track_label, label);
+    if (summary->suspect_sectors) {
+        char message[160];
+        snprintf(message, sizeof(message), "%lu suspect sectors. To reread them: turn Advanced CRC ON, then Start / Resume with the same disc and folder.",
+            (unsigned long)summary->suspect_sectors);
+        set_message(message);
+    } else if (result == GD_VERIFY_NO_MATCH || result == GD_VERIFY_PARTIAL_MATCH) {
+        set_message("No catalog match: check revision/layout or run Advanced CRC to locate sector errors.");
+    } else if (result == GD_VERIFY_INTEGRITY_FAILED) {
+        set_message("Dump is incomplete or has recorded bad sectors. See verify.log; use Start / Resume.");
+    } else if (result == GD_VERIFY_ERROR) {
+        set_message("Verification failed. Check destination, track files and available storage.");
+    } else {
+        set_message(summary->streaming ?
+            "Stream CRC checked. Storage was not reread; see verify.log for catalog and track results." :
+            "Storage read-back finished. See verify.log and sector maps for details.");
+    }
 
 	if (summary->game_name[0]) {
-		snprintf(game_text, sizeof(game_text), "Known: %.48s", summary->game_name);
-		GUI_LabelSetText(self.speed_label, game_text);
+		snprintf(game_text, sizeof(game_text), "%s: %.64s",
+            result == GD_VERIFY_PARTIAL_MATCH ? "Candidate" : "Matched", summary->game_name);
+        GUI_LabelSetText(self.disc_label, game_text);
+        snprintf(game_text, sizeof(game_text), "Catalog: %s", summary->catalog);
+        GUI_LabelSetText(self.speed_label, game_text);
 	}
 	else {
 		GUI_LabelSetText(self.speed_label, " ");
@@ -1371,7 +1406,7 @@ static void* gd_verify_thread(void *arg) {
 	self.rip_active = 0;
 	GUI_WidgetSetEnabled(self.start_btn, 1);
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
-	GUI_WidgetSetEnabled(self.read_name_btn, 1);
+
 	GUI_WidgetSetEnabled(self.verify_btn, 1);
 	show_verify_result(&summary, result, NULL);
 	self.start_time = 0;
@@ -1450,7 +1485,74 @@ static int checkpoint_track(file_t hnd, uint32_t tn, uint32_t written_sectors,
 	set_io_status("Sync", fad);
 	rip_log("Checkpoint track %lu at track sector %lu (FAD %lu)",
 		(unsigned long)tn, (unsigned long)written_sectors, (unsigned long)fad);
-	return sync_track(hnd);
+	if (sync_track(hnd) != CMD_OK) return CMD_ERROR;
+    if (gd_crc_checkpoint(self.crc_path, self.crc_tag, self.crc_bytes,
+            self.current_crc, self.sync_mount[0] != '\0') != CMD_OK) {
+        self.crc_failed = true;
+        rip_log("Could not save CRC checkpoint; stopping before claiming verification");
+        return CMD_ERROR;
+    }
+    return CMD_OK;
+}
+
+static int restore_stream_crc(const char *path, uint64_t existing, uint32_t tn,
+        uint32_t first, uint32_t count, uint32_t secbyte) {
+    uint8_t *buffer;
+    file_t fd;
+    self.crc_tag = gd_crc_tag(tn, first, count, secbyte);
+    self.crc_bytes = 0;
+    self.current_crc = 0;
+    self.crc_failed = false;
+    snprintf(self.crc_path, sizeof(self.crc_path), "%s", path);
+    if (!existing) {
+        char journal[NAME_MAX];
+        if (snprintf(journal, sizeof(journal), "%s.crc", path) >= (int)sizeof(journal)) return CMD_ERROR;
+        if (FileExists(journal) && fs_unlink(journal)) return CMD_ERROR;
+        return CMD_OK;
+    }
+    gd_crc_restore(path, self.crc_tag, existing, secbyte, &self.crc_bytes, &self.current_crc);
+    if (self.crc_bytes == existing) return CMD_OK;
+    set_message(self.crc_bytes ? "Restoring CRC: reading the uncheckpointed tail only." :
+        "Older dump has no CRC checkpoint: hashing the saved portion once to resume safely.");
+    fd = fs_open(path, O_RDONLY);
+    if (fd == FILEHND_INVALID) return CMD_ERROR;
+    if (fs_seek(fd, (off_t)self.crc_bytes, SEEK_SET) != (off_t)self.crc_bytes) { fs_close(fd); return CMD_ERROR; }
+    buffer = memalign(32, 2352 * 16);
+    if (!buffer) { fs_close(fd); return CMD_ERROR; }
+    while (self.crc_bytes < existing) {
+        uint64_t left = existing - self.crc_bytes;
+        size_t n = left > 2352 * 16 ? 2352 * 16 : (size_t)left;
+        if (!self.rip_active || fs_read(fd, buffer, n) != (ssize_t)n) {
+            free(buffer); fs_close(fd); return CMD_ERROR;
+        }
+        self.current_crc = crc32(self.current_crc, buffer, n);
+        self.crc_bytes += n;
+        set_io_status("Resume CRC", first + self.crc_bytes / secbyte);
+        thd_pass();
+    }
+    free(buffer); fs_close(fd);
+    return gd_crc_checkpoint(path, self.crc_tag, self.crc_bytes, self.current_crc,
+        self.sync_mount[0] != '\0');
+}
+
+static void stream_written(const void *data, size_t bytes) {
+    self.current_crc = crc32(self.current_crc, data, bytes);
+    self.crc_bytes += bytes;
+}
+
+static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
+        uint32_t type, uint32_t secbyte) {
+    int rv = timed_cdrom_read(buffer, fad, count);
+    if (rv != ERR_OK || !self.advanced || type != 4 || secbyte != 2352) return rv;
+    for (size_t i = 0; i < count; ++i) {
+        unsigned flags = gd_check_sector((const uint8_t *)buffer + i * 2352, fad + i);
+        if (flags && flags != GD_SECTOR_UNSUPPORTED) {
+            rip_log("Sector validation failed at FAD %lu (flags=%u: sync=1 address=2 EDC=4 ECC=8)",
+                (unsigned long)(fad + i), flags);
+            return ERR_SYS;
+        }
+    }
+    return rv;
 }
 
 static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, char *dst_file) {
@@ -1484,7 +1586,16 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		return CMD_ERROR;
 	}
 
-	resumed_sectors = existing_bytes / secbyte;
+    if (self.advanced && type == 4 && secbyte == 2352 && existing_bytes &&
+            repair_suspects(dst_file, first, existing_bytes / secbyte) != CMD_OK) {
+        rip_log("Repair pass failed; original backups and partial files preserved");
+        return CMD_ERROR;
+    }
+    if (restore_stream_crc(dst_file, existing_bytes, tn, first, count, secbyte) != CMD_OK) {
+        rip_log("Could not restore the rolling CRC for track %lu", (unsigned long)tn);
+        return CMD_ERROR;
+    }
+    resumed_sectors = existing_bytes / secbyte;
 	self.processed_sectors += resumed_sectors;
 	set_io_status("Resume", first + resumed_sectors);
 	update_ui_display(secbyte, true);
@@ -1563,7 +1674,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		/* This updates the visible address before a potentially slow command. */
 		set_io_status("Read", first);
 		update_ui_display(secbyte, false);
-		cdstat = timed_cdrom_read(buffer, first, nsects);
+		cdstat = checked_sector_read(buffer, first, nsects, type, secbyte);
 
 		if (cdstat == ERR_OK) {
 			size_t bytes_to_write = nsects * secbyte;
@@ -1577,6 +1688,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 				free(buffer);
 				return CMD_ERROR;
 			}
+			stream_written(buffer, bytes_to_write);
+			self.processed_sectors += nsects; self.session_sectors += nsects;
 		}
 		else {
 			/* Commit everything already written before doing slow recovery. */
@@ -1633,7 +1746,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					GUI_LabelSetText(self.track_label, track_text);
 					set_io_status("Retry", fad);
 					update_ui_display(secbyte, true);
-					cdstat = timed_cdrom_read(buffer, fad, 1);
+					cdstat = checked_sector_read(buffer, fad, 1, type, secbyte);
 					if (cdstat == ERR_OK) {
 						break;
 					}
@@ -1683,6 +1796,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					bad++;
 					if (record_bad_sector(dst_file, tn, track_sector, fad, secbyte) != CMD_OK) {
 						rip_log("Failed to record zero-filled FAD %lu", (unsigned long)fad);
+						fs_close(hnd); free(buffer); return CMD_ERROR;
 					}
 					rip_log("Zero-filled unreadable FAD %lu after %d attempts",
 						(unsigned long)fad, max_attempts);
@@ -1697,6 +1811,9 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					free(buffer);
 					return CMD_ERROR;
 				}
+
+				stream_written(buffer, secbyte);
+				self.processed_sectors++; self.session_sectors++;
 
 				if (cdstat != ERR_OK &&
 					checkpoint_track(hnd, tn, track_sector + 1, fad + 1) != CMD_OK) {
@@ -1713,8 +1830,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 
 		first += nsects;
 		count -= nsects;
-		self.processed_sectors += nsects;
-		self.session_sectors += nsects;
+
 		checkpoint_sectors += nsects;
 		update_ui_display(secbyte, false);
 
@@ -1788,48 +1904,441 @@ int create_gdi_file(char *dst_folder, char *dst_file, char *text, int disc_type)
 	return CMD_OK;
 }
 
-void gd_ripper_Exit()  {
-	if (self.app && self.app->thd) {
-		self.rip_active = 0;
-		thd_join(self.app->thd, NULL);
-		self.app->thd = NULL;
-	}
-	safe_cdrom_set_sector_size(2048);
-	safe_cdrom_spin_down();
+void gd_ripper_Open(void) {
+    if (!self.input_event) return;
+    GUI_DisableInput();
+    SDL_DC_EmulateMouse(SDL_FALSE);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
+    SetEventActive(self.input_event, 1);
+    select_page(0);
+}
+
+void gd_ripper_Close(void) {
+    self.rip_active = 0;
+    if (self.input_event) SetEventActive(self.input_event, 0);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    GUI_EnableInput();
+}
+
+void gd_ripper_Exit(void) {
+    gd_ripper_Close();
+    self.shutdown = 1;
+    self.rip_active = 0;
+    if (self.worker) { thd_join(self.worker, NULL); self.worker = NULL; }
+    if (self.input_event) RemoveEvent(self.input_event);
+    if (self.video_event) RemoveEvent(self.video_event);
+}
+
+void gd_ripper_Quit(GUI_Widget *widget) {
+    (void)widget;
+    if (!self.busy && !self.request) OpenMainApp();
 }
 
 void gd_ripper_ShowFileBrowser(GUI_Widget *widget) {
 	(void)widget;
-	if (self.pages) {
-		GUI_CardStackShowIndex(self.pages, 1);
-	}
+	if (!self.busy) {
+        GUI_TextEntrySetText(APP_GET_WIDGET("destination-entry"), self.selected_path);
+        select_page(1);
+    }
 }
 
 void gd_ripper_ShowMainPage(GUI_Widget *widget) {
 	(void)widget;
-	if (self.pages) {
-		GUI_CardStackShowIndex(self.pages, 0);
-	}
-}
-
-void gd_ripper_FileBrowserItemClick(dirent_fm_t *fm_ent) {
-	if (!fm_ent) {
-		return;
-	}
-	dirent_t *ent = &fm_ent->ent;
-	GUI_FileManagerChangeDir(self.file_browser, ent->name, ent->size);
+	select_page(0);
 }
 
 void gd_ripper_FileBrowserConfirm(GUI_Widget *widget) {
-	(void)widget;
+    (void)widget;
+    if (self.busy) return;
+    const char *path = GUI_TextEntryGetText(APP_GET_WIDGET("destination-entry"));
+    if (!path || path[0] != '/' || strlen(path) >= sizeof(self.selected_path) ||
+        !DirExists(path) || !strncmp(path, "/cd", 3)) {
+        GUI_LabelSetText(APP_GET_WIDGET("destination-error"), "Choose an existing writable folder on SD, IDE or PC.");
+        return;
+    }
+    snprintf(self.selected_path, sizeof(self.selected_path), "%s", path);
+    GUI_LabelSetText(self.destination_path, self.selected_path);
+    select_page(0);
+}
 
-	if (self.file_browser && self.destination_path && self.pages) {
-		const char *path = GUI_FileManagerGetPath(self.file_browser);
-		if (path) {
-			strncpy(self.selected_path, path, NAME_MAX - 1);
-			self.selected_path[NAME_MAX - 1] = '\0';
-			GUI_LabelSetText(self.destination_path, self.selected_path);
-		}
-		GUI_CardStackShowIndex(self.pages, 0);
-	}
+/* All drive commands (including insertion probes) run on this worker. */
+static void refresh_controls(void) {
+    GUI_WidgetSetEnabled(self.start_btn, !self.busy && self.disc_ready && self.worker != NULL);
+    GUI_WidgetSetEnabled(self.cancel_btn, self.busy && self.rip_active);
+    GUI_WidgetSetEnabled(self.verify_btn, !self.busy && self.worker != NULL);
+    GUI_WidgetSetEnabled(self.exit_btn, !self.busy);
+    GUI_WidgetSetEnabled(self.advanced_btn, !self.busy);
+    GUI_WidgetSetEnabled(self.browse_btn, !self.busy);
+    GUI_WidgetSetEnabled(self.gname, !self.busy);
+}
+
+static void *service_thread(void *arg) {
+    uint64_t stable_since = 0, next_poll = timer_ms_gettime64() + 1500;
+    (void)arg;
+    while (!self.shutdown) {
+        if (!(self.app->state & APP_STATE_OPENED)) { thd_sleep(50); continue; }
+        if (self.request) {
+            int operation = self.request;
+            self.request = 0;
+            self.start_time = timer_ms_gettime64();
+            if (operation == 1) gd_ripper_thread(NULL);
+            else gd_verify_thread(NULL);
+            self.busy = 0;
+            self.rip_active = 0;
+            self.drive_command = 0;
+            self.io_started = 0;
+            refresh_controls();
+            next_poll = timer_ms_gettime64() + 1000;
+        } else if (timer_ms_gettime64() >= next_poll && claim_worker()) {
+            int status = 0, type = 0;
+            int rv;
+            rv = cdrom_get_status(&status, &type);
+            next_poll = timer_ms_gettime64() + 500;
+            if (rv == ERR_OK && (status == CD_STATUS_OPEN || status == CD_STATUS_NO_DISC)) {
+                self.disc_ready = false;
+                self.media_seen = false;
+                self.disc_header_valid = false;
+                stable_since = 0;
+                GUI_LabelSetText(self.disc_label, status == CD_STATUS_OPEN ? "Lid open - insert disc" : "No disc inserted");
+            } else if (rv == ERR_OK && (status == CD_STATUS_PAUSED || status == CD_STATUS_STANDBY || status == CD_STATUS_PLAYING)) {
+                self.disc_ready = self.media_seen;
+                if (!self.media_seen) {
+                    if (!stable_since) stable_since = timer_ms_gettime64();
+                    if (timer_ms_gettime64() - stable_since >= DRIVE_SETTLE_MS) {
+                        self.rip_active = 1;
+                        refresh_controls();
+                        GUI_LabelSetText(self.disc_label, "Disc detected - reading title...");
+                        GUI_LabelSetText(self.track_label, "Reading disc title...");
+                        gd_ripper_ipbin_name();
+                        self.media_seen = true;
+                        self.disc_ready = true;
+                        self.rip_active = 0;
+                        GUI_LabelSetText(self.track_label, "Ready to rip");
+                        set_message(self.disc_header_valid ?
+                            "Disc ready. Select Start / Resume; CRC checking runs while ripping." :
+                            "Title unavailable. Set a folder name and select Start / Resume, or reinsert the disc.");
+                        if (!self.disc_header_valid) {
+                            GUI_LabelSetText(self.disc_label, "Disc detected - title unavailable");
+                            GUI_TextEntrySetText(self.gname, "ripped_disc");
+                        }
+                    }
+                }
+            } else {
+                stable_since = 0;
+                self.disc_ready = false;
+                /* DISC_CHG also detects a quick swap between two polls. */
+                if (rv == ERR_DISC_CHG) { self.media_seen = false; self.disc_ready = false; }
+            }
+            self.busy = 0;
+            refresh_controls();
+        }
+        thd_sleep(50);
+    }
+    return NULL;
+}
+
+static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn"};
+static const char *advanced_focus[] = {"edc-btn", "verify-btn", "bad_btn", "use_bin_btn", "num-read", "advanced-back"};
+static const char *destination_focus[] = {"device-sd", "device-ide", "device-pc", "destination-entry", "destination-confirm", "destination-back"};
+
+static GUI_Widget *focus_widget(int index) {
+    const char **names = self.page == 2 ? advanced_focus : self.page == 1 ? destination_focus : main_focus;
+    return APP_GET_WIDGET(names[index]);
+}
+
+static void focus_step(int direction) {
+    for (int i = 0; i < 6; ++i) GUI_WidgetClearFlags(focus_widget(i), WIDGET_INSIDE);
+    for (int i = 0; i < 6; ++i) {
+        self.focus = (self.focus + direction + 6) % 6;
+        if (!(GUI_WidgetGetFlags(focus_widget(self.focus)) & (WIDGET_DISABLED | WIDGET_HIDDEN))) break;
+    }
+    GUI_WidgetSetFlags(focus_widget(self.focus), WIDGET_INSIDE);
+}
+
+static void select_page(int page) {
+    for (int i = 0; i < 6; ++i) GUI_WidgetClearFlags(focus_widget(i), WIDGET_INSIDE);
+    self.page = page;
+    GUI_CardStackShowIndex(self.pages, page);
+    self.focus = 5;
+    focus_step(1);
+}
+
+void gd_ripper_Advanced(GUI_Widget *widget) { (void)widget; if (!self.busy) select_page(2); }
+
+void gd_ripper_Toggle(GUI_Widget *widget) {
+    if (self.busy) return;
+    int enabled = !GUI_WidgetGetState(widget);
+    GUI_WidgetSetState(widget, enabled);
+    const char *label = widget == self.bad ?
+        (enabled ? "Zero-fill unreadable sectors: ON" : "Zero-fill unreadable sectors: OFF") :
+        widget == self.edc_btn ?
+        (enabled ? "Advanced CRC during rip: ON" : "Advanced CRC during rip: OFF") :
+        (enabled ? "Track format: BIN (raw, recommended)" : "Track format: ISO (no catalog CRC match)");
+    GUI_LabelSetText(GUI_ButtonGetCaption(widget), label);
+}
+
+void gd_ripper_Destination(GUI_Widget *widget) {
+    const char *path = widget == APP_GET_WIDGET("device-sd") ? "/sd" :
+        widget == APP_GET_WIDGET("device-ide") ? "/ide" : "/pc";
+    GUI_TextEntrySetText(APP_GET_WIDGET("destination-entry"), path);
+}
+
+static void activate_focus(void) {
+    GUI_Widget *w = focus_widget(self.focus);
+    if (!(GUI_WidgetGetFlags(w) & (WIDGET_DISABLED | WIDGET_HIDDEN))) GUI_WidgetClicked(w, 0, 0);
+}
+
+static void input_event(void *event, void *param, int action) {
+    SDL_Event *e = param;
+    (void)event;
+    if (action != EVENT_ACTION_UPDATE || !e || !(self.app->state & APP_STATE_OPENED)) return;
+    /* Let text entry / DreamShell's keyboard process actual typing. */
+    if (GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
+        GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
+        return;
+    }
+    if (e->type == SDL_JOYHATMOTION && e->jhat.hat == 0) {
+        if (e->jhat.value & (SDL_HAT_UP | SDL_HAT_LEFT)) focus_step(-1);
+        else if (e->jhat.value & (SDL_HAT_DOWN | SDL_HAT_RIGHT)) focus_step(1);
+    } else if (e->type == SDL_JOYAXISMOTION) {
+        int dir = e->jaxis.value < -48 ? -1 : e->jaxis.value > 48 ? 1 : 0;
+        int *old = e->jaxis.axis == 0 ? &self.analog_x : &self.analog_y;
+        if (e->jaxis.axis <= 1) { if (dir && dir != *old) focus_step(dir); *old = dir; }
+    } else if (e->type == SDL_JOYBUTTONDOWN) {
+        if (e->jbutton.button == SDL_DC_A) activate_focus();
+        else if (e->jbutton.button == SDL_DC_B) {
+            if (self.busy) gd_ripper_CancelRip(NULL); else if (self.page) select_page(0);
+        }
+    } else if (e->type == SDL_KEYDOWN) {
+        switch (e->key.keysym.sym) {
+            case SDLK_UP: case SDLK_LEFT: focus_step(-1); break;
+            case SDLK_DOWN: case SDLK_RIGHT: case SDLK_TAB: focus_step(1); break;
+            case SDLK_RETURN: case SDLK_SPACE: activate_focus(); break;
+            case SDLK_ESCAPE: if (self.busy) gd_ripper_CancelRip(NULL); else select_page(0); break;
+            default: GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0); break;
+        }
+    } else if (e->type == SDL_MOUSEMOTION || e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP || e->type >= SDL_USEREVENT) {
+        /* Real mouse remains optional; the controller never moves a pointer. */
+        GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
+    }
+}
+
+static void video_event(void *event, void *param, int action) {
+    (void)event; (void)param;
+    if (action != EVENT_ACTION_RENDER || !(self.app->state & APP_STATE_OPENED)) return;
+    if (self.busy && self.io_started) {
+        unsigned seconds = ((uint32_t)timer_ms_gettime64() - self.io_started) / 1000;
+        if (seconds >= 2 && seconds != self.heartbeat_second) {
+            self.heartbeat_second = seconds;
+            char line[120];
+            snprintf(line, sizeof(line), "%s waiting %us at FAD %lu%s", self.io_operation, seconds,
+                (unsigned long)self.current_fad, self.rip_active ? " - B / Stop to request pause" : " - Stop requested");
+            set_message(line);
+        }
+        if (seconds >= 15 && self.drive_command) GUI_LabelSetText(self.track_label, "Drive command stalled");
+    }
+}
+
+static void set_message(const char *text) {
+    const char *p = text;
+    for (int line = 0; line < 3; ++line) {
+        char part[76];
+        size_t len = strlen(p), take = len > 70 ? 70 : len;
+        if (len > take) {
+            size_t space = take;
+            while (space && p[space] != ' ') --space;
+            if (space) take = space;
+        }
+        memcpy(part, p, take); part[take] = '\0'; p += take;
+        while (*p == ' ') ++p;
+        GUI_LabelSetText(line == 0 ? self.message : APP_GET_WIDGET(line == 1 ? "message-2" : "message-3"), part);
+    }
+}
+
+/* Bind resumable files to the disc's boot sector, not just its TOC shape. */
+static int check_disc_identity(const char *folder, bool resume, int disc_type) {
+    uint8_t *data;
+    char path[NAME_MAX];
+    file_t fd;
+    ssize_t completed = 0;
+    uint32_t boot_fad = disc_type == CD_GDROM ? 45150 : 0;
+    if (!boot_fad) return CMD_OK; /* Existing CD/CD-R workflow uses TOC checks. */
+    if (safe_cdrom_set_sector_size(2048) != ERR_OK ||
+            timed_cdrom_read(self.disc_header, boot_fad, 1) != ERR_OK) return CMD_ERROR;
+    self.disc_header_valid = true;
+    data = memalign(32, 2352);
+    if (!data) return CMD_ERROR;
+    snprintf(path, sizeof(path), "%s/rip.disc", folder);
+    if (resume && FileExists(path)) {
+        fd = fs_open(path, O_RDONLY);
+        bool same = fd != FILEHND_INVALID && fs_total(fd) == 2048 &&
+            fs_read(fd, data, 2048) == 2048 && !memcmp(data, self.disc_header, 2048);
+        if (fd != FILEHND_INVALID) fs_close(fd);
+        free(data);
+        return same ? CMD_OK : CMD_ERROR;
+    }
+    if (resume) {
+        char track_path[NAME_MAX];
+        uint64_t bytes = 0;
+        /* Older versions have no identity file: compare existing track 3's IP.BIN. */
+        snprintf(track_path, sizeof(track_path), "%s/track03.%s", folder, self.use_bin ? "bin" : "iso");
+        fd = fs_open(track_path, O_RDONLY);
+        if (fd != FILEHND_INVALID) {
+            ssize_t size = fs_total(fd);
+            if (size > 0) bytes = size;
+            if (bytes >= (self.use_bin ? 2352 : 2048)) {
+                ssize_t want = self.use_bin ? 2352 : 2048;
+                if (fs_read(fd, data, want) != want ||
+                        memcmp(data + (self.use_bin ? 16 : 0), self.disc_header, 2048)) {
+                    fs_close(fd); free(data); return CMD_ERROR;
+                }
+            }
+            fs_close(fd);
+        }
+        /* For a zero-byte legacy track 3, match the already-dumped low data track. */
+        if (!bytes && self.track_count && self.tracks[0].type == 4) {
+            uint8_t *current = memalign(32, 2048);
+            snprintf(track_path, sizeof(track_path), "%s/%s", folder, self.tracks[0].filename);
+            fd = fs_open(track_path, O_RDONLY);
+            ssize_t want = self.use_bin ? 2352 : 2048;
+            bool same = current && fd != FILEHND_INVALID && fs_read(fd, data, want) == want &&
+                timed_cdrom_read(current, self.tracks[0].start_lba, 1) == ERR_OK &&
+                !memcmp(data + (self.use_bin ? 16 : 0), current, 2048);
+            if (fd != FILEHND_INVALID) fs_close(fd);
+            free(current);
+            if (!same) { free(data); return CMD_ERROR; }
+        }
+    }
+    fd = fs_open(path, O_WRONLY | O_CREAT | O_TRUNC);
+    int rv = CMD_OK;
+    if (fd == FILEHND_INVALID) rv = CMD_ERROR;
+    else {
+        if (fs_write(fd, self.disc_header, 2048) != 2048 ||
+            (self.sync_mount[0] && fs_complete(fd, &completed))) rv = CMD_ERROR;
+        if (fs_close(fd)) rv = CMD_ERROR;
+    }
+    free(data);
+    return rv;
+}
+
+/* Repair only addresses found by the storage scan, keeping the original bytes. */
+static int repair_suspects(const char *path, uint32_t first, uint32_t count) {
+    char map_path[NAME_MAX], backup_path[NAME_MAX], journal[NAME_MAX], line[120];
+    FILE *map;
+    file_t track = FILEHND_INVALID, backup = FILEHND_INVALID;
+    uint8_t *old = NULL, *read = NULL;
+    int result = CMD_ERROR;
+    bool changed = false;
+    if (snprintf(map_path, sizeof(map_path), "%s.suspect", path) >= (int)sizeof(map_path) ||
+        snprintf(backup_path, sizeof(backup_path), "%s.repair-backup", path) >= (int)sizeof(backup_path) ||
+        snprintf(journal, sizeof(journal), "%s.crc", path) >= (int)sizeof(journal)) return CMD_ERROR;
+    if (!FileExists(map_path)) return CMD_OK;
+    map = fopen(map_path, "r");
+    if (!map) return CMD_ERROR;
+    track = fs_open(path, O_RDWR);
+    old = memalign(32, 2352); read = memalign(32, 2352);
+    if (track == FILEHND_INVALID || !old || !read || safe_cdrom_set_sector_size(2352) != ERR_OK) goto out;
+    while (fgets(line, sizeof(line), map)) {
+        unsigned long sector, fad, flags;
+        char extra;
+        if (sscanf(line, "%lu %lu %lu %c", &sector, &fad, &flags, &extra) != 3 ||
+            sector >= count || fad != first + sector) goto out;
+        (void)flags;
+        off_t offset = (off_t)(sector * 2352UL);
+        if (!self.rip_active || fs_seek(track, offset, SEEK_SET) != offset || fs_read(track, old, 2352) != 2352) goto out;
+        if (!gd_check_sector(old, fad)) continue;
+        int rv = ERR_SYS;
+        for (int attempt = 1; attempt <= self.max_attempts && self.rip_active; ++attempt) {
+            char message[128];
+            snprintf(message, sizeof(message), "Repair FAD %lu: attempt %d/%d", fad, attempt, self.max_attempts);
+            set_message(message); set_io_status("Repair", fad);
+            rv = timed_cdrom_read(read, fad, 1);
+            if (rv == ERR_OK && !gd_check_sector(read, fad)) break;
+            if (rv == ERR_NO_DISC || rv == ERR_DISC_CHG) goto out;
+            rv = ERR_SYS;
+            if (attempt == 3 && (safe_cdrom_reinit() != ERR_OK || safe_cdrom_set_sector_size(2352) != ERR_OK)) goto out;
+            thd_sleep(100);
+        }
+        if (!self.rip_active || rv != ERR_OK) {
+            rip_log("Repair stopped: FAD %lu still invalid; original sector retained", fad);
+            goto out;
+        }
+        if (!changed) {
+            if (FileExists(journal) && fs_unlink(journal)) goto out;
+            changed = true;
+        }
+        if (backup == FILEHND_INVALID) backup = fs_open(backup_path, O_WRONLY | O_CREAT | O_APPEND);
+        if (backup == FILEHND_INVALID) goto out;
+        /* Records: ASCII 'FAD <n>\n', then exactly 2352 original bytes. */
+        int n = snprintf(line, sizeof(line), "FAD %lu\n", fad);
+        ssize_t completed = 0;
+        if (fs_write(backup, line, n) != n || fs_write(backup, old, 2352) != 2352 ||
+            (self.sync_mount[0] && fs_complete(backup, &completed))) goto out;
+        if (fs_seek(track, offset, SEEK_SET) != offset || fs_write(track, read, 2352) != 2352 ||
+            sync_track(track) != CMD_OK) goto out;
+        rip_log("Replaced FAD %lu with an EDC/ECC/address-valid reread; original saved in repair-backup", fad);
+    }
+    if (ferror(map)) goto out;
+    result = CMD_OK;
+out:
+    if (track != FILEHND_INVALID) fs_close(track);
+    if (backup != FILEHND_INVALID) fs_close(backup);
+    free(old); free(read); fclose(map);
+    if (changed) set_message("Repair pass finished. Rebuilding the whole-track CRC from storage is required after edits.");
+    if (result == CMD_OK) result = retire_repaired_bad_map(path, first, count);
+    return result;
+}
+
+/* One SH-4 CPU: protect the UI/service ownership hand-off from preemption. */
+static bool claim_worker(void) {
+    irq_mask_t irq = irq_disable();
+    bool available = !self.busy && !self.request;
+    if (available) self.busy = 1;
+    irq_restore(irq);
+    return available;
+}
+
+/* Only retire a zero-fill map when every listed sector now validates. */
+static int retire_repaired_bad_map(const char *path, uint32_t first, uint32_t count) {
+    char map_path[NAME_MAX], history_path[NAME_MAX], line[192];
+    FILE *map;
+    file_t track, history;
+    uint8_t *sector;
+    ssize_t completed = 0;
+    if (snprintf(map_path, sizeof(map_path), "%s.bad", path) >= (int)sizeof(map_path) ||
+        snprintf(history_path, sizeof(history_path), "%s.bad.history", path) >= (int)sizeof(history_path)) return CMD_ERROR;
+    if (!FileExists(map_path)) return CMD_OK;
+    map = fopen(map_path, "r");
+    track = fs_open(path, O_RDONLY);
+    sector = memalign(32, 2352);
+    if (!map || track == FILEHND_INVALID || !sector) {
+        if (map) fclose(map);
+        if (track != FILEHND_INVALID) fs_close(track);
+        free(sector); return CMD_ERROR;
+    }
+    bool valid = true;
+    while (fgets(line, sizeof(line), map)) {
+        unsigned long tn, index, lba, fad;
+        unsigned long long offset;
+        if (!strncmp(line, "track,", 6)) continue;
+        if (sscanf(line, "%lu,%lu,%lu,%lu,%llu", &tn, &index, &lba, &fad, &offset) != 5 ||
+            index >= count || fad != first + index || offset != (uint64_t)index * 2352 ||
+            fs_seek(track, (off_t)offset, SEEK_SET) != (off_t)offset ||
+            fs_read(track, sector, 2352) != 2352 || gd_check_sector(sector, fad)) { valid = false; break; }
+    }
+    if (ferror(map)) valid = false;
+    free(sector); fs_close(track);
+    if (!valid) { fclose(map); return CMD_OK; }
+    rewind(map);
+    history = fs_open(history_path, O_WRONLY | O_CREAT | O_APPEND);
+    if (history == FILEHND_INVALID) { fclose(map); return CMD_ERROR; }
+    while (fgets(line, sizeof(line), map)) {
+        size_t n = strlen(line);
+        if (fs_write(history, line, n) != (ssize_t)n) valid = false;
+    }
+    if (ferror(map) || (self.sync_mount[0] && fs_complete(history, &completed))) valid = false;
+    fclose(map);
+    if (fs_close(history)) valid = false;
+    if (!valid) return CMD_ERROR;
+    return fs_unlink(map_path) ? CMD_ERROR : CMD_OK;
 }

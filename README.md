@@ -124,18 +124,19 @@ cd ${KOS_BASE}/ds/firmware/hollysh && make && make install
 - make cdi image: `make cdi`
 - make IDE/SD FAT32 image: `make ide`
 
-## GD Ripper verification
+## GD Ripper 2.0
 
-GD Ripper can now read every completed track back from the destination on the
-Dreamcast, calculate CRC32 values, check file lengths and recovery metadata,
-and compare the result with `DS/apps/gd_ripper/redump.db`. Use the **Verify**
-button for an existing named dump, or leave **Verify against known dump after
-rip** enabled. Every run writes `verify.log` beside the GDI.
+GD Ripper now calculates CRC while ripping, checkpoints it for resume, and
+compares completed tracks with bundled TOSEC and Redump catalogs. Normal
+verification no longer rereads the whole dump through serial SD.
 
-Development releases also include desktop tools to verify with SHA-1/MD5/CRC32
-or generate a replacement on-console database from a current Redump DAT. See
-[the verifier guide](utils/README.gd-verify.md) for commands and an explanation
-of full-track, data-track, and identification-only matches.
+The redesigned interface uses direct controller/button selection, automatic
+disc-title detection, explicit Stop/error status, and an Advanced Features
+page. Optional advanced checks validate data-sector addresses and EDC/ECC,
+scan saved dumps, and reread flagged sectors while backing up replaced bytes.
+
+See [the ripper/verifier guide](utils/README.gd-verify.md) for installation,
+recovery steps, catalog limitations, and the included desktop tools.
 
 ## Links
 - Website: http://www.dc-swat.ru/ 

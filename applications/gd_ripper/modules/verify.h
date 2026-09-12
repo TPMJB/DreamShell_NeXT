@@ -22,6 +22,10 @@ typedef struct {
 	gd_verify_result_t result;
 	gd_verify_result_t catalog_result;
 	bool clean;
+	bool streaming;
+	uint32_t suspect_sectors;
+	uint32_t unsupported_sectors;
+	char catalog[32];
 	bool report_written;
 	uint32_t track_count;
 	uint32_t bad_sector_count;
@@ -36,6 +40,9 @@ typedef void (*gd_verify_progress_cb_t)(void *data, const char *filename,
 gd_verify_result_t gd_verify_dump(const char *folder, const char *database_path,
 	bool sync_report, volatile int *active, gd_verify_progress_cb_t progress_cb,
 	void *progress_data, gd_verify_summary_t *summary);
+gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_path,
+    bool sync_report, volatile int *active, gd_verify_progress_cb_t progress_cb,
+    void *progress_data, gd_verify_summary_t *summary, bool streaming, bool scan);
 const char *gd_verify_result_text(gd_verify_result_t result);
 
 #endif

@@ -4,3 +4,8 @@ Required Notice: Commercial licensing: contact Ruslan Rostovtsev (SWAT) via http
 The bundled GD Ripper redump.db is adapted from libretro/libretro-database,
 licensed CC BY-SA 4.0. Full attribution is in
 applications/gd_ripper/redump-db.README.
+
+GD Ripper's tosec.db indexes factual track checksums and names from the TOSEC
+ISO Dreamcast US, JP and PAL catalogs (official 2025-03-13 release).
+Catalog author: Maddog and TOSEC contributors, https://www.tosecdev.org/.
+See applications/gd_ripper/redump-db.README for exact source DAT versions.

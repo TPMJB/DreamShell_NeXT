@@ -1,37 +1,108 @@
-# DreamShell GD Dump Verifier
+# DreamShell GD Ripper 2.0
 
-## Verify directly on the Dreamcast
+## Normal ripping
 
-GD Ripper 1.9 adds two on-console paths:
+Insert a disc and wait for **Ready to rip**. GD Ripper detects the lid/disc
+state, lets the drive settle, and reads its title automatically. There is no
+manual Read Name button. Detection is suspended while ripping, repairing or
+verifying; one worker owns all of the app's drive commands.
 
-- Leave **Verify against known dump after rip** checked to read the files back
-  and verify them immediately after a successful rip.
-- Enter the existing dump's folder name and select **Verify** to check it later;
-  the game disc is not needed for this read-back pass.
+Choose **Start / Resume**. CRC32 is calculated from the bytes successfully
+written while ripping. On completion, the saved CRCs and track sizes are
+compared with both the bundled TOSEC retail GDI and reduced Redump catalogs.
+This fast path does **not** reread the track data from SD or prove that storage
+returned the same bytes. `verify.log` explicitly identifies the hash origin.
 
-The console checks `rip.state`, `rip.complete`, track sizes, and `.bad` maps,
-then calculates CRC32 for every track. Results appear on screen and in
-`verify.log` inside the dump folder. The database is read as a stream, so it
-does not need to fit in the Dreamcast's memory.
+Use the D-pad or stick to select a control and A to activate it. B requests
+Stop or returns from a settings page. The controller does not emulate a mouse;
+real mouse clicks and keyboard input remain available. Destination has SD,
+IDE and PC buttons plus an editable path. Settings show ON/OFF in words.
 
-The bundled `DS/apps/gd_ripper/redump.db` is generated from Libretro's reduced
-Dreamcast catalog. It normally contains one identifying data track per game,
-so a successful result is **IDENTIFIED BY DATA TRACK**. This is a known-dump
-content match, but not a full physical-disc Redump verification.
+## Advanced features
 
-To replace it with a current or full Redump-compatible DAT, run this on a PC:
+- **Advanced CRC during rip**: validates raw Mode 1 sector sync, physical
+  address, EDC and ECC parity. Invalid reads fall back to individual-sector
+  retries before writing. It detects errors; it does not manufacture ECC or
+  substitute guessed bytes. Mode 2 and audio are not covered by these checks.
+- **Scan saved dump**: rereads storage, calculates whole-track CRC32, and scans
+  raw Mode 1 data sectors. It writes `trackNN.bin.suspect` containing zero-based
+  track-sector, FAD, and error flags (sync=1, address=2, EDC=4, ECC=8).
+  No disc is required for a scan. Serial SD read-back can take about 30 minutes.
+- **Zero-fill unreadable sectors** remains OFF by default. Turning it on writes
+  zeros only after retries are exhausted and records them in `.bad`. It loses
+  data and cannot count as a clean verification.
+- Track format defaults to 2352-byte BIN. 2048-byte ISO cannot match these raw
+  track catalogs. Read-attempt choices are 1, 5, 10, 20 and 50.
+
+To repair a previously completed dump, scan it first. If suspects were found,
+insert the same disc, enable **Advanced CRC during rip**, keep the same
+folder/destination, then choose **Start / Resume**. The app checks the TOC and
+boot-sector identity, rereads flagged sectors, and accepts only reads that pass
+address/EDC/ECC validation. Before each replacement it durably saves the old
+2352 bytes in `.repair-backup` (ASCII `FAD <number>\n`, then 2352 raw bytes,
+repeated). A failed replacement leaves the original or its backup available.
+CRC checkpoints are invalidated before edits; the repaired track is hashed
+from storage once to rebuild its whole-track CRC. This is intentionally a slow
+advanced operation. A fully repaired zero-fill map is saved as `.bad.history`
+before its active `.bad` map is removed.
+
+No catalog match is **inconclusive**: different revisions, missing catalog
+coverage, different track boundaries and read/storage errors can all cause it.
+A whole-track CRC cannot reveal a bad-sector address. If the sector scan finds
+no suspects but CRC still differs, compare two independent rips on a PC (below).
+The checker never changes sectors just to force an expected whole-track CRC.
+
+## Resume, Stop and storage
+
+Stop returns to the interface immediately and requests cancellation. Keep the
+console powered until it shows a stopped/result message and Exit is enabled.
+The worker must still finish or time out its current I/O and save a checkpoint.
+A waiting operation displays its elapsed time and FAD; a long drive read is
+explicitly labeled stalled. Timed KOS commands now also bound semaphore waits.
+A BIOS call that itself never returns cannot safely be interrupted by issuing
+competing drive commands from another thread; hardware testing is still needed
+for such firmware-level hangs.
+
+`rip.state` retains the original track layout. `rip.disc` binds new GD-ROM
+resumes to the 2048-byte boot sector; older dumps are checked against their
+saved track 3 (or low data track if track 3 is empty). This is not a disc-wide
+cryptographic identity and CD/CD-R resumes still use the existing TOC checks.
+
+Each `.crc` journal records a metadata tag, committed byte count, rolling CRC
+and record checksum, **after** the track is flushed. Torn or out-of-range
+records are ignored. Resume restores the last valid checkpoint and hashes any
+uncheckpointed tail. An older dump without a journal needs a one-time hash of
+its saved portion. Keep the `.crc`, `.bad`, `.suspect` and `rip.*` files with
+their tracks. A matching stream CRC does not test for subsequent SD corruption;
+use the optional storage scan for that.
+
+## Catalogs on the Dreamcast
+
+The release includes `redump.db` and `tosec.db`; keep both with `app.xml` and
+the module. TOSEC is a natural reference for traditional Dreamcast GDI dumps.
+Redump data tracks are also useful when their boundaries and bytes agree.
+For Sonic Adventure's common US revisions both catalogs have the same track 3:
+
+| Revision | Bytes | CRC32 |
+| --- | ---: | --- |
+| v1.004 / original US | 1,185,760,800 | `21483b0c` |
+| v1.005 / US Rev A | 1,185,760,800 | `00c55860` |
+
+Thus changing catalog alone does not explain a mismatch in those tracks.
+Sources: bundled database provenance in `redump-db.README`; [TOSEC official
+DAT pack](https://www.tosecdev.org/downloads/category/59-2025-03-13) and
+[Libretro Redump DAT](https://github.com/libretro/libretro-database/blob/master/metadat/redump/Sega%20-%20Dreamcast.dat).
+
+To update either database on your PC:
 
 ```sh
-python3 make_gd_redump_db.py "/path/to/Sega - Dreamcast.dat" \
-  --output redump.db
+python3 make_gd_redump_db.py "Sega - Dreamcast.dat" -o redump.db
+python3 make_gd_redump_db.py "TOSEC US.dat" "TOSEC JP.dat" "TOSEC PAL.dat" -o tosec.db
 ```
 
-Copy the resulting file over `DS/apps/gd_ripper/redump.db` on the DreamShell
-card. ZIP- and gzip-compressed DAT files are accepted directly.
-
-For direct comparison, GD Ripper data tracks must use 2352-byte BIN format.
-With 2048-byte ISO data tracks, the console reports
-**INCOMPATIBLE DATA-TRACK FORMAT** and retains the computed hashes in the log.
+Copy the result into `DS/apps/gd_ripper/`. XML, ClrMamePro, gzip, and ZIPs
+containing a single DAT are supported. Extract regional DATs from a full TOSEC
+pack first. The compact format remains backward compatible with v1.9.
 
 ## Verify on a desktop computer
 
@@ -41,7 +112,7 @@ library.
 
 The verifier deliberately keeps these results separate:
 
-- **FULL TRACK MATCH** — every dumped track matches one Redump DAT entry.
+- **FULL TRACK MATCH** — every dumped track matches one selected DAT entry.
 - **DATA TRACKS MATCH** — all data tracks match, but one or more audio tracks do
   not. This is common when a console dump and a Redump-grade PC drive use
   different audio offsets or padding.
@@ -50,7 +121,7 @@ The verifier deliberately keeps these results separate:
   does not verify every track.
 - **NO DATA-TRACK HASH MATCH** — no catalog entry has an identical data track.
 - **INCOMPATIBLE DATA-TRACK FORMAT** — DreamShell produced 2048-byte ISO data
-  tracks. Enable **Use bin tracks** before ripping if you want direct comparison
+  tracks. Select **Track format: BIN** before ripping if you want direct comparison
   with Redump's 2352-byte BIN hashes.
 
 Even a full track-file match does not mean DreamShell captured lead-in,
@@ -120,13 +191,12 @@ rest of the data tracks match.
 
 ## Which DAT should I use?
 
-For the most complete answer, use Redump's full Dreamcast DAT containing every
-track. A reduced DAT such as Libretro's `Sega - Dreamcast.dat` is still useful,
-but generally contains only one identifying data track per game; the verifier
-therefore reports **IDENTIFIED BY DATA TRACK**, never a full-disc match, when
-that is all the catalog provides. The reduced DAT can be downloaded directly
-from
-<https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/redump/Sega%20-%20Dreamcast.dat>.
+Use a TOSEC Dreamcast GDI DAT for traditional console dumps, and Redump when
+track representation agrees. Both are supported. A full DAT can compare every
+listed track; a reduced Libretro DAT normally covers one identifying data
+track, so it cannot verify the entire disc. Catalog hashes do not identify
+sector addresses or repair missing bytes. Neither format guarantees that an
+unmatched dump is corrupt.
 
 ## Privacy and performance
 
