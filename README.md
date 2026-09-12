@@ -1,3 +1,9 @@
+This is my own personal project to fix the GD-ROM dumping on the Dreamcast as it...leaves a lot to be desired.
+
+I went down a rabbit hole dumping all my games to redump quality, so I aim to make the Dreamcast dumper as close as possible to that, even though you can't really get every single bit of data that those rare drives can get.
+
+If the vibe-coding turns your Dreamcast into a bot-net, I am not responsible for it. You use this at your own risk. I'm building this for MYSELF.
+
 DreamShell
 ==========
 
