@@ -3,6 +3,7 @@
    module.c - GD Ripper app module
    Copyright (C)2014 megavolt85
    Copyright (C)2025 SWAT
+   DreamShell NeXT recovery improvements coordinated and tested by TPMJB
 
 */
 
@@ -172,15 +173,20 @@ static void rip_log(const char *format, ...) {
 		line_len = sizeof(line) - 1;
 	}
 
-	hnd = fs_open(self.log_path, O_WRONLY | O_CREAT);
+	hnd = fs_open(self.log_path, O_WRONLY | O_CREAT | O_APPEND);
 	if (hnd == FILEHND_INVALID) {
 		ds_printf("DS_WARN: Can't open rip log %s\n", self.log_path);
 		return;
 	}
 
-	if (fs_seek(hnd, 0, SEEK_END) < 0 ||
-		fs_write(hnd, line, line_len) != line_len) {
+	if (fs_write(hnd, line, line_len) != line_len) {
 		ds_printf("DS_WARN: Can't append to rip log %s\n", self.log_path);
+	}
+	else if (self.sync_mount[0]) {
+		ssize_t completed = 0;
+		if (fs_complete(hnd, &completed) != 0) {
+			ds_printf("DS_WARN: Can't sync rip log %s\n", self.log_path);
+		}
 	}
 	fs_close(hnd);
 }
@@ -1022,9 +1028,19 @@ out:
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
 	GUI_WidgetSetEnabled(self.read_name_btn, 1);
 	if (success) {
+		char final_done[64];
+		char final_total[64];
+
+		snprintf(final_done, sizeof(final_done), "Done: %llu",
+			(unsigned long long)self.processed_sectors);
+		snprintf(final_total, sizeof(final_total), "Total: %llu",
+			(unsigned long long)self.total_sectors);
 		GUI_LabelSetText(self.track_label, "Rip complete");
 		GUI_ProgressBarSetPosition(self.pbar, 1.0);
+		GUI_LabelSetText(self.time_label, "Time left: 0m");
 		GUI_LabelSetText(self.progress_percent_label, "Overall: 100.00%");
+		GUI_LabelSetText(self.sectors_total_label, final_total);
+		GUI_LabelSetText(self.sectors_processed_label, final_done);
 		set_io_status("Finished", 0);
 	}
 	else if (cancelled) {

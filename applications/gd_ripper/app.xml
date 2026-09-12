@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="GD Ripper" version="1.7.0" icon="images/icon.png">
+<app name="GD Ripper" version="1.8.0" icon="images/icon.png">
 	<resources>
 		<module src="modules/app_gd_ripper.klf" />
 		<font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="16" name="arial" />
@@ -113,6 +113,11 @@
 							name="num-read" />
 						<label width="280" height="20" x="42" font="arial" color="#333333" text="Bad sector read attempts" align="left" />
 					</panel>
+				</panel>
+
+				<panel x="40" y="370" width="360" height="20">
+					<label width="360" height="20" font="arial" color="#444444"
+						text="DreamShell NeXT enhancements by TPMJB" align="left" />
 				</panel>
 
 				<input type="button"

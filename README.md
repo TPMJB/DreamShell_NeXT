@@ -1,9 +1,3 @@
-This is my own personal project to fix the GD-ROM dumping on the Dreamcast as it...leaves a lot to be desired.
-
-I went down a rabbit hole dumping all my games to redump quality, so I aim to make the Dreamcast dumper as close as possible to that, even though you can't really get every single bit of data that those rare drives can get.
-
-If the vibe-coding turns your Dreamcast into a bot-net, I am not responsible for it. You use this at your own risk. I'm building this for MYSELF.
-
 DreamShell
 ==========
 
@@ -129,6 +123,15 @@ cd ${KOS_BASE}/ds/firmware/hollysh && make && make install
 - flycast emulator: `make flycast`
 - make cdi image: `make cdi`
 - make IDE/SD FAT32 image: `make ide`
+
+## GD Ripper verification
+
+Development releases include `host-tools/verify_gd_dump.py`, a local desktop
+checker for GD Ripper output. It validates `rip.state`, `rip.complete`, and bad
+sector maps; compares independent dumps; and supports full Redump XML or
+ClrMamePro DAT files. See [the verifier guide](utils/README.gd-verify.md) for
+commands and an explanation of full-track, data-track, and identification-only
+matches.
 
 ## Links
 - Website: http://www.dc-swat.ru/ 

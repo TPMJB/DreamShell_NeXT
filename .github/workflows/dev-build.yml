@@ -96,6 +96,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Test GD dump verifier
+        run: python3 -m unittest discover -s utils/tests -v
+
       - name: Prepare directories
         run: |
           sudo mkdir -p /usr/local/dc/kos /opt/toolchains/dc
