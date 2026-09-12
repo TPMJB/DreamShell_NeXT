@@ -2266,7 +2266,6 @@ fs_fat_shutdown
 fs_fat_mount
 fs_fat_unmount
 fs_fat_is_mounted
-fs_fat_sync
 #
 # Shutdown
 dcload_syscall_net_shutdown

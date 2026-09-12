@@ -12,7 +12,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <dc/cdrom.h>
-#include <fat/fs_fat.h>
 
 DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 
@@ -129,13 +128,16 @@ static void set_sync_mount(const char *path) {
 	}
 }
 
-static int sync_destination(void) {
+static int sync_track(file_t hnd) {
+	ssize_t completed = 0;
+
 	if (!self.sync_mount[0]) {
 		return CMD_OK;
 	}
 
-	if (fs_fat_sync(self.sync_mount) != 0) {
-		ds_printf("DS_ERROR: Failed to sync FAT filesystem %s\n", self.sync_mount);
+	/* DreamShell's FatFs VFS maps fs_complete() to f_sync() for this handle. */
+	if (fs_complete(hnd, &completed) != 0) {
+		ds_printf("DS_ERROR: Failed to sync open track on %s\n", self.sync_mount);
 		return CMD_ERROR;
 	}
 
@@ -993,10 +995,6 @@ static void* gd_ripper_thread(void *arg) {
 		fs_unlink(complete_path);
 	}
 
-	if (sync_destination() != CMD_OK) {
-		goto out;
-	}
-
 	ds_printf("DS_PROCESS: Starting track extraction\n");
 
 	if(process_tracks(dst_folder, dst_file) != CMD_OK) {
@@ -1010,9 +1008,6 @@ static void* gd_ripper_thread(void *arg) {
 
 	rip_log("Rip completed successfully: %llu sectors",
 		(unsigned long long)self.processed_sectors);
-	if (sync_destination() != CMD_OK) {
-		goto out;
-	}
 	success = true;
 
 out:
@@ -1020,7 +1015,6 @@ out:
 	if (!success && self.log_path[0]) {
 		rip_log(cancelled ? "Rip cancelled; partial files preserved" :
 			"Rip paused after an error; partial files preserved for resume");
-		sync_destination();
 	}
 
 	self.rip_active = 0;
@@ -1200,11 +1194,12 @@ static int record_bad_sector(const char *dst_file, uint32_t tn,
 	return CMD_OK;
 }
 
-static int checkpoint_track(uint32_t tn, uint32_t written_sectors, uint32_t fad) {
+static int checkpoint_track(file_t hnd, uint32_t tn, uint32_t written_sectors,
+		uint32_t fad) {
 	set_io_status("Sync", fad);
 	rip_log("Checkpoint track %lu at track sector %lu (FAD %lu)",
 		(unsigned long)tn, (unsigned long)written_sectors, (unsigned long)fad);
-	return sync_destination();
+	return sync_track(hnd);
 }
 
 static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, char *dst_file) {
@@ -1308,8 +1303,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		int cdstat;
 
 		if (!self.rip_active || !(self.app->state & APP_STATE_OPENED)) {
+			checkpoint_track(hnd, tn, original_count - count, first);
 			fs_close(hnd);
-			checkpoint_track(tn, original_count - count, first);
 			free(buffer);
 			return CMD_ERROR;
 		}
@@ -1326,8 +1321,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 			if (fs_write(hnd, buffer, bytes_to_write) != (ssize_t)bytes_to_write) {
 				rip_log("Write error in track %lu at FAD %lu",
 					(unsigned long)tn, (unsigned long)first);
+				checkpoint_track(hnd, tn, original_count - count, first);
 				fs_close(hnd);
-				checkpoint_track(tn, original_count - count, first);
 				free(buffer);
 				return CMD_ERROR;
 			}
@@ -1336,7 +1331,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 			/* Commit everything already written before doing slow recovery. */
 			rip_log("Bulk read error %d at FAD %lu (%lu sectors); trying sectors individually",
 				cdstat, (unsigned long)first, (unsigned long)nsects);
-			if (checkpoint_track(tn, original_count - count, first) != CMD_OK) {
+			if (checkpoint_track(hnd, tn, original_count - count, first) != CMD_OK) {
 				fs_close(hnd);
 				free(buffer);
 				return CMD_ERROR;
@@ -1376,8 +1371,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					int reinit_rv;
 
 					if (!self.rip_active || !(self.app->state & APP_STATE_OPENED)) {
+						checkpoint_track(hnd, tn, track_sector, fad);
 						fs_close(hnd);
-						checkpoint_track(tn, track_sector, fad);
 						free(buffer);
 						return CMD_ERROR;
 					}
@@ -1399,8 +1394,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 						(unsigned long)fad, cdstat);
 
 					if (cdstat == ERR_NO_DISC || cdstat == ERR_DISC_CHG) {
+						checkpoint_track(hnd, tn, track_sector, fad);
 						fs_close(hnd);
-						checkpoint_track(tn, track_sector, fad);
 						free(buffer);
 						return CMD_ERROR;
 					}
@@ -1411,8 +1406,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 						reinit_rv = safe_cdrom_reinit();
 						if (reinit_rv != ERR_OK || safe_cdrom_set_sector_size(secbyte) != ERR_OK) {
 							rip_log("GD-ROM reinitialization failed with error %d", reinit_rv);
+							checkpoint_track(hnd, tn, track_sector, fad);
 							fs_close(hnd);
-							checkpoint_track(tn, track_sector, fad);
 							free(buffer);
 							return CMD_ERROR;
 						}
@@ -1427,8 +1422,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					if (!zero_fill) {
 						rip_log("FAD %lu remains unreadable; pausing without writing a substitute sector",
 							(unsigned long)fad);
+						checkpoint_track(hnd, tn, track_sector, fad);
 						fs_close(hnd);
-						checkpoint_track(tn, track_sector, fad);
 						free(buffer);
 						return CMD_ERROR;
 					}
@@ -1446,13 +1441,14 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 				if (fs_write(hnd, buffer, secbyte) != (ssize_t)secbyte) {
 					rip_log("Write error in recovered track %lu at FAD %lu",
 						(unsigned long)tn, (unsigned long)fad);
+					checkpoint_track(hnd, tn, track_sector, fad);
 					fs_close(hnd);
-					checkpoint_track(tn, track_sector, fad);
 					free(buffer);
 					return CMD_ERROR;
 				}
 
-				if (cdstat != ERR_OK && sync_destination() != CMD_OK) {
+				if (cdstat != ERR_OK &&
+					checkpoint_track(hnd, tn, track_sector + 1, fad + 1) != CMD_OK) {
 					fs_close(hnd);
 					free(buffer);
 					return CMD_ERROR;
@@ -1472,7 +1468,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		update_ui_display(secbyte, false);
 
 		if (checkpoint_sectors >= FAT_CHECKPOINT_SECTORS) {
-			if (checkpoint_track(tn, original_count - count, first) != CMD_OK) {
+			if (checkpoint_track(hnd, tn, original_count - count, first) != CMD_OK) {
 				fs_close(hnd);
 				free(buffer);
 				return CMD_ERROR;
@@ -1481,7 +1477,6 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		}
 	}
 
-	fs_close(hnd);
 	if (bad) {
 		rip_log("Track %lu completed with %lu zero-filled sector(s)",
 			(unsigned long)tn, (unsigned long)bad);
@@ -1490,7 +1485,14 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		rip_log("Track %lu completed successfully", (unsigned long)tn);
 	}
 
-	if (checkpoint_track(tn, original_count, original_first + original_count) != CMD_OK) {
+	if (checkpoint_track(hnd, tn, original_count,
+			original_first + original_count) != CMD_OK) {
+		fs_close(hnd);
+		free(buffer);
+		return CMD_ERROR;
+	}
+	if (fs_close(hnd) != 0) {
+		rip_log("Failed to close track %lu after syncing", (unsigned long)tn);
 		free(buffer);
 		return CMD_ERROR;
 	}
