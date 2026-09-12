@@ -238,6 +238,7 @@ release: build cdi
 	@mv $(DS_BASE)/firmware/bootloader/*.cdi $(DS_BASE)/release
 	@mkdir -p $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/verify_gd_dump.py $(DS_BASE)/release/host-tools
+	@cp $(DS_BASE)/utils/make_gd_redump_db.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/README.gd-verify.md $(DS_BASE)/release/host-tools/README.md
 	@echo Compressing...
 	@cd $(DS_BASE)/release && zip -q -r $(TARGET_NAME).zip * 2> /dev/null

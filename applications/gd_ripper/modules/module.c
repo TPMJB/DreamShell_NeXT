@@ -9,6 +9,7 @@
 
 #include "ds.h"
 #include "isofs/isofs.h"
+#include "verify.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -20,11 +21,13 @@ DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 #define UI_UPDATE_INTERVAL 500
 #define GD_COMMAND_TIMEOUT_MS 8000
 #define FAT_CHECKPOINT_SECTORS 4096
+#define DRIVE_SETTLE_MS 1000
 #define MAX_TRACKS 99
 #define RIP_STATE_HEADER "DreamShell GD Ripper state v1"
 
 static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, char *dst_file);
 static void* gd_ripper_thread(void *arg);
+static void* gd_verify_thread(void *arg);
 static int create_gdi_file(char *dst_folder, char *dst_file, char *text, int disc_type);
 static int get_disc_status_and_type(int *status, int *disc_type);
 static int safe_cdrom_read_toc(cd_toc_t *toc, bool high_density);
@@ -47,6 +50,11 @@ static int collect_track_info(int area_count, int disc_type);
 static uint64_t calculate_total_sectors(void);
 static void set_io_status(const char *operation, uint32_t fad);
 static void update_ui_display(uint32_t current_sector_size, bool force);
+static void update_verify_display(void *data, const char *filename,
+	uint32_t track_index, uint32_t track_count, uint64_t processed_bytes,
+	uint64_t total_bytes);
+static void show_verify_result(const gd_verify_summary_t *summary,
+	gd_verify_result_t result, const char *rip_label);
 
 static struct self {
 	App_t *app;
@@ -58,6 +66,8 @@ static struct self {
 	GUI_Widget *start_btn;
 	GUI_Widget *cancel_btn;
 	GUI_Widget *read_name_btn;
+	GUI_Widget *verify_btn;
+	GUI_Widget *verify_after_btn;
 	GUI_Widget *speed_label;
 	GUI_Widget *time_label;
 	GUI_Widget *progress_percent_label;
@@ -75,16 +85,19 @@ static struct self {
 	uint64_t processed_sectors;
 	uint64_t session_sectors;
 	uint64_t last_ui_update;
+	uint64_t drive_ready_after;
 	uint32_t track_count;
 	uint32_t current_fad;
 	int max_attempts;
 	bool zero_fill;
 	bool use_bin;
+	bool verify_after;
 	track_info_t tracks[MAX_TRACKS];
 	char selected_path[NAME_MAX];
 	char rip_name[NAME_MAX];
 	char rip_destination[NAME_MAX];
 	char log_path[NAME_MAX];
+	char database_path[NAME_MAX];
 	char sync_mount[8];
 } self;
 
@@ -238,6 +251,7 @@ static void reset_rip_state(void) {
 	GUI_WidgetSetEnabled(self.start_btn, 1);
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
 	GUI_WidgetSetEnabled(self.read_name_btn, 1);
+	GUI_WidgetSetEnabled(self.verify_btn, 1);
 	GUI_LabelSetText(self.speed_label, " ");
 	GUI_LabelSetText(self.time_label, " ");
 	GUI_LabelSetText(self.track_label, "GD Ripper");
@@ -255,6 +269,15 @@ static void reset_rip_state(void) {
 	self.current_fad = 0;
 	self.log_path[0] = '\0';
 	self.sync_mount[0] = '\0';
+}
+
+static void wait_for_drive_settle(void) {
+	while (self.rip_active && self.drive_ready_after &&
+			timer_ms_gettime64() < self.drive_ready_after) {
+		GUI_LabelSetText(self.track_label, "Settling drive...");
+		thd_sleep(50);
+	}
+	self.drive_ready_after = 0;
 }
 
 void gd_ripper_Number_read()
@@ -330,7 +353,9 @@ void gd_ripper_ipbin_name()
 
 	ds_printf("DS_PROCESS: Reading IP.BIN from LBA: %d\n", lba);
 
-	if (timed_cdrom_read(pbuff, lba, 1) != ERR_OK) {
+	int read_rv = timed_cdrom_read(pbuff, lba, 1);
+	self.drive_ready_after = timer_ms_gettime64() + DRIVE_SETTLE_MS;
+	if (read_rv != ERR_OK) {
 		ds_printf("DS_ERROR: GD read error\n"); 
 		free(pbuff);
 		return;
@@ -390,6 +415,8 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 		self.start_btn = APP_GET_WIDGET("start_btn");
 		self.cancel_btn = APP_GET_WIDGET("cancel_btn");
 		self.read_name_btn = APP_GET_WIDGET("Read-name");
+		self.verify_btn = APP_GET_WIDGET("verify-btn");
+		self.verify_after_btn = APP_GET_WIDGET("verify-after-btn");
 		self.speed_label = APP_GET_WIDGET("speed-label");
 		self.time_label = APP_GET_WIDGET("time-label");
 		self.progress_percent_label = APP_GET_WIDGET("progress-percent-label");
@@ -400,6 +427,13 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 		self.file_browser = APP_GET_WIDGET("file-browser");
 		self.pages = APP_GET_WIDGET("pages");
 		self.use_bin_btn = APP_GET_WIDGET("use_bin_btn");
+
+		char app_path[NAME_MAX];
+		GetAppPath(app_path, sizeof(app_path), app->fn);
+		if (snprintf(self.database_path, sizeof(self.database_path),
+				"%s/redump.db", app_path) >= (int)sizeof(self.database_path)) {
+			self.database_path[0] = '\0';
+		}
 
 		if(DirExists("/ide")) {
 			strcpy(self.selected_path, "/ide");
@@ -416,7 +450,7 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 
 		GUI_LabelSetText(self.destination_path, self.selected_path);
 		GUI_WidgetSetEnabled(self.cancel_btn, 0);
-		gd_ripper_ipbin_name();
+		GUI_LabelSetText(self.track_label, "Insert disc / Read name");
 	} 
 	else 
 	{
@@ -442,6 +476,7 @@ void gd_ripper_StartRip(GUI_Widget *widget)
 	if (self.max_attempts > 50) self.max_attempts = 50;
 	self.zero_fill = !!GUI_WidgetGetState(self.bad);
 	self.use_bin = !!GUI_WidgetGetState(self.use_bin_btn);
+	self.verify_after = !!GUI_WidgetGetState(self.verify_after_btn);
 	sanitize_rip_name(self.rip_name, sizeof(self.rip_name),
 		GUI_TextEntryGetText(self.gname));
 	GUI_TextEntrySetText(self.gname, self.rip_name);
@@ -452,6 +487,7 @@ void gd_ripper_StartRip(GUI_Widget *widget)
 	GUI_WidgetSetEnabled(self.start_btn, 0);
 	GUI_WidgetSetEnabled(self.cancel_btn, 1);
 	GUI_WidgetSetEnabled(self.read_name_btn, 0);
+	GUI_WidgetSetEnabled(self.verify_btn, 0);
 	
 	GUI_LabelSetText(self.track_label, "Starting...");
 	GUI_LabelSetText(self.speed_label, "Preparing...");
@@ -464,10 +500,43 @@ void gd_ripper_StartRip(GUI_Widget *widget)
 	}
 }
 
+void gd_ripper_Verify(GUI_Widget *widget)
+{
+	(void)widget;
+	if (self.app->thd) {
+		self.rip_active = 0;
+		thd_join(self.app->thd, NULL);
+		self.app->thd = NULL;
+	}
+
+	reset_rip_state();
+	sanitize_rip_name(self.rip_name, sizeof(self.rip_name),
+		GUI_TextEntryGetText(self.gname));
+	GUI_TextEntrySetText(self.gname, self.rip_name);
+	snprintf(self.rip_destination, sizeof(self.rip_destination), "%s",
+		self.selected_path);
+	self.rip_active = 1;
+	self.start_time = timer_ms_gettime64();
+
+	GUI_WidgetSetEnabled(self.start_btn, 0);
+	GUI_WidgetSetEnabled(self.cancel_btn, 1);
+	GUI_WidgetSetEnabled(self.read_name_btn, 0);
+	GUI_WidgetSetEnabled(self.verify_btn, 0);
+	GUI_LabelSetText(self.track_label, "Starting verify...");
+	GUI_LabelSetText(self.speed_label, "Reading SD...");
+	GUI_LabelSetText(self.time_label, "Please wait");
+
+	self.app->thd = thd_create(0, gd_verify_thread, NULL);
+	if (!self.app->thd) {
+		reset_rip_state();
+		GUI_LabelSetText(self.track_label, "Thread start failed");
+	}
+}
+
 void gd_ripper_CancelRip(GUI_Widget *widget)
 {
 	(void)widget;
-	ds_printf("DS_PROCESS: Cancelling ripping\n");
+	ds_printf("DS_PROCESS: Cancelling GD Ripper operation\n");
 	self.rip_active = 0;
 
 	if(self.app->thd)
@@ -918,11 +987,16 @@ static void* gd_ripper_thread(void *arg) {
 	bool resume = false;
 	bool destination_ready = false;
 	bool success = false;
+	bool verification_ran = false;
 	bool cancelled;
 	char complete_path[NAME_MAX];
 	const char *failure_label = "Rip failed";
+	gd_verify_summary_t verification_summary;
+	gd_verify_result_t verification_result = GD_VERIFY_ERROR;
 
 	(void)arg;
+	memset(&verification_summary, 0, sizeof(verification_summary));
+	verification_summary.catalog_result = GD_VERIFY_ERROR;
 
 	ds_printf("DS_PROCESS: Starting disc ripping process\n");
 	self.start_time = timer_ms_gettime64();
@@ -931,6 +1005,10 @@ static void* gd_ripper_thread(void *arg) {
 	self.log_path[0] = '\0';
 	set_sync_mount(self.rip_destination);
 
+	wait_for_drive_settle();
+	if (!self.rip_active) {
+		goto out;
+	}
 	GUI_LabelSetText(self.track_label, "Initializing...");
 	if (safe_cdrom_reinit() != ERR_OK) {
 		ds_printf("DS_ERROR: Failed to initialize GD-ROM\n");
@@ -1016,6 +1094,19 @@ static void* gd_ripper_thread(void *arg) {
 		(unsigned long long)self.processed_sectors);
 	success = true;
 
+	if (self.verify_after && self.rip_active) {
+		verification_ran = true;
+		safe_cdrom_spin_down();
+		GUI_LabelSetText(self.track_label, "Read-back verify...");
+		GUI_LabelSetText(self.speed_label, "Reading SD...");
+		GUI_LabelSetText(self.time_label, "Please wait");
+		self.start_time = timer_ms_gettime64();
+		self.last_ui_update = 0;
+		verification_result = gd_verify_dump(dst_folder, self.database_path,
+			self.sync_mount[0] != '\0', &self.rip_active, update_verify_display,
+			NULL, &verification_summary);
+	}
+
 out:
 	cancelled = !self.rip_active;
 	if (!success && self.log_path[0]) {
@@ -1027,7 +1118,13 @@ out:
 	GUI_WidgetSetEnabled(self.start_btn, 1);
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
 	GUI_WidgetSetEnabled(self.read_name_btn, 1);
-	if (success) {
+	GUI_WidgetSetEnabled(self.verify_btn, 1);
+	if (success && verification_ran) {
+		show_verify_result(&verification_summary, verification_result,
+			verification_result == GD_VERIFY_CANCELLED ?
+			"Rip complete / verify stopped" : NULL);
+	}
+	else if (success) {
 		char final_done[64];
 		char final_total[64];
 
@@ -1141,6 +1238,144 @@ static void update_ui_display(uint32_t current_sector_size, bool force) {
 	GUI_LabelSetText(self.sectors_processed_label, processed_sectors_text);
 
 	self.last_ui_update = current_time;
+}
+
+static void format_verify_bytes(char *buffer, size_t size, uint64_t bytes,
+		const char *prefix) {
+	if (bytes >= 1024ULL * 1024 * 1024) {
+		snprintf(buffer, size, "%s %.2f GB", prefix,
+			(double)bytes / (1024.0 * 1024.0 * 1024.0));
+	}
+	else if (bytes >= 1024ULL * 1024) {
+		snprintf(buffer, size, "%s %.1f MB", prefix,
+			(double)bytes / (1024.0 * 1024.0));
+	}
+	else {
+		snprintf(buffer, size, "%s %.1f KB", prefix, (double)bytes / 1024.0);
+	}
+}
+
+static void update_verify_display(void *data, const char *filename,
+		uint32_t track_index, uint32_t track_count, uint64_t processed_bytes,
+		uint64_t total_bytes) {
+	uint64_t now = timer_ms_gettime64();
+	double percent = total_bytes ? (double)processed_bytes * 100.0 / total_bytes : 0.0;
+	char track_text[64];
+	char current_text[64];
+	char percent_text[64];
+	char speed_text[64];
+	char time_text[64];
+	char total_text[64];
+	char done_text[64];
+
+	(void)data;
+	if (!(self.app->state & APP_STATE_OPENED)) {
+		self.rip_active = 0;
+		return;
+	}
+	GUI_ProgressBarSetPosition(self.pbar, percent / 100.0);
+	if (now - self.last_ui_update < UI_UPDATE_INTERVAL) {
+		return;
+	}
+
+	snprintf(track_text, sizeof(track_text), "Verify %lu of %lu",
+		(unsigned long)track_index, (unsigned long)track_count);
+	snprintf(current_text, sizeof(current_text), "Hash: %.44s", filename);
+	snprintf(percent_text, sizeof(percent_text), "Verify: %.2f%%", percent);
+	format_verify_bytes(total_text, sizeof(total_text), total_bytes, "Total:");
+	format_verify_bytes(done_text, sizeof(done_text), processed_bytes, "Done:");
+
+	uint64_t elapsed = now - self.start_time;
+	double bytes_per_second = elapsed ?
+		(double)processed_bytes * 1000.0 / elapsed : 0.0;
+	if (bytes_per_second > 0) {
+		snprintf(speed_text, sizeof(speed_text), "Speed: %.1f KB/s",
+			bytes_per_second / 1024.0);
+	}
+	else {
+		snprintf(speed_text, sizeof(speed_text), "Speed: --");
+	}
+	if (bytes_per_second > 0 && total_bytes > processed_bytes) {
+		uint64_t seconds = (uint64_t)((total_bytes - processed_bytes) /
+			bytes_per_second);
+		snprintf(time_text, sizeof(time_text), "Time left: %lum",
+			(unsigned long)((seconds + 59) / 60));
+	}
+	else {
+		snprintf(time_text, sizeof(time_text), "Time left: --");
+	}
+
+	GUI_LabelSetText(self.track_label, track_text);
+	GUI_LabelSetText(self.current_lba_label, current_text);
+	GUI_LabelSetText(self.progress_percent_label, percent_text);
+	GUI_LabelSetText(self.speed_label, speed_text);
+	GUI_LabelSetText(self.time_label, time_text);
+	GUI_LabelSetText(self.sectors_total_label, total_text);
+	GUI_LabelSetText(self.sectors_processed_label, done_text);
+	self.last_ui_update = now;
+}
+
+static void show_verify_result(const gd_verify_summary_t *summary,
+		gd_verify_result_t result, const char *rip_label) {
+	const char *label;
+	char game_text[64];
+
+	switch (result) {
+		case GD_VERIFY_FULL_MATCH: label = "Redump FULL match"; break;
+		case GD_VERIFY_DATA_MATCH: label = "Redump data match"; break;
+		case GD_VERIFY_IDENTIFIED: label = "Known data match"; break;
+		case GD_VERIFY_PARTIAL_MATCH: label = "Partial match only"; break;
+		case GD_VERIFY_NO_MATCH: label = "No Redump match"; break;
+		case GD_VERIFY_NO_DATABASE: label = "Hashed - no database"; break;
+		case GD_VERIFY_INCOMPATIBLE: label = "Verify needs BIN tracks"; break;
+		case GD_VERIFY_INTEGRITY_FAILED: label = "Dump integrity FAILED"; break;
+		case GD_VERIFY_CANCELLED: label = rip_label ? rip_label : "Verify cancelled"; break;
+		default: label = "Verification failed"; break;
+	}
+	GUI_LabelSetText(self.track_label, label);
+
+	if (summary->game_name[0]) {
+		snprintf(game_text, sizeof(game_text), "Known: %.48s", summary->game_name);
+		GUI_LabelSetText(self.speed_label, game_text);
+	}
+	else {
+		GUI_LabelSetText(self.speed_label, " ");
+	}
+	GUI_LabelSetText(self.time_label,
+		summary->report_written ? "Saved verify.log" : "No verification report");
+	GUI_LabelSetText(self.current_lba_label, gd_verify_result_text(summary->catalog_result));
+	if (result != GD_VERIFY_CANCELLED && result != GD_VERIFY_ERROR) {
+		GUI_ProgressBarSetPosition(self.pbar, 1.0);
+		GUI_LabelSetText(self.progress_percent_label, "Verification complete");
+	}
+}
+
+static void* gd_verify_thread(void *arg) {
+	char folder[NAME_MAX];
+	gd_verify_summary_t summary;
+	gd_verify_result_t result;
+
+	(void)arg;
+	if (snprintf(folder, sizeof(folder), "%s/%s", self.rip_destination,
+			self.rip_name) >= (int)sizeof(folder)) {
+		memset(&summary, 0, sizeof(summary));
+		summary.catalog_result = GD_VERIFY_ERROR;
+		result = GD_VERIFY_ERROR;
+	}
+	else {
+		set_sync_mount(self.rip_destination);
+		result = gd_verify_dump(folder, self.database_path, self.sync_mount[0] != '\0',
+			&self.rip_active, update_verify_display, NULL, &summary);
+	}
+
+	self.rip_active = 0;
+	GUI_WidgetSetEnabled(self.start_btn, 1);
+	GUI_WidgetSetEnabled(self.cancel_btn, 0);
+	GUI_WidgetSetEnabled(self.read_name_btn, 1);
+	GUI_WidgetSetEnabled(self.verify_btn, 1);
+	show_verify_result(&summary, result, NULL);
+	self.start_time = 0;
+	return NULL;
 }
 
 static int get_existing_file_size(const char *path, uint64_t *size) {

@@ -1,5 +1,40 @@
 # DreamShell GD Dump Verifier
 
+## Verify directly on the Dreamcast
+
+GD Ripper 1.9 adds two on-console paths:
+
+- Leave **Verify against known dump after rip** checked to read the files back
+  and verify them immediately after a successful rip.
+- Enter the existing dump's folder name and select **Verify** to check it later;
+  the game disc is not needed for this read-back pass.
+
+The console checks `rip.state`, `rip.complete`, track sizes, and `.bad` maps,
+then calculates CRC32 for every track. Results appear on screen and in
+`verify.log` inside the dump folder. The database is read as a stream, so it
+does not need to fit in the Dreamcast's memory.
+
+The bundled `DS/apps/gd_ripper/redump.db` is generated from Libretro's reduced
+Dreamcast catalog. It normally contains one identifying data track per game,
+so a successful result is **IDENTIFIED BY DATA TRACK**. This is a known-dump
+content match, but not a full physical-disc Redump verification.
+
+To replace it with a current or full Redump-compatible DAT, run this on a PC:
+
+```sh
+python3 make_gd_redump_db.py "/path/to/Sega - Dreamcast.dat" \
+  --output redump.db
+```
+
+Copy the resulting file over `DS/apps/gd_ripper/redump.db` on the DreamShell
+card. ZIP- and gzip-compressed DAT files are accepted directly.
+
+For direct comparison, GD Ripper data tracks must use 2352-byte BIN format.
+With 2048-byte ISO data tracks, the console reports
+**INCOMPATIBLE DATA-TRACK FORMAT** and retains the computed hashes in the log.
+
+## Verify on a desktop computer
+
 `verify_gd_dump.py` checks a GD Ripper folder on a desktop computer. It never
 uploads disc data: all parsing and hashing happen locally with Python's standard
 library.

@@ -126,12 +126,16 @@ cd ${KOS_BASE}/ds/firmware/hollysh && make && make install
 
 ## GD Ripper verification
 
-Development releases include `host-tools/verify_gd_dump.py`, a local desktop
-checker for GD Ripper output. It validates `rip.state`, `rip.complete`, and bad
-sector maps; compares independent dumps; and supports full Redump XML or
-ClrMamePro DAT files. See [the verifier guide](utils/README.gd-verify.md) for
-commands and an explanation of full-track, data-track, and identification-only
-matches.
+GD Ripper can now read every completed track back from the destination on the
+Dreamcast, calculate CRC32 values, check file lengths and recovery metadata,
+and compare the result with `DS/apps/gd_ripper/redump.db`. Use the **Verify**
+button for an existing named dump, or leave **Verify against known dump after
+rip** enabled. Every run writes `verify.log` beside the GDI.
+
+Development releases also include desktop tools to verify with SHA-1/MD5/CRC32
+or generate a replacement on-console database from a current Redump DAT. See
+[the verifier guide](utils/README.gd-verify.md) for commands and an explanation
+of full-track, data-track, and identification-only matches.
 
 ## Links
 - Website: http://www.dc-swat.ru/ 

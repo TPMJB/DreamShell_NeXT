@@ -1,0 +1,21 @@
+Bundled known-dump database
+===========================
+
+redump.db contains game names, track numbers, sizes, and CRC32 values derived
+from the Libretro Database file:
+
+  metadat/redump/Sega - Dreamcast.dat, version 2026.08.01
+  https://github.com/libretro/libretro-database/blob/master/metadat/redump/Sega%20-%20Dreamcast.dat
+
+The source database is licensed under Creative Commons
+Attribution-ShareAlike 4.0 International (CC BY-SA 4.0):
+
+  https://creativecommons.org/licenses/by-sa/4.0/
+
+This compact adaptation is distributed under the same license. It was produced
+with host-tools/make_gd_redump_db.py and contains no game or disc payload data.
+
+The bundled Libretro catalog normally lists one identifying data track per
+game. Therefore GD Ripper reports IDENTIFIED BY DATA TRACK for a match. To use
+a full Redump DAT with all tracks, run the included converter and replace this
+redump.db file.

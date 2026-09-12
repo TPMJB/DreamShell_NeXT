@@ -6,14 +6,14 @@
 
 APP_NAME = gd_ripper
 TARGET_NAME = app_$(APP_NAME)
-OBJS = module.o
+OBJS = module.o verify.o
 DBG_LIBS = -lds -lisofs
 EXPORTS_FILE = exports.txt
 
 KOS_CFLAGS += -I./
 
 VER_MAJOR = 1
-VER_MINOR = 8
+VER_MINOR = 9
 VER_MICRO = 0
 
 all: rm-elf

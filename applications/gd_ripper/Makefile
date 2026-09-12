@@ -10,20 +10,21 @@ include ../../sdk/Makefile.cfg
 
 APP_NAME = gd_ripper
 APP_DIR = $(DS_BUILD)/apps/$(APP_NAME)
-DEPS = app.xml modules/app_$(APP_NAME).klf
+DEPS = modules/app_$(APP_NAME).klf
 
 all: install
 
-$(DEPS): modules/module.c
+$(DEPS): modules/module.c modules/verify.c modules/verify.h
 	cd modules && make
 	
 clean:
 	cd modules && make clean && cd ../
 
-install: app.xml $(DEPS)
+install: app.xml $(DEPS) redump.db redump-db.README
 	-mkdir -p $(APP_DIR)
 	-mkdir -p $(APP_DIR)/modules
 	cp modules/app_$(APP_NAME).klf $(APP_DIR)/modules/app_$(APP_NAME).klf
 	cp app.xml $(APP_DIR)/app.xml
+	cp redump.db redump-db.README $(APP_DIR)
 	cp -R images $(APP_DIR)
 
