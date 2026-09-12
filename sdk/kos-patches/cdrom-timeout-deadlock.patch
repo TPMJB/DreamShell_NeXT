@@ -1,0 +1,81 @@
+diff --git a/kernel/arch/dreamcast/hardware/cdrom.c b/kernel/arch/dreamcast/hardware/cdrom.c
+index 116c5005..51aff154 100644
+--- a/kernel/arch/dreamcast/hardware/cdrom.c
++++ b/kernel/arch/dreamcast/hardware/cdrom.c
+@@ -167,6 +167,29 @@ static int cdrom_check_transfer(void *d) {
+     return cdrom_stream_progress(&data->size) == 0;
+ }
+ 
++/* Abort a command while the caller owns _g1_ata_sem. */
++static int cdrom_abort_cmd_locked(uint32_t timeout) {
++    int rv = ERR_OK;
++
++    syscall_gdrom_abort_command(cmd_hnd);
++
++    if(cdrom_poll(&cmd_hnd, timeout, cdrom_check_abort_done) == ERR_TIMEOUT) {
++        dbglog(DBG_ERROR, "cdrom_abort_cmd: Timeout exceeded, resetting.\n");
++        rv = ERR_TIMEOUT;
++        syscall_gdrom_reset();
++        syscall_gdrom_init();
++    }
++
++    cmd_hnd = 0;
++    stream_enabled = false;
++
++    if(stream_cb) {
++        cdrom_stream_set_callback(0, NULL);
++    }
++
++    return rv;
++}
++
+ /* Command execution sequence */
+ int cdrom_exec_cmd(cd_cmd_code_t cmd, void *param) {
+     return cdrom_exec_cmd_timed(cmd, param, 0);
+@@ -183,7 +206,12 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
+ 
+     /* Start the process of executing the command. */
+     if(cdrom_poll(&cmd_hnd, timeout, cdrom_check_cmd_done) == ERR_TIMEOUT) {
+-        cdrom_abort_cmd(1000, true);
++        /*
++         * sem_wait_scoped() already owns _g1_ata_sem. Calling the public
++         * abort helper here would wait on that same semaphore forever for
++         * non-DMA commands such as PIO reads.
++         */
++        cdrom_abort_cmd_locked(1000);
+         return ERR_TIMEOUT;
+     }
+ 
+@@ -208,7 +236,7 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t cmd, void *param, uint32_t timeout) {
+ }
+ 
+ int cdrom_abort_cmd(uint32_t timeout, bool abort_dma) {
+-    int rv = ERR_OK;
++    int rv;
+     irq_mask_t old = irq_disable();
+ 
+     if(cmd_hnd <= 0) {
+@@ -227,22 +255,7 @@ int cdrom_abort_cmd(uint32_t timeout, bool abort_dma) {
+     }
+ 
+     irq_restore(old);
+-    syscall_gdrom_abort_command(cmd_hnd);
+-
+-    if(cdrom_poll(&cmd_hnd, timeout, cdrom_check_abort_done) == ERR_TIMEOUT) {
+-        dbglog(DBG_ERROR, "cdrom_abort_cmd: Timeout exceeded, resetting.\n");
+-        rv = ERR_TIMEOUT;
+-        syscall_gdrom_reset();
+-        syscall_gdrom_init();
+-    }
+-
+-    cmd_hnd = 0;
+-    stream_enabled = false;
+-
+-    if(stream_cb) {
+-        cdrom_stream_set_callback(0, NULL);
+-    }
+-
++    rv = cdrom_abort_cmd_locked(timeout);
+     sem_signal(&_g1_ata_sem);
+     return rv;
+ }
