@@ -19,6 +19,8 @@ void gd_ripper_Init(App_t *app, const char* fileName);
 
 void gd_ripper_StartRip(GUI_Widget *widget);
 
+void gd_ripper_Verify(GUI_Widget *widget);
+
 void gd_ripper_CancelRip(GUI_Widget *widget);
 
 int create_gdi_file(char *dst_folder,char *dst_file, char *text, int disc_type);
