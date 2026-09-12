@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <errno.h>
 #include <dc/cdrom.h>
 
 DEFAULT_MODULE_EXPORTS(app_gd_ripper);
@@ -34,6 +35,7 @@ static void video_event(void *event, void *param, int action);
 static void refresh_controls(void);
 static void set_message(const char *text);
 static bool claim_worker(void);
+static int check_storage(const char *folder);
 static void select_page(int page);
 static int check_disc_identity(const char *folder, bool resume, int disc_type);
 static int retire_repaired_bad_map(const char *path, uint32_t first, uint32_t count);
@@ -130,6 +132,8 @@ static struct self {
     uint64_t crc_bytes;
     char crc_path[NAME_MAX];
     bool crc_failed;
+    char failure_detail[208];
+    const char *failure_stage;
     int analog_x, analog_y;
 	track_info_t tracks[MAX_TRACKS];
 	char selected_path[NAME_MAX];
@@ -197,7 +201,7 @@ static int sync_track(file_t hnd) {
 	return CMD_OK;
 }
 
-static void rip_log(const char *format, ...) {
+static int rip_log(const char *format, ...) {
 	char message[256];
 	char line[320];
 	va_list args;
@@ -212,35 +216,129 @@ static void rip_log(const char *format, ...) {
 	ds_printf("DS_GD_RIPPER: %s\n", message);
 
 	if (!self.log_path[0]) {
-		return;
+		return CMD_OK;
 	}
 
 	line_len = snprintf(line, sizeof(line), "%llu.%03llu %s\n",
 		(unsigned long long)(elapsed / 1000),
 		(unsigned long long)(elapsed % 1000), message);
 	if (line_len < 0) {
-		return;
+		return CMD_ERROR;
 	}
 	if (line_len >= (int)sizeof(line)) {
 		line_len = sizeof(line) - 1;
 	}
 
-	hnd = fs_open(self.log_path, O_WRONLY | O_CREAT | O_APPEND);
+	hnd = gd_open_append(self.log_path);
 	if (hnd == FILEHND_INVALID) {
 		ds_printf("DS_WARN: Can't open rip log %s\n", self.log_path);
-		return;
+		return CMD_ERROR;
 	}
 
 	if (fs_write(hnd, line, line_len) != line_len) {
+		int error = errno ? errno : EIO;
 		ds_printf("DS_WARN: Can't append to rip log %s\n", self.log_path);
+		fs_close(hnd);
+		errno = error;
+		return CMD_ERROR;
 	}
 	else if (self.sync_mount[0]) {
 		ssize_t completed = 0;
 		if (fs_complete(hnd, &completed) != 0) {
+			int error = errno ? errno : EIO;
 			ds_printf("DS_WARN: Can't sync rip log %s\n", self.log_path);
+			fs_close(hnd);
+			errno = error;
+			return CMD_ERROR;
 		}
 	}
-	fs_close(hnd);
+	return fs_close(hnd) ? CMD_ERROR : CMD_OK;
+}
+
+static int storage_error(const char *stage, const char *path, int error) {
+    const char *name = strrchr(path, '/');
+    self.failure_stage = stage;
+    snprintf(self.failure_detail, sizeof(self.failure_detail),
+        "%s: %.90s (filesystem error %d). Progress preserved; check storage and rip.log.",
+        stage, name ? name + 1 : path, error ? error : EIO);
+    rip_log("%s: %s, errno=%d", stage, path, error ? error : EIO);
+    return CMD_ERROR;
+}
+
+static int drive_error(const char *stage, uint32_t track, uint32_t fad, int error) {
+    self.failure_stage = stage;
+    snprintf(self.failure_detail, sizeof(self.failure_detail),
+        "Track %lu, FAD %lu: drive error %d. Progress preserved. Select Start / Resume to retry.",
+        (unsigned long)track, (unsigned long)fad, error);
+    rip_log("%s: track %lu FAD %lu, GD error=%d", stage,
+        (unsigned long)track, (unsigned long)fad, error);
+    return CMD_ERROR;
+}
+
+/* Test the running core's create/reopen/seek/sync behavior before touching tracks.
+ * Old FAT handlers reject O_APPEND or treat writable reopen as CREATE_NEW.
+ * A bootloader update alone does not establish which core was loaded. */
+static int check_storage(const char *folder) {
+    static const char first[] = "GD Ripper storage probe\n";
+    static const char second[] = "reopen OK\n";
+    char path[NAME_MAX], data[sizeof(first) + sizeof(second) - 2];
+    file_t fd = FILEHND_INVALID;
+    bool created = false;
+    const char *stage = "Storage probe create failed";
+    ssize_t completed = 0;
+    int error = 0;
+
+    for (unsigned attempt = 0; attempt < 16; ++attempt) {
+        if (snprintf(path, sizeof(path), "%s/rip-io-%08lx-%u.tmp", folder,
+                (unsigned long)(uint32_t)timer_ms_gettime64(), attempt) >= (int)sizeof(path))
+            return storage_error(stage, folder, ENAMETOOLONG);
+        errno = 0;
+        fd = fs_open(path, O_WRONLY | O_CREAT | O_EXCL);
+        if (fd != FILEHND_INVALID) { created = true; break; }
+        if (errno != EEXIST) break;
+    }
+    if (!created) goto failed;
+    stage = "Storage probe write failed";
+    if (fs_write(fd, first, sizeof(first) - 1) != sizeof(first) - 1) goto failed;
+    stage = "Storage probe sync failed";
+    if (self.sync_mount[0] && fs_complete(fd, &completed)) goto failed;
+    stage = "Storage probe close failed";
+    if (fs_close(fd)) { fd = FILEHND_INVALID; goto failed; }
+    fd = FILEHND_INVALID;
+
+    stage = "Storage reopen failed";
+    errno = 0;
+    fd = gd_open_append(path);
+    if (fd == FILEHND_INVALID) goto failed;
+    stage = "Storage append failed";
+    if (fs_write(fd, second, sizeof(second) - 1) != sizeof(second) - 1) goto failed;
+    stage = "Storage append sync failed";
+    if (self.sync_mount[0] && fs_complete(fd, &completed)) goto failed;
+    stage = "Storage append close failed";
+    if (fs_close(fd)) { fd = FILEHND_INVALID; goto failed; }
+    fd = FILEHND_INVALID;
+
+    stage = "Storage probe read failed";
+    fd = fs_open(path, O_RDONLY);
+    if (fd == FILEHND_INVALID || fs_total(fd) != sizeof(data) ||
+            fs_read(fd, data, sizeof(data)) != sizeof(data) ||
+            memcmp(data, first, sizeof(first) - 1) ||
+            memcmp(data + sizeof(first) - 1, second, sizeof(second) - 1)) goto failed;
+    if (fs_close(fd)) { fd = FILEHND_INVALID; goto failed; }
+    fd = FILEHND_INVALID;
+    if (fs_unlink(path)) return storage_error("Storage probe cleanup failed", path, errno);
+    return CMD_OK;
+
+failed:
+    error = errno ? errno : EIO;
+    if (fd != FILEHND_INVALID) fs_close(fd);
+    if (created) fs_unlink(path); /* Remove only the file this invocation created. */
+    storage_error(stage, path, error);
+    if (!strcmp(stage, "Storage reopen failed") && (error == EINVAL || error == EEXIST)) {
+        snprintf(self.failure_detail, sizeof(self.failure_detail),
+            "File reopen failed (error %d). An older core may be loaded. Boot the updated DS_CORE.BIN from SD/IDE before ripping.", error);
+    }
+    return CMD_ERROR;
 }
 
 static int timed_cdrom_read(void *buffer, uint32_t first, size_t count) {
@@ -281,6 +379,21 @@ static int safe_cdrom_set_sector_size(uint32_t sector_size) {
 	return cdrom_change_datatype(CDROM_READ_DEFAULT, -1, sector_size);
 }
 
+static int prepare_track_mode(uint32_t track, uint32_t fad, uint32_t size) {
+    int rv = ERR_SYS;
+    set_io_status("Sector mode", fad);
+    for (int attempt = 1; attempt <= 3 && self.rip_active; ++attempt) {
+        rv = safe_cdrom_set_sector_size(size);
+        if (rv == ERR_OK) return CMD_OK;
+        rip_log("Track %lu sector mode %lu attempt %d/3 failed: GD error=%d",
+            (unsigned long)track, (unsigned long)size, attempt, rv);
+        if (rv == ERR_NO_DISC || rv == ERR_DISC_CHG || attempt == 3) break;
+        rv = safe_cdrom_reinit();
+        if (rv != ERR_OK) break;
+    }
+    return drive_error("Sector mode failed", track, fad, rv);
+}
+
 static void safe_cdrom_spin_down(void) {
 	int rv = cdrom_exec_cmd_timed(CD_CMD_STOP, NULL, GD_COMMAND_TIMEOUT_MS);
 
@@ -314,6 +427,8 @@ static void reset_rip_state(void) {
 	self.current_fad = 0;
 	self.log_path[0] = '\0';
 	self.sync_mount[0] = '\0';
+	self.failure_stage = NULL;
+	self.failure_detail[0] = '\0';
 }
 
 static void wait_for_drive_settle(void) {
@@ -1003,6 +1118,10 @@ static void* gd_ripper_thread(void *arg) {
 	self.session_sectors = 0;
 	self.log_path[0] = '\0';
 	set_sync_mount(self.rip_destination);
+	self.failure_stage = NULL;
+	self.failure_detail[0] = '\0';
+	GUI_LabelSetText(self.track_label, "Checking destination...");
+	if (check_storage(self.rip_destination) != CMD_OK) goto out;
 
 	wait_for_drive_settle();
 	if (!self.rip_active) {
@@ -1046,21 +1165,28 @@ static void* gd_ripper_thread(void *arg) {
 		failure_label = "Name/options conflict";
 		goto out;
 	}
-    if (check_disc_identity(dst_folder, resume, disc_type) != CMD_OK) {
-        failure_label = "Disc identity mismatch / unreadable";
-        goto out;
-    }
-    destination_ready = true;
-
 	if (snprintf(self.log_path, sizeof(self.log_path), "%s/rip.log", dst_folder) >=
 			(int)sizeof(self.log_path)) {
 		ds_printf("DS_ERROR: Destination log path is too long\n");
 		goto out;
 	}
 
-	rip_log("Started %s rip with %lu track(s), %llu total sectors, retries=%d, zero-fill=%d",
+	if (rip_log("GD Ripper 2.0.1: destination reopen/sync/read-back passed") != CMD_OK) {
+        storage_error("Rip log creation failed", self.log_path, errno);
+        goto out;
+    }
+    if (check_disc_identity(dst_folder, resume, disc_type) != CMD_OK) {
+        failure_label = "Disc identity mismatch / unreadable";
+        rip_log("Disc identity check failed before track extraction");
+        goto out;
+    }
+    destination_ready = true;
+	if (rip_log("Started %s rip with %lu track(s), %llu total sectors, retries=%d, zero-fill=%d",
 		resume ? "resumed" : "new", (unsigned long)self.track_count,
-		(unsigned long long)self.total_sectors, self.max_attempts, self.zero_fill);
+		(unsigned long long)self.total_sectors, self.max_attempts, self.zero_fill) != CMD_OK) {
+        storage_error("Rip log reopen failed", self.log_path, errno);
+        goto out;
+    }
 
 	if (resume) {
 		rip_log("Existing rip matches; checking track files for resume points");
@@ -1149,6 +1275,12 @@ out:
 		set_message("Keep the same disc and folder; select Start / Resume to continue.");
 		set_io_status("Stopped", self.current_fad);
 	}
+	else if (self.failure_stage) {
+        GUI_LabelSetText(self.track_label, self.failure_stage);
+        GUI_LabelSetTextColor(self.track_label, 255, 154, 136);
+        set_message(self.failure_detail);
+        set_io_status("Paused", self.current_fad);
+    }
 	else if (destination_ready) {
 		GUI_LabelSetText(self.track_label, "Stopped - read/write error");
         GUI_LabelSetTextColor(self.track_label, 255, 154, 136);
@@ -1160,6 +1292,7 @@ out:
         GUI_LabelSetText(self.track_label, failure_label);
 		set_message("Check the disc and destination folder, then select Start / Resume.");
 	}
+	self.io_started = 0; /* Keep the error visible during cleanup. */
 	safe_cdrom_spin_down();
 	self.start_time = 0;
 	return NULL;
@@ -1483,14 +1616,15 @@ static int record_bad_sector(const char *dst_file, uint32_t tn,
 static int checkpoint_track(file_t hnd, uint32_t tn, uint32_t written_sectors,
 		uint32_t fad) {
 	set_io_status("Sync", fad);
-	rip_log("Checkpoint track %lu at track sector %lu (FAD %lu)",
-		(unsigned long)tn, (unsigned long)written_sectors, (unsigned long)fad);
-	if (sync_track(hnd) != CMD_OK) return CMD_ERROR;
+	if (rip_log("Checkpoint track %lu at track sector %lu (FAD %lu)",
+		(unsigned long)tn, (unsigned long)written_sectors, (unsigned long)fad) != CMD_OK)
+        return storage_error("Rip log write failed", self.log_path, errno);
+	if (sync_track(hnd) != CMD_OK)
+        return storage_error("Track sync failed", self.crc_path, errno);
     if (gd_crc_checkpoint(self.crc_path, self.crc_tag, self.crc_bytes,
             self.current_crc, self.sync_mount[0] != '\0') != CMD_OK) {
         self.crc_failed = true;
-        rip_log("Could not save CRC checkpoint; stopping before claiming verification");
-        return CMD_ERROR;
+        return storage_error("CRC checkpoint failed", self.crc_path, errno);
     }
     return CMD_OK;
 }
@@ -1575,8 +1709,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 	expected_bytes = (uint64_t)count * secbyte;
 	size_status = get_existing_file_size(dst_file, &existing_bytes);
 	if (size_status < 0) {
-		rip_log("Can't determine the existing size of %s", dst_file);
-		return CMD_ERROR;
+		return storage_error("Track size check failed", dst_file, errno);
 	}
 
 	if (existing_bytes > expected_bytes || existing_bytes % secbyte) {
@@ -1592,8 +1725,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
         return CMD_ERROR;
     }
     if (restore_stream_crc(dst_file, existing_bytes, tn, first, count, secbyte) != CMD_OK) {
-        rip_log("Could not restore the rolling CRC for track %lu", (unsigned long)tn);
-        return CMD_ERROR;
+        return storage_error("Resume CRC failed", dst_file, errno);
     }
     resumed_sectors = existing_bytes / secbyte;
 	self.processed_sectors += resumed_sectors;
@@ -1612,8 +1744,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		return CMD_ERROR;
 	}
 
-	if (safe_cdrom_set_sector_size(secbyte) != ERR_OK) {
-		rip_log("Failed to select %lu-byte sector mode", (unsigned long)secbyte);
+	if (prepare_track_mode(tn, first + resumed_sectors, secbyte) != CMD_OK) {
 		free(buffer);
 		return CMD_ERROR;
 	}
@@ -1633,14 +1764,13 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 	}
 
 	if (hnd == FILEHND_INVALID) {
-		rip_log("Can't open track file %s", dst_file);
+		storage_error("Track open failed", dst_file, errno);
 		free(buffer);
 		return CMD_ERROR;
 	}
 
 	if (resumed_sectors && fs_seek(hnd, (off_t)existing_bytes, SEEK_SET) != (off_t)existing_bytes) {
-		rip_log("Can't seek %s to resume offset %llu", dst_file,
-			(unsigned long long)existing_bytes);
+		storage_error("Track resume seek failed", dst_file, errno);
 		fs_close(hnd);
 		free(buffer);
 		return CMD_ERROR;
@@ -1680,9 +1810,9 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 			size_t bytes_to_write = nsects * secbyte;
 
 			set_io_status("Write", first);
+			errno = 0;
 			if (fs_write(hnd, buffer, bytes_to_write) != (ssize_t)bytes_to_write) {
-				rip_log("Write error in track %lu at FAD %lu",
-					(unsigned long)tn, (unsigned long)first);
+				storage_error("Track write failed", dst_file, errno);
 				checkpoint_track(hnd, tn, original_count - count, first);
 				fs_close(hnd);
 				free(buffer);
@@ -1703,6 +1833,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 			checkpoint_sectors = 0;
 
 			if (cdstat == ERR_NO_DISC || cdstat == ERR_DISC_CHG) {
+				drive_error("Disc removed / changed", tn, first, cdstat);
 				fs_close(hnd);
 				free(buffer);
 				return CMD_ERROR;
@@ -1712,15 +1843,15 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 
 				rip_log("Timed-out bulk read was aborted; reinitializing GD-ROM");
 				reinit_rv = safe_cdrom_reinit();
-				if (reinit_rv != ERR_OK || safe_cdrom_set_sector_size(secbyte) != ERR_OK) {
-					rip_log("GD-ROM reinitialization failed with error %d", reinit_rv);
+				if (reinit_rv == ERR_OK) reinit_rv = safe_cdrom_set_sector_size(secbyte);
+				if (reinit_rv != ERR_OK) {
+					drive_error("Drive recovery failed", tn, first, reinit_rv);
 					fs_close(hnd);
 					free(buffer);
 					return CMD_ERROR;
 				}
 			}
-			else if (safe_cdrom_set_sector_size(secbyte) != ERR_OK) {
-				rip_log("Failed to restore %lu-byte sector mode", (unsigned long)secbyte);
+			else if (prepare_track_mode(tn, first, secbyte) != CMD_OK) {
 				fs_close(hnd);
 				free(buffer);
 				return CMD_ERROR;
@@ -1758,6 +1889,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 						(unsigned long)fad, cdstat);
 
 					if (cdstat == ERR_NO_DISC || cdstat == ERR_DISC_CHG) {
+						drive_error("Disc removed / changed", tn, fad, cdstat);
 						checkpoint_track(hnd, tn, track_sector, fad);
 						fs_close(hnd);
 						free(buffer);
@@ -1768,8 +1900,9 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 						rip_log("Reinitializing GD-ROM before retrying FAD %lu",
 							(unsigned long)fad);
 						reinit_rv = safe_cdrom_reinit();
-						if (reinit_rv != ERR_OK || safe_cdrom_set_sector_size(secbyte) != ERR_OK) {
-							rip_log("GD-ROM reinitialization failed with error %d", reinit_rv);
+						if (reinit_rv == ERR_OK) reinit_rv = safe_cdrom_set_sector_size(secbyte);
+						if (reinit_rv != ERR_OK) {
+							drive_error("Drive recovery failed", tn, fad, reinit_rv);
 							checkpoint_track(hnd, tn, track_sector, fad);
 							fs_close(hnd);
 							free(buffer);
@@ -1784,8 +1917,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 
 				if (cdstat != ERR_OK) {
 					if (!zero_fill) {
-						rip_log("FAD %lu remains unreadable; pausing without writing a substitute sector",
-							(unsigned long)fad);
+						drive_error("Sector retries exhausted", tn, fad, cdstat);
 						checkpoint_track(hnd, tn, track_sector, fad);
 						fs_close(hnd);
 						free(buffer);
@@ -1803,9 +1935,9 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 				}
 
 				set_io_status("Write", fad);
+				errno = 0;
 				if (fs_write(hnd, buffer, secbyte) != (ssize_t)secbyte) {
-					rip_log("Write error in recovered track %lu at FAD %lu",
-						(unsigned long)tn, (unsigned long)fad);
+					storage_error("Recovered sector write failed", dst_file, errno);
 					checkpoint_track(hnd, tn, track_sector, fad);
 					fs_close(hnd);
 					free(buffer);
@@ -1859,7 +1991,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		return CMD_ERROR;
 	}
 	if (fs_close(hnd) != 0) {
-		rip_log("Failed to close track %lu after syncing", (unsigned long)tn);
+		storage_error("Track close failed", dst_file, errno);
 		free(buffer);
 		return CMD_ERROR;
 	}
@@ -2267,7 +2399,7 @@ static int repair_suspects(const char *path, uint32_t first, uint32_t count) {
             if (FileExists(journal) && fs_unlink(journal)) goto out;
             changed = true;
         }
-        if (backup == FILEHND_INVALID) backup = fs_open(backup_path, O_WRONLY | O_CREAT | O_APPEND);
+        if (backup == FILEHND_INVALID) backup = gd_open_append(backup_path);
         if (backup == FILEHND_INVALID) goto out;
         /* Records: ASCII 'FAD <n>\n', then exactly 2352 original bytes. */
         int n = snprintf(line, sizeof(line), "FAD %lu\n", fad);
@@ -2330,7 +2462,7 @@ static int retire_repaired_bad_map(const char *path, uint32_t first, uint32_t co
     free(sector); fs_close(track);
     if (!valid) { fclose(map); return CMD_OK; }
     rewind(map);
-    history = fs_open(history_path, O_WRONLY | O_CREAT | O_APPEND);
+    history = gd_open_append(history_path);
     if (history == FILEHND_INVALID) { fclose(map); return CMD_ERROR; }
     while (fgets(line, sizeof(line), map)) {
         size_t n = strlen(line);

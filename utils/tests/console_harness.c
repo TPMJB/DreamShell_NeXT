@@ -8,6 +8,8 @@ static char widget_names[64][64];
 static int nw, drive_fd = -1, read_calls, injected, fault, clicks;
 static uint32_t mode = 2352;
 static int auto_test;
+static int legacy_fs, reject_append, fail_crc, mode_failures;
+static uint32_t drive_base = 45150;
 static uint64_t clock_ms = 1000, read_bytes;
 GUI_Widget *host_widget(const char *name) {
     for (int i=0;i<nw;++i) if (!strcmp(widget_names[i],name)) return &widgets[i];
@@ -48,7 +50,17 @@ const char *lib_get_name(void) {return "fixture";}
 void GetAppPath(char *b,size_t n,const char *f) {(void)f;snprintf(b,n,"/tmp");}
 int FileExists(const char *p) {struct stat st;return !stat(p,&st)&&S_ISREG(st.st_mode);}
 int DirExists(const char *p) {struct stat st;return !stat(p,&st)&&S_ISDIR(st.st_mode);}
-file_t fs_open(const char *p,int f) {return open(p,f&~O_DIR,0600);}
+file_t fs_open(const char *p,int f) {
+    /* DC-SWAT/FatFs before 80e27b7 masks O_APPEND into the access mode,
+     * and before 89f59cc writable non-truncating opens use FA_CREATE_NEW.
+     * Translate that behavior explicitly; Linux O_APPEND has a different bit. */
+    if((legacy_fs || reject_append) && (f&O_APPEND)) {errno=EINVAL;return -1;}
+    if(legacy_fs && (f&(O_WRONLY|O_RDWR)) && !(f&O_TRUNC)) f|=O_CREAT|O_EXCL;
+    if(fail_crc && strlen(p)>4 && !strcmp(p+strlen(p)-4,".crc") && (f&(O_WRONLY|O_RDWR))) {
+        errno=ENOSPC;return -1;
+    }
+    return open(p,f&~O_DIR,0600);
+}
 ssize_t fs_total(file_t f) {struct stat st;return fstat(f,&st)?-1:st.st_size;}
 ssize_t fs_read(file_t f,void *p,size_t n) {ssize_t rv=read(f,p,n);if(rv>0)read_bytes+=rv;return rv;}
 ssize_t fs_write(file_t f,const void *p,size_t n) {return write(f,p,n);}
@@ -59,19 +71,24 @@ int fs_unlink(const char *p) {return unlink(p);}
 int fs_mkdir(const char *p) {return mkdir(p,0700);}
 const dirent_t *fs_readdir(file_t f) {(void)f;return NULL;}
 int cdrom_get_status(int *s,int *t) {*s=auto_test && clock_ms>=6000 && clock_ms<7000 ? CD_STATUS_OPEN : CD_STATUS_STANDBY;*t=CD_GDROM;return ERR_OK;}
-int cdrom_change_datatype(cd_read_sec_part_t p,int t,int size) {(void)p;(void)t;mode=size<0?2048:(unsigned)size;return ERR_OK;}
+int cdrom_change_datatype(cd_read_sec_part_t p,int t,int size) {
+    (void)p;(void)t;
+    if(size==2352 && mode_failures>0) {mode_failures--;return ERR_SYS;}
+    mode=size<0?2048:(unsigned)size;return ERR_OK;
+}
 uint32_t cdrom_locate_data_track(cd_toc_t *t) {(void)t;return 45150;}
 int cdrom_exec_cmd_timed(cd_cmd_code_t c,void *p,uint32_t timeout) {
     (void)timeout;
     if(c!=CD_CMD_PIOREAD)return ERR_OK;
     cd_read_params_t *req=p;read_calls++;
     if(fault==2 && req->start_sec<=45151 && req->start_sec+req->num_sec>45151)return ERR_SYS;
+    if(fault==3 && req->start_sec>=600)return ERR_SYS;
     size_t n=req->num_sec*mode;
     if (mode == 2048) {
         for (size_t i=0; i<req->num_sec; ++i)
             if(pread(drive_fd,(uint8_t*)req->buffer+i*2048,2048,
-                (off_t)(req->start_sec-45150+i)*2352+16)!=2048)return ERR_SYS;
-    } else if(pread(drive_fd,req->buffer,n,(off_t)(req->start_sec-45150)*mode)!=(ssize_t)n)return ERR_SYS;
+                (off_t)(req->start_sec-drive_base+i)*2352+16)!=2048)return ERR_SYS;
+    } else if(pread(drive_fd,req->buffer,n,(off_t)(req->start_sec-drive_base)*mode)!=(ssize_t)n)return ERR_SYS;
     if(auto_test) {gd_ripper_StartRip(NULL);assert(!self.request);}
     if(fault==1 && !injected++){((uint8_t*)req->buffer)[100]^=1;}
     return ERR_OK;
@@ -93,6 +110,26 @@ static void setup(void) {
 int main(int argc,char **argv) {
     if(argc<2)return 2;
     setup();
+    if(!strcmp(argv[1],"transition")) {
+        char path[NAME_MAX];
+        legacy_fs=!strcmp(argv[4],"legacy");reject_append=!strcmp(argv[4],"append");
+        fail_crc=!strcmp(argv[4],"crc");fault=!strcmp(argv[4],"audio-read")?3:0;
+        mode_failures=!strcmp(argv[4],"mode")?2:0;
+        drive_base=150;drive_fd=open(argv[3],O_RDONLY);assert(drive_fd>=0);
+        strcpy(self.sync_mount,"/sd");
+        int rv=check_storage(argv[2]);
+        if(rv==CMD_OK) {
+            snprintf(self.log_path,sizeof(self.log_path),"%s/rip.log",argv[2]);
+            assert(rip_log("Transition fixture start")==CMD_OK);
+            self.track_count=2;self.last_track=2;self.total_sectors=826;
+            self.tracks[0]=(track_info_t){.track_num=1,.start_lba=150,.sector_count=300,.type=4,.filename="track01.bin"};
+            self.tracks[1]=(track_info_t){.track_num=2,.start_lba=600,.sector_count=526,.type=0,.filename="track02.raw"};
+            rv=process_tracks(argv[2],path);
+        }
+        printf("%d|%llu|%d|%s|%s\n",rv,(unsigned long long)self.processed_sectors,read_calls,
+            self.failure_stage?self.failure_stage:"OK",self.failure_detail);
+        close(drive_fd);return 0;
+    }
     if(!strcmp(argv[1],"sector")) {
         uint8_t data[2352];FILE *f=fopen(argv[2],"rb");assert(f);
         assert(fread(data,1,sizeof(data),f)==sizeof(data));fclose(f);

@@ -13,6 +13,9 @@
 #define GD_SECTOR_UNSUPPORTED 16
 unsigned gd_check_sector(const uint8_t *sector, uint32_t fad);
 
+/* The app serializes metadata writers. Do not use the legacy O_APPEND path. */
+file_t gd_open_append(const char *path);
+
 /* A journal record is published only AFTER its track has been flushed. */
 uint32_t gd_crc_tag(uint32_t number, uint32_t start, uint32_t count, uint32_t size);
 int gd_crc_checkpoint(const char *track_path, uint32_t tag, uint64_t bytes,

@@ -124,7 +124,14 @@ cd ${KOS_BASE}/ds/firmware/hollysh && make && make install
 - make cdi image: `make cdi`
 - make IDE/SD FAT32 image: `make ide`
 
-## GD Ripper 2.0
+## GD Ripper 2.0.1
+
+The 2.0.1 update checks the running core's storage capabilities before ripping,
+avoids legacy append-mode handling, and identifies CRC-save, track-open,
+sector-mode and disc-read failures separately. Load the updated `DS_CORE.BIN`
+from SD as well as updating the app; the bootloader version alone is not the
+core version. See the [ripper guide](utils/README.gd-verify.md) for boot selection
+and recovery from a stop after Track 1.
 
 GD Ripper now calculates CRC while ripping, checkpoints it for resume, and
 compares completed tracks with bundled TOSEC and Redump catalogs. Normal

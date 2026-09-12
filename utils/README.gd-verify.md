@@ -1,4 +1,32 @@
-# DreamShell GD Ripper 2.0
+# DreamShell GD Ripper 2.0.1
+
+## Install and diagnose an early stop
+
+Merge the release's entire `DS` folder onto the SD card, including `DS_CORE.BIN`.
+The bootloader and the loaded DreamShell core are separate binaries. During
+boot, press/hold Start to enter the boot menu, select **Boot from SD**, and use
+left/right to show the full path. Confirm `/sd/DS/DS_CORE.BIN` before pressing A.
+Updating only the ripper or the bootloader can leave an older core running.
+
+Version 2.0.1 checks create/reopen/seek/sync/read-back on a small temporary file
+before changing a dump. Old FAT handlers may reject append opens or refuse to
+reopen an existing file for writing. Metadata now uses explicit seek-to-end;
+cores that still cannot reopen files stop before track extraction with a core
+update hint. Successful probe files are removed. This is a capability check,
+not a test of the whole SD card.
+
+The rip log must be created and reopened successfully before tracks are read.
+Errors now distinguish log creation, CRC checkpoint, track sync/open/write,
+sector-mode selection and exhausted disc reads, with filesystem or drive error
+codes and the current track/FAD. Failed sector-mode selection gets bounded
+reinitialization/retry attempts. Error messages stay visible during cleanup.
+
+For Time Stalkers, the reported 300-sector Track 1 is exactly 705,600 bytes:
+that size means the track reached its expected length. An error there can be
+the final CRC checkpoint or the transition to Track 2, not necessarily a bad
+Track 1 read. Keep that file; resume can hash it once, save its missing CRC,
+skip Track 1, and proceed to Track 2. If the new build stops, preserve `rip.log`
+and photograph its specific error message rather than starting over.
 
 ## Normal ripping
 

@@ -1,6 +1,7 @@
 #include "checksum.h"
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include <zlib/zlib.h>
 
 static uint32_t edc_table[256];
@@ -65,6 +66,20 @@ unsigned gd_check_sector(const uint8_t *s, uint32_t fad) {
     return result;
 }
 
+file_t gd_open_append(const char *path) {
+    errno = 0;
+    file_t fd = fs_open(path, O_WRONLY | O_CREAT);
+    if (fd == FILEHND_INVALID) return fd;
+    off_t size = fs_total(fd);
+    if (size < 0 || fs_seek(fd, size, SEEK_SET) != size) {
+        int error = errno ? errno : EIO;
+        fs_close(fd);
+        errno = error;
+        return FILEHND_INVALID;
+    }
+    return fd;
+}
+
 int gd_crc_checkpoint(const char *track_path, uint32_t tag, uint64_t bytes,
         uint32_t crc, bool sync) {
     char path[NAME_MAX], body[120], line[160];
@@ -79,11 +94,14 @@ int gd_crc_checkpoint(const char *track_path, uint32_t tag, uint64_t bytes,
     /* Leading newline isolates a previous torn record on FAT. */
     n = snprintf(line, sizeof(line), "\n%s %08lx\n", body,
         (unsigned long)crc32(0, (const Bytef *)body, strlen(body)));
-    fd = fs_open(path, O_WRONLY | O_CREAT | O_APPEND);
+    fd = gd_open_append(path);
     if (fd == FILEHND_INVALID) return CMD_ERROR;
-    if (fs_write(fd, line, n) != n || (sync && fs_complete(fd, &completed)))
+    if (fs_write(fd, line, n) != n || (sync && fs_complete(fd, &completed))) {
+        int error = errno ? errno : EIO;
+        fs_close(fd);
+        errno = error;
         rv = CMD_ERROR;
-    if (fs_close(fd)) rv = CMD_ERROR;
+    } else if (fs_close(fd)) rv = CMD_ERROR;
     return rv;
 }
 

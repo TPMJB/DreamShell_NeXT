@@ -73,6 +73,64 @@ class ConsoleTests(unittest.TestCase):
     def run_c(self, *args):
         return subprocess.check_output([str(self.exe), *map(str,args)], text=True).strip().split()
 
+    def transition(self, scenario='append', resume=False):
+        data=bytes(range(256))*((976*2352+255)//256)
+        data=data[:976*2352]
+        self.disc.write_bytes(data)
+        if resume:
+            (self.path/'track01.bin').write_bytes(data[:300*2352])
+        result=subprocess.check_output([str(self.exe),'transition',str(self.path),str(self.disc),scenario],text=True)
+        return result.strip().split('|'),data
+
+    def test_track1_to_audio_transition_without_append_flag_support(self):
+        result,data=self.transition()
+        self.assertEqual(result[0:2],['0','826'])
+        self.assertEqual((self.path/'track01.bin').read_bytes(),data[:705600])
+        self.assertEqual((self.path/'track02.raw').read_bytes(),data[450*2352:])
+        log=(self.path/'rip.log').read_text()
+        self.assertIn('Starting track 1',log)
+        self.assertIn('Starting track 2',log)
+        self.assertIn('Track 2 completed successfully',log)
+        self.assertTrue((self.path/'track01.bin.crc').exists())
+        self.assertTrue((self.path/'track02.raw.crc').exists())
+        self.assertEqual(list(self.path.glob('rip-io-*.tmp')),[])
+
+    def test_completed_track1_without_crc_resumes_at_track2(self):
+        result,data=self.transition(resume=True)
+        self.assertEqual(result[0:2],['0','826'])
+        self.assertEqual(result[2],'33')  # Only the 526-sector audio track reaches the drive.
+        self.assertEqual((self.path/'track01.bin').read_bytes(),data[:705600])
+        self.assertIn('already complete',(self.path/'rip.log').read_text())
+
+    def test_old_core_reopen_failure_is_caught_before_reading_disc(self):
+        previous=(self.path/'rip.state').read_bytes()
+        result,_=self.transition('legacy')
+        self.assertEqual(result[0:4],['-1','0','0','Storage reopen failed'])
+        self.assertIn('DS_CORE.BIN',result[4])
+        self.assertFalse((self.path/'track01.bin').exists())
+        self.assertEqual((self.path/'rip.state').read_bytes(),previous)
+        self.assertEqual(list(self.path.glob('rip-io-*.tmp')),[])
+
+    def test_crc_save_failure_reports_storage_after_full_track1(self):
+        result,data=self.transition('crc')
+        self.assertEqual(result[0:2],['-1','300'])
+        self.assertEqual(result[3],'CRC checkpoint failed')
+        self.assertEqual((self.path/'track01.bin').read_bytes(),data[:705600])
+        self.assertIn('CRC checkpoint failed',(self.path/'rip.log').read_text())
+        self.assertFalse((self.path/'track02.raw').exists())
+
+    def test_audio_read_failure_names_track_and_fad(self):
+        result,_=self.transition('audio-read')
+        self.assertEqual(result[0:2],['-1','300'])
+        self.assertEqual(result[3],'Sector retries exhausted')
+        self.assertIn('Track 2, FAD 600',result[4])
+        self.assertEqual((self.path/'track02.raw').stat().st_size,0)
+
+    def test_sector_mode_failure_reinitializes_and_retries(self):
+        result,_=self.transition('mode')
+        self.assertEqual(result[0:2],['0','826'])
+        self.assertIn('attempt 2/3 failed',(self.path/'rip.log').read_text())
+
     def rip(self, advanced=0, fault=0):
         return self.run_c('rip',self.disc,self.track,advanced,fault)
 
