@@ -55,6 +55,7 @@ include sfx.h
 include audio/snddrv.h
 
 start
+pvr_wait_render_done
 expt_init
 expt_shutdown
 expt_get_stack
