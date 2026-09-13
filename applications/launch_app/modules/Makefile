@@ -5,11 +5,11 @@
 
 APP_NAME = launch_app
 TARGET_NAME = app_$(APP_NAME)
-OBJS = module.o items.o scene.o config.o
-DBG_LIBS = -lds -lwave
+OBJS = module.o items.o scene.o manage.o
+DBG_LIBS = -lds
 EXPORTS_FILE = exports.txt
 
-VER_MAJOR = 1
+VER_MAJOR = 2
 VER_MINOR = 0
 VER_MICRO = 0
 
