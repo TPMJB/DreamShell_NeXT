@@ -12,6 +12,8 @@
 #include "../../applications/launch_app/modules/manage.c"
 
 static Font font;
+static Texture *allocated[256];
+static int in_flight[256];
 static Drawable *draws[512];
 static App_t apps[64], home;
 static Item_t nodes[64];
@@ -50,9 +52,15 @@ void *GetLuaState(void) {return NULL;}
 int dsystem_script(const char *p) {(void)p;return 0;}
 void ds_printf(const char *fmt,...) {(void)fmt;}
 void ds_sfx_play(int id) {(void)id;}
-void LockVideo(void) {assert(lock_depth==0);lock_depth++;}
+void LockVideo(void) {
+ int i,j;assert(lock_depth==0);lock_depth++;
+ /* The preceding frame may still sample textures after TA becomes ready. */
+ for(i=0;i<512;i++)if(draws[i]&&draws[i]->kind==2&&draws[i]->texture)
+   for(j=0;j<256;j++)if(allocated[j]==draws[i]->texture)in_flight[j]=1;
+}
 void UnlockVideo(void) {assert(lock_depth==1);lock_depth--;}
 int pvr_wait_ready(void) {return 0;}
+int pvr_wait_render_done(void) {memset(in_flight,0,sizeof(in_flight));return 0;}
 void SDL_DS_Blit_Cursor(void) {}
 void SDL_DC_EmulateMouse(SDL_bool b) {(void)b;}
 uint64_t timer_ms_gettime64(void) {return now;}
@@ -64,15 +72,21 @@ Event_t *AddEvent(const char *n,int t,int p,Event_func *fn,void *a) {(void)n;(vo
 int RemoveEvent(Event_t *e) {e->fn=NULL;return 0;}
 
 Texture *TSU_TextureCreateFromFile(const char *p,bool alpha,bool flip,unsigned flags) {
- unsigned char h[24];Texture *t;int f;(void)alpha;(void)flip;(void)flags;
+ unsigned char h[24];Texture *t;int f,i;(void)alpha;(void)flip;(void)flags;
  loads++;if(strstr(p,"broken"))return NULL;
  f=open(p,O_RDONLY);if(f<0)return NULL;assert(read(f,h,24)==24);close(f);
  t=calloc(1,sizeof(*t));assert(t);t->w=(h[16]<<24)|(h[17]<<16)|(h[18]<<8)|h[19];t->h=(h[20]<<24)|(h[21]<<16)|(h[22]<<8)|h[23];
+ for(i=0;i<256;i++)if(!allocated[i]){allocated[i]=t;in_flight[i]=0;break;}
+ assert(i<256);
  snprintf(t->path,sizeof(t->path),"%s",p);textures++;if(textures>peak_textures)peak_textures=textures;
  if(stale_load){stale_load=0;LockVideo();MoveFocus(1);UnlockVideo();}
  return t;
 }
-void TSU_TextureDestroy(Texture **t) {if(*t){free(*t);*t=NULL;textures--;assert(textures>=0);}}
+void TSU_TextureDestroy(Texture **t) {
+ int i;if(!*t)return;
+ for(i=0;i<256;i++)if(allocated[i]==*t){assert(!in_flight[i]);allocated[i]=NULL;break;}
+ assert(i<256);free(*t);*t=NULL;textures--;assert(textures>=0);
+}
 int TSU_TextureGetW(Texture *t) {return t?t->w:0;}
 int TSU_TextureGetH(Texture *t) {return t?t->h:0;}
 Banner *TSU_BannerCreate(int l,Texture *t) {Banner *b;(void)l;if(!t)return NULL;b=NewDraw(2);b->texture=t;return b;}

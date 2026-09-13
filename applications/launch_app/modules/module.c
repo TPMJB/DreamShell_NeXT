@@ -230,6 +230,7 @@ void LaunchApp_Shutdown(App_t *app) {
     if(self.input_event) { RemoveEvent(self.input_event); self.input_event = NULL; }
     LockVideo();
     pvr_wait_ready();
+    pvr_wait_render_done();
     /* Destroy the preview before the item textures it may reference. */
     DestroyScene();
     ClearAllItems();

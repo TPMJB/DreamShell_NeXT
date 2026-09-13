@@ -84,6 +84,7 @@ void ds_sfx_play(int);
 void LockVideo(void);
 void UnlockVideo(void);
 int pvr_wait_ready(void);
+int pvr_wait_render_done(void);
 void SDL_DS_Blit_Cursor(void);
 uint64_t timer_ms_gettime64(void);
 time_t rtc_unix_secs(void);

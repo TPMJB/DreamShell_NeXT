@@ -6,7 +6,9 @@ Installed apps and saved Lua/DSC shortcuts remain discoverable. The original
 Main application is available in the list as **Classic launcher**.
 
 This preview is based on exFAT commit `6958fdc`. It does not change the
-filesystem, bootloader, ISO Loader or GD Ripper. The separate `exfat` release
+filesystem, bootloader, ISO Loader or GD Ripper behavior. The core adds the
+`pvr_wait_render_done` export so the launcher can wait until the GPU has finished
+sampling textures before freeing them. The separate `exfat` release
 remains available while the new launcher is tested on a console.
 
 ## Install
@@ -17,11 +19,13 @@ If you already have that working exFAT preview:
    and power down before removing the card.
 2. Extract **DreamShell-launcher-update.zip**. Merge its `DS` folder onto the
    card, overwriting matching files. This replaces `DS/apps/launch_app/` and
-   installs `DS/fonts/txf/helvetica.txf`. Preserve your existing shortcuts.
+   installs `DS/fonts/txf/helvetica.txf` and the accompanying `DS/DS_CORE.BIN`.
+   Copy the core too: the new launcher needs its graphics synchronization export.
+   Preserve your existing shortcuts.
 3. Safely unmount the card and boot with your existing bootloader 3.0 CD.
    There is no need to burn another disc for this launcher update.
 
-The full **DreamShell-launcher.zip** includes the same exFAT core and boot files
+The full **DreamShell-launcher.zip** includes the updated core and the existing exFAT boot files
 for a complete installation. Follow its `exfat-guide.md` if upgrading from an
 older core. The small launcher update assumes the current exFAT preview core.
 

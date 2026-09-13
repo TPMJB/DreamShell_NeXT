@@ -137,6 +137,7 @@ jobs:
               full.write('launcher-guide.md')
               full.write('launcher-preview.png')
           required = {
+              'DS/DS_CORE.BIN',
               'DS/apps/launch_app/app.xml',
               'DS/apps/launch_app/catalog.xml',
               'DS/apps/launch_app/modules/app_launch_app.klf',
@@ -147,7 +148,7 @@ jobs:
               assert required <= set(full.namelist()), 'Launcher files missing'
               with ZipFile('DreamShell-launcher-update.zip', 'w', ZIP_DEFLATED) as update:
                   for name in full.namelist():
-                      if name.startswith('DS/apps/launch_app/') or name == 'DS/fonts/txf/helvetica.txf':
+                      if name.startswith('DS/apps/launch_app/') or name in ('DS/fonts/txf/helvetica.txf', 'DS/DS_CORE.BIN'):
                           update.writestr(name, full.read(name))
                   update.write('launcher-guide.md')
           PY_PACKAGE
@@ -157,7 +158,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: |
             Launcher 2.0 preview: app list, descriptions, static artwork and direct controller navigation.
-            Based on the current exFAT preview; filesystem, bootloader, ISO Loader and GD Ripper are unchanged.
+            Based on the current exFAT preview; includes a core export needed for safe texture cleanup.
+            Filesystem, bootloader, ISO Loader and GD Ripper behavior are unchanged.
 
             Already running the exFAT preview? Use DreamShell-launcher-update.zip and merge its DS folder.
             No new boot disc is needed for that update. See launcher-guide.md for controls and console checks.

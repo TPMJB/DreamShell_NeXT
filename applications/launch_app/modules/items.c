@@ -205,6 +205,7 @@ void ClearAllItems(void) {
 void RebuildAppList(void) {
     LockVideo();
     pvr_wait_ready();
+    pvr_wait_render_done();
     ClearAllItems();
     BuildAppList();
     UnlockVideo();

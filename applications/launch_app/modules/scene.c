@@ -189,6 +189,7 @@ void ServicePreview(uint64_t now) {
     if(texture) {
         if(self.preview_cache[0].texture && (!self.preview_cache[1].texture || self.preview_cache[1].age < self.preview_cache[0].age)) slot = 1;
         pvr_wait_ready();
+        pvr_wait_render_done();
         ShowPreview(texture);
         if(self.preview_cache[slot].texture) TSU_TextureDestroy(&self.preview_cache[slot].texture);
         self.preview_cache[slot].texture = texture;
