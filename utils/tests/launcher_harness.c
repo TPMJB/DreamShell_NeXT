@@ -8,7 +8,18 @@
 #include <tsunami/tsunami.h>
 #include "../../applications/launch_app/modules/module.c"
 #include "../../applications/launch_app/modules/items.c"
+#ifdef HOST_KLF_CTYPE_OFFSET
+/* The shipped 2.0.1 SH-4 KLF stores _ctype_ + 1 as an implicit addend.
+ * KOS's undefined-symbol RELA path drops that byte, classifying c as c - 1.
+ * Exercise wrapping with the observed target lookup as well as host libc. */
+static int ModuleIsSpace(int c) { return c > 0 && isspace(c - 1); }
+#undef isspace
+#define isspace(c) ModuleIsSpace(c)
+#endif
 #include "../../applications/launch_app/modules/scene.c"
+#ifdef HOST_KLF_CTYPE_OFFSET
+#undef isspace
+#endif
 #include "../../applications/launch_app/modules/manage.c"
 
 static Font font;
@@ -26,7 +37,7 @@ static Event_t input;
 
 static void Register(Drawable *d) { int i; for(i=0;i<512;i++) if(!draws[i]) { draws[i]=d; return; } assert(0); }
 static void Unregister(Drawable *d) { int i; for(i=0;i<512;i++) if(draws[i]==d) draws[i]=NULL; }
-static Drawable *NewDraw(int kind) { Drawable *d=calloc(1,sizeof(*d)); assert(d); d->kind=kind;d->alpha=1;d->color=(Color){1,1,1,1};return d; }
+static Drawable *NewDraw(int kind) { Drawable *d=calloc(1,sizeof(*d)); assert(d); d->kind=kind;d->color=(Color){1,1,1,1};return d; }
 void *host_drawable(const char *name) { int i;for(i=0;i<512;i++)if(draws[i]&&!strcmp(draws[i]->name,name))return draws[i];return NULL; }
 Font *host_font(const char *name) { (void)name;return &font; }
 
@@ -115,7 +126,8 @@ void TSU_LabelSetTint(Label *l,const Color *c) {l->color=*c;}
 void TSU_AppSubAddLabel(DSApp *s,Label *l) {(void)s;Register(l);}
 void TSU_AppSubRemoveLabel(DSApp *s,Label *l) {(void)s;Unregister(l);}
 void TSU_DrawableSetTranslate(Drawable *d,const Vector *v) {d->pos=*v;}
-void TSU_DrawableSetAlpha(Drawable *d,float a) {d->alpha=a;}
+/* Tsunami stores opacity in the tint itself; SetTint replaces it too. */
+void TSU_DrawableSetAlpha(Drawable *d,float a) {d->color.a=a;}
 void TSU_AppSetDrawTransparentPolyEvent(DSApp *s,void (*fn)(void)) {(void)s;(void)fn;}
 void TSU_DialogHide(Dialog *d) {if(d)d->visible=0;}
 void TSU_DialogShow(Dialog *d,const char *s) {d->visible=1;snprintf(d->text,sizeof(d->text),"%s",s);}
@@ -239,10 +251,49 @@ static void Lifecycle(void) {
  assert(self.focused_index==saved);assert(!strcmp(self.items[saved].identity,selected_file));
  puts("selection restored after module unload and reopen: passed");
 }
+static void ListBounds(void) {
+ /* Visit every scroll position in both directions, including the last page. */
+ for(int pass=0;pass<2;pass++) for(int n=0;n<self.item_count;n++) {
+  int selected=pass?self.item_count-1-n:n;
+  SetFocusedIndex(selected,0);
+  for(int i=0;i<self.item_count;i++) {
+   launch_item_t *item=&self.items[i];int visible=ItemVisibleOnPage(i);
+   assert(item->label->color.a==(visible?1.0f:0.0f));
+   if(item->banner) assert(item->banner->color.a==(visible?1.0f:0.0f));
+   if(visible) {
+    float w,h;TSU_LabelGetSize(item->label,&w,&h);
+    assert(item->label->pos.y-h>=LIST_Y);
+    assert(item->label->pos.y+item->label->size/2<=LIST_Y+LIST_ROWS*ROW_H);
+    assert(item->label->pos.x+w<=LIST_X+LIST_W);
+    if(item->banner) {
+     assert(item->banner->pos.y-item->banner->h/2>=LIST_Y);
+     assert(item->banner->pos.y+item->banner->h/2<=LIST_Y+LIST_ROWS*ROW_H);
+    }
+   }
+  }
+ }
+ puts("list labels and icons stay inside every page: passed");
+}
+static void WordWrapping(void) {
+#ifdef HOST_KLF_CTYPE_OFFSET
+ assert(!ModuleIsSpace(' ')); /* Reproduce the actual dropped-offset lookup. */
+#endif
+ WrapLabels(self.description,4,"Dump cartridge data using a compatible cartridge interface.",DETAIL_W);
+ assert(!strcmp(self.description[0]->text,"Dump cartridge data using a"));
+ assert(!strcmp(self.description[1]->text,"compatible cartridge"));
+ assert(!strcmp(self.description[2]->text,"interface."));
+ assert(!strcmp(self.description[3]->text,""));
+ /* Leading whitespace and a manual line break must also be consumed. */
+ WrapLabels(self.description,4," \tFirst line\nSecond line",DETAIL_W);
+ assert(!strcmp(self.description[0]->text,"First line"));
+ assert(!strcmp(self.description[1]->text,"Second line"));
+ assert(!strcmp(self.description[2]->text,""));
+ puts("whole-word wrapping and whitespace: passed");
+}
 static void JsonString(const char *s) {putchar('"');for(;*s;s++){if(*s=='"'||*s=='\\')putchar('\\');if((unsigned char)*s>=32)putchar(*s);}putchar('"');}
 static void Snapshot(void) {
- int first=1;printf("[");for(int i=0;i<512;i++){Drawable *d=draws[i];if(!d||d->alpha<=0||d->kind==3)continue;if(!first)printf(",");first=0;
- printf("{\"kind\":%d,\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"w\":%.3f,\"h\":%.3f,\"size\":%d,\"radius\":%.3f,\"color\":[%.3f,%.3f,%.3f,%.3f],\"text\":",d->kind,d->pos.x,d->pos.y,d->pos.z,d->w,d->h,d->size,d->radius,d->color.r,d->color.g,d->color.b,d->alpha*d->color.a);
+ int first=1;printf("[");for(int i=0;i<512;i++){Drawable *d=draws[i];if(!d||d->color.a<=0||d->kind==3)continue;if(!first)printf(",");first=0;
+ printf("{\"kind\":%d,\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"w\":%.3f,\"h\":%.3f,\"size\":%d,\"radius\":%.3f,\"color\":[%.3f,%.3f,%.3f,%.3f],\"text\":",d->kind,d->pos.x,d->pos.y,d->pos.z,d->w,d->h,d->size,d->radius,d->color.r,d->color.g,d->color.b,d->color.a);
  JsonString(d->text);printf(",\"image\":");JsonString(d->texture?d->texture->path:"");printf("}");}puts("]");
 }
 int main(int argc,char **argv) {
@@ -252,6 +303,8 @@ int main(int argc,char **argv) {
  else if(!strcmp(argv[1],"previews")){assert(argc>=3);Previews(argv[2]);}
  else if(!strcmp(argv[1],"lifecycle"))Lifecycle();
  else if(!strcmp(argv[1],"faults"))Faults();
+ else if(!strcmp(argv[1],"list-bounds"))ListBounds();
+ else if(!strcmp(argv[1],"word-wrap"))WordWrapping();
  else if(!strcmp(argv[1],"snapshot")){SetFocusedIndex(argc>2?atoi(argv[2]):0,0);Snapshot();}
  else assert(0);
  Cleanup();return 0;

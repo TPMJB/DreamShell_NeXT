@@ -11,13 +11,17 @@ class LauncherTests(unittest.TestCase):
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
         cls.exe = Path(cls.temp.name)/'launcher-test'
+        cls.ctype_exe = Path(cls.temp.name)/'launcher-ctype-test'
         mxml = [str(p.relative_to(ROOT)) for p in (ROOT/'lib/mxml').glob('mxml-*.c')]
-        subprocess.run(['gcc', '-std=gnu11', '-O1', '-Wall', '-Wextra', '-Werror',
+        command = ['gcc', '-std=gnu11', '-O1', '-Wall', '-Wextra', '-Werror',
                         '-Wno-format-truncation', '-Wno-unused-parameter',
                         '-Wno-implicit-fallthrough', '-Wno-sign-compare',
                         '-Iutils/tests/launcher_shim', '-Iinclude/SDL', '-Ilib/mxml',
-                        'utils/tests/launcher_harness.c', *mxml, '-pthread', '-o', str(cls.exe)],
-                       cwd=ROOT, check=True)
+                        'utils/tests/launcher_harness.c', *mxml, '-pthread', '-o', str(cls.exe)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        command.insert(1, '-DHOST_KLF_CTYPE_OFFSET')
+        command[-1] = str(cls.ctype_exe)
+        subprocess.run(command, cwd=ROOT, check=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -41,3 +45,14 @@ class LauncherTests(unittest.TestCase):
 
     def test_startup_fallback_and_native_texture_dimensions(self):
         self.assertIn('passed', self.run_c('textures'))
+
+    def test_list_stays_inside_panel_when_scrolling(self):
+        self.assertIn('passed', self.run_c('list-bounds'))
+
+    def test_description_wraps_at_word_boundaries(self):
+        self.assertIn('passed', self.run_c('word-wrap'))
+
+    def test_word_wrap_with_shipped_klf_ctype_offset(self):
+        output = subprocess.check_output([str(self.ctype_exe), 'word-wrap'],
+                                         cwd=ROOT, text=True)
+        self.assertIn('passed', output)

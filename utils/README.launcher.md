@@ -1,9 +1,14 @@
 # DreamShell NeXT launcher preview
 
-Launch App 2.0.1 replaces the animated app grid with a controller-operated list and
+Launch App 2.0.2 replaces the animated app grid with a controller-operated list and
 an app details pane. It uses DreamShell's existing Tsunami renderer at 640x480.
 Installed apps and saved Lua/DSC shortcuts remain discoverable. The original
 Main application is available in the list as **Classic launcher**.
+
+Version 2.0.2 keeps off-page rows hidden after their text colour is updated.
+Descriptions now recognise whitespace without depending on an imported ctype
+table offset that was lost when loading the SH-4 module. Words that fit in the
+pane wrap as whole words; names longer than the pane still use bounded fitting.
 
 Version 2.0.1 fixes a startup abort in 2.0.0: the launcher tried to upload the
 shared 48x48 SDL fallback icon as a native PVR texture before the splash was
@@ -17,6 +22,12 @@ sampling textures before freeing them. The separate `exfat` release
 remains available while the new launcher is tested on a console.
 
 ## Install
+
+Already running launcher 2.0.1? Use **DreamShell-launcher-layout-update.zip**.
+After the current scan finishes, save its diagnostic reports and power down.
+Merge the update's `DS` folder onto the card. This package contains only
+`DS/apps/launch_app/` and this guide, so the installed CRC diagnostic module and
+core are preserved. Safely unmount and boot with the same boot disc.
 
 If you already have that working exFAT preview:
 
@@ -94,6 +105,10 @@ repeat, mouse click cancellation, deletion confirmation, remembered selection,
 text fitting with the shipped font, missing images, preview caching and stale
 loads. Its texture backend enforces KOS's native dimension restrictions; the
 original 48x48 startup fallback reproduces an assertion failure in this check.
+The graphics shim uses Tsunami's shared tint/alpha state and checks every list
+position in both scroll directions. Word wrapping is checked both with host
+libc and with the misplaced ctype lookup observed in the shipped 2.0.1 module.
+The previous code fails both the list-boundary and target-whitespace checks.
 The release workflow also runs the existing storage and ripper tests,
 then compiles the full SH-4 release.
 

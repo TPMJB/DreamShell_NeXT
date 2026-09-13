@@ -2,10 +2,16 @@
  * NeXT enhancements by TPMJB and contributors.
  */
 #include "app_internal.h"
-#include <ctype.h>
 
 static const Color normal = {1.0f, 0.88f, 0.92f, 0.96f};
 static const Color selected = {1.0f, 1.0f, 1.0f, 1.0f};
+
+/* Avoid imported ctype table arithmetic in a KLF: the shipped SH-4 object
+ * encodes _ctype_ + 1 in-place, but the undefined-symbol RELA loader replaces
+ * that word. Explicit ASCII whitespace keeps wrapping independent of it. */
+static int WrapSpace(unsigned char c) {
+    return c == ' ' || (c >= '\t' && c <= '\r');
+}
 
 static void Place(Drawable *d, float x, float y, float z, int visible) {
     Vector v = {x, y, z, 1.0f};
@@ -46,14 +52,14 @@ static void WrapLabels(Label **labels, int count, const char *text, float width)
         size_t n = 0, space = 0;
         float w = 0, h;
         if(!labels[line]) continue;
-        while(*p && isspace((unsigned char)*p)) p++;
+        while(*p && WrapSpace((unsigned char)*p)) p++;
         if(line == count - 1) { FitLabel(labels[line], p, width); break; }
         while(p[n] && n + 1 < sizeof(s)) {
             s[n] = p[n]; n++; s[n] = '\0';
             TSU_LabelSetText(labels[line], s);
             TSU_LabelGetSize(labels[line], &w, &h);
             if(w > width || s[n - 1] == '\n') { n--; break; }
-            if(isspace((unsigned char)s[n - 1])) space = n - 1;
+            if(WrapSpace((unsigned char)s[n - 1])) space = n - 1;
         }
         if(p[n] && space && w > width) n = space;
         if(!n && *p) n = 1;
@@ -81,9 +87,11 @@ void RefreshList(void) {
         launch_item_t *item = &self.items[i];
         float y = LIST_Y + (i - self.first_visible) * ROW_H;
         visible = ItemVisibleOnPage(i);
+        /* SetTint also writes alpha. Set the row's visibility last so an
+         * off-page label cannot be made opaque by its normal text colour. */
+        if(item->label) TSU_LabelSetTint(item->label, i == self.focused_index ? &selected : &normal);
         Place((Drawable *)item->banner, LIST_X + 23, y + 22, 74, visible);
         Place((Drawable *)item->label, LIST_X + 44, y + 29, 74, visible);
-        if(item->label) TSU_LabelSetTint(item->label, i == self.focused_index ? &selected : &normal);
     }
     visible = self.focused_index >= 0 && ItemVisibleOnPage(self.focused_index);
     i = self.focused_index - self.first_visible;

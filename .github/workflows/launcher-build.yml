@@ -161,19 +161,26 @@ jobs:
                       if name.startswith('DS/apps/launch_app/') or name in ('DS/fonts/txf/helvetica.txf', 'DS/DS_CORE.BIN'):
                           update.writestr(name, full.read(name))
                   update.write('launcher-guide.md')
+              with ZipFile('DreamShell-launcher-layout-update.zip', 'w', ZIP_DEFLATED) as update:
+                  for name in full.namelist():
+                      if name.startswith('DS/apps/launch_app/'):
+                          update.writestr(name, full.read(name))
+                  update.write('launcher-guide.md')
           PY_PACKAGE
 
       - name: Publish launcher prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: |
-            Launcher 2.0.1 fixes the splash-screen abort caused by uploading a 48x48 fallback icon as a native GPU texture.
-            Uses the bundled 64x64 launcher icon and rejects unsupported artwork sizes before GPU upload.
+            Launcher 2.0.2 fixes app rows appearing over the header/footer and descriptions breaking inside words.
+            Includes the 2.0.1 fix for the splash-screen abort from unsupported fallback texture dimensions.
             Includes the app list, descriptions, static artwork and direct controller navigation.
             Based on the current exFAT preview; includes a core export needed for safe texture cleanup.
             Filesystem, bootloader, ISO Loader and GD Ripper behavior are unchanged.
 
-            Already running the exFAT preview? Use DreamShell-launcher-update.zip and merge its DS folder.
+            Already on launcher 2.0.1? Use DreamShell-launcher-layout-update.zip; it updates only DS/apps/launch_app/.
+            That small update preserves the installed CRC diagnostic app and core while storage testing continues.
+            Moving from the exFAT preview to the launcher for the first time? Use DreamShell-launcher-update.zip and merge its DS folder.
             No new boot disc is needed for that update. See launcher-guide.md for controls and console checks.
             DreamShell-launcher.zip is the complete release. This preview still needs console validation.
 
@@ -183,7 +190,7 @@ jobs:
           if gh release view launcher >/dev/null 2>&1; then
             gh release delete launcher --yes --cleanup-tag
           fi
-          gh release create launcher DreamShell-launcher.zip DreamShell-launcher-update.zip launcher-guide.md launcher-preview.png \
+          gh release create launcher DreamShell-launcher.zip DreamShell-launcher-update.zip DreamShell-launcher-layout-update.zip launcher-guide.md launcher-preview.png \
             --title "DreamShell NeXT Launcher Preview" \
             --prerelease \
             --latest=false \

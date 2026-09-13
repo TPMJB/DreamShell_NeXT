@@ -44,7 +44,7 @@ typedef struct { float a,r,g,b; } Color;
 typedef struct { int w,h; char path[1024]; } Texture;
 typedef struct { float left[256],right[256],up[256],down[256]; int exists[256]; } Font;
 typedef struct drawable {
- int kind,size,focus,visible; float w,h,alpha,radius; Vector pos; Color color;
+ int kind,size,focus,visible; float w,h,radius; Vector pos; Color color;
  char text[384], name[64]; Texture *texture;
 } Drawable;
 typedef Drawable Label;
