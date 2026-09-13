@@ -1,0 +1,58 @@
+diff --git a/kernel/arch/dreamcast/exports.txt b/kernel/arch/dreamcast/exports.txt
+--- a/kernel/arch/dreamcast/exports.txt
++++ b/kernel/arch/dreamcast/exports.txt
+@@ -83,6 +83,7 @@ sd_shutdown
+ sd_read_blocks
+ sd_write_blocks
+ sd_get_size
++sd_get_interface
+ sd_blockdev_for_partition
+ sd_blockdev_for_device
+ 
+diff --git a/kernel/arch/dreamcast/hardware/sd.c b/kernel/arch/dreamcast/hardware/sd.c
+--- a/kernel/arch/dreamcast/hardware/sd.c
++++ b/kernel/arch/dreamcast/hardware/sd.c
+@@ -296,6 +296,10 @@ int sd_init(void) {
+     return sd_init_ex(&params);
+ }
+ 
++sd_interface_t sd_get_interface(void) {
++    return initted ? current_interface : SD_IF_NONE;
++}
++
+ static int sd_reinit(void) {
+     sd_init_params_t params = {
+         .interface = current_interface,
+diff --git a/kernel/arch/dreamcast/include/dc/sd.h b/kernel/arch/dreamcast/include/dc/sd.h
+--- a/kernel/arch/dreamcast/include/dc/sd.h
++++ b/kernel/arch/dreamcast/include/dc/sd.h
+@@ -2,7 +2,7 @@
+ 
+    dc/sd.h
+    Copyright (C) 2012 Lawrence Sebald
+-   Copyright (C) 2025 Ruslan Rostovtsev
++   Copyright (C) 2025, 2026 Ruslan Rostovtsev
+ */
+ 
+ /** \file    dc/sd.h
+@@ -57,6 +57,7 @@ __BEGIN_DECLS
+ 
+ /** \brief  SD card interface type */
+ typedef enum {
++    SD_IF_NONE = -1,   /**< Not detected */
+     SD_IF_SCIF = 0,    /**< Use SCIF interface */
+     SD_IF_SCI = 1      /**< Use SCI interface */
+ } sd_interface_t;
+@@ -107,6 +108,12 @@ int sd_init_ex(const sd_init_params_t *params);
+ */
+ int sd_init(void);
+ 
++/** \brief  Return the SPI interface used by the SD card.
++    \return                 SD_IF_SCIF or SD_IF_SCI if a card is initialized,
++                            SD_IF_NONE otherwise.
++*/
++sd_interface_t sd_get_interface(void);
++
+ /** \brief  Shut down SD card support.
+ 
+     This function shuts down SD card support, and cleans up anything that the

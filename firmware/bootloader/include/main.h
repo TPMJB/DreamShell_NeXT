@@ -28,7 +28,7 @@ int DirExists(const char *dir);
 int flashrom_get_region_only();
 void descramble(uint8 *source, uint8 *dest, uint32 size);
 
-extern const char	title[28];
+extern const char	title[];
 extern uint32 spiral_color;
 extern int start_pressed;
 

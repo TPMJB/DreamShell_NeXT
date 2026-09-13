@@ -39,7 +39,7 @@ pvr_init_params_t params = {
 	0
 };
 
-const char title[28] = "DreamShell bootloader v"VERSION;
+const char title[] = "DreamShell NeXT boot v"VERSION;
 
 
 int FileExists(const char *fn) {
@@ -111,6 +111,7 @@ static void start_callback(void) {
 
 static void show_boot_message(void) {
 	dbglog(DBG_INFO, "         %s\n", title);
+	dbglog(DBG_INFO, "         by TPMJB - based on SWAT DreamShell\n");
 	dbglog(DBG_INFO, "         FAT16 / FAT32 / exFAT\n");
 	dbglog(DBG_INFO, "  !!! Press START to enter the boot menu !!!\n\n");
 }

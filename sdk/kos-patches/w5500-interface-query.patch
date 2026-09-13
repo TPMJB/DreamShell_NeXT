@@ -1,0 +1,96 @@
+diff --git a/kernel/arch/dreamcast/exports.txt b/kernel/arch/dreamcast/exports.txt
+--- a/kernel/arch/dreamcast/exports.txt
++++ b/kernel/arch/dreamcast/exports.txt
+@@ -1,6 +1,7 @@
+ include kos.h
+ include dc/sound/sound.h
+ include dc/maple/mie.h
++include dc/net/w5500_adapter.h
+ 
+ # Cache management
+ arch_icache_inval_range
+@@ -87,6 +88,11 @@ sd_get_interface
+ sd_blockdev_for_partition
+ sd_blockdev_for_device
+ 
++# W5500
++w5500_adapter_init
++w5500_adapter_shutdown
++w5500_adapter_interface
++
+ # Timers
+ timer_prime
+ timer_start
+diff --git a/kernel/arch/dreamcast/hardware/network/w5500_adapter.c b/kernel/arch/dreamcast/hardware/network/w5500_adapter.c
+--- a/kernel/arch/dreamcast/hardware/network/w5500_adapter.c
++++ b/kernel/arch/dreamcast/hardware/network/w5500_adapter.c
+@@ -19,6 +19,7 @@
+ #include <dc/scif.h>
+ #include <dc/flashrom.h>
+ #include <dc/syscalls.h>
++#include <dc/net/w5500_adapter.h>
+ #include <kos/mutex.h>
+ 
+ /* W5500 Register Definitions & Constants */
+@@ -72,11 +73,6 @@
+ 
+ #define MAC_FILTER_SIZE 16
+ 
+-typedef enum {
+-    W5500_IF_SCI = 0,
+-    W5500_IF_SCIF = 1
+-} w5500_interface_t;
+-
+ static w5500_interface_t current_interface = W5500_IF_SCI;
+ static kthread_t *w5500_rx_thread = NULL;
+ static bool w5500_rx_exit = false;
+@@ -863,3 +859,10 @@ int w5500_adapter_shutdown(void) {
+     }
+     return 0;
+ }
++
++w5500_interface_t w5500_adapter_interface(void) {
++    if(!w5500_registered) {
++        return W5500_IF_NONE;
++    }
++    return current_interface;
++}
+diff --git a/kernel/arch/dreamcast/include/dc/net/w5500_adapter.h b/kernel/arch/dreamcast/include/dc/net/w5500_adapter.h
+--- a/kernel/arch/dreamcast/include/dc/net/w5500_adapter.h
++++ b/kernel/arch/dreamcast/include/dc/net/w5500_adapter.h
+@@ -1,7 +1,7 @@
+ /* KallistiOS ##version##
+ 
+    dc/net/w5500_adapter.h
+-   Copyright (C) 2025 Ruslan Rostovtsev
++   Copyright (C) 2025, 2026 Ruslan Rostovtsev
+ 
+ */
+ 
+@@ -24,6 +24,13 @@
+ 
+ __BEGIN_DECLS
+ 
++/** \brief  W5500 SPI interface. */
++typedef enum {
++    W5500_IF_NONE = -1, /**< Not detected */
++    W5500_IF_SCIF = 0,  /**< SCIF-SPI */
++    W5500_IF_SCI = 1    /**< SCI-SPI */
++} w5500_interface_t;
++
+ /** \defgroup w5500_adapter  W5500 Adapter
+     \brief                   Driver for the WIZnet W5500 Adapter
+     \ingroup                 networking_drivers
+@@ -42,6 +49,12 @@ int w5500_adapter_init(const uint8_t *mac_addr, bool use_thread);
+ */
+ int w5500_adapter_shutdown(void);
+ 
++/** \brief  Return the SPI interface used by a detected W5500.
++    \return                 W5500_IF_SCIF or W5500_IF_SCI on success,
++                            W5500_IF_NONE if the adapter is not present.
++*/
++w5500_interface_t w5500_adapter_interface(void);
++
+ __END_DECLS
+ 
+ #endif  /* __DC_NET_W5500_ADAPTER_H */

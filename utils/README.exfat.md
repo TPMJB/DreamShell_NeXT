@@ -1,6 +1,6 @@
-# DreamShell NeXT exFAT preview
+# DreamShell NeXT exFAT support
 
-This experimental build adds exFAT to bootloader **3.0**, the DreamShell core,
+NeXT 1.0.0 includes exFAT to bootloader **3.0**, the DreamShell core,
 ISO Loader **0.9.0**, and the optional HollySH BIOS loader. It uses a pinned FatFs R0.16 engine. FAT16/FAT32
 remain supported. GD Ripper uses the core's filesystem services; its existing
 logging, CRC checkpoints and targeted recovery work through the same interface.

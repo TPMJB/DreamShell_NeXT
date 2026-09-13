@@ -1,11 +1,27 @@
-DreamShell
-==========
+# DreamShell NeXT — by TPMJB
 
-The Dreamshell is the operating system for the Sega Dreamcast based on the KallistiOS kernel.
-It has a dynamic loadable modular system and  interface for creating applications with XML UI and both C/C++ and Lua script on.
-You can see examples in ready-made applications and modules, drivers for various devices, formats and interfaces. Examples for audio and video decoding, compression, packaging, binding, network, emulation, scripts and more. From hardcore low-level assembler to high-level applications.
-There are also large subproject is the ISO Loader, which contains emulation of BIOS system calls, CDDA playback and VMU, also it can hooking interrupts for various SDKs and more.
+A Dreamcast tools environment built on [SWAT's DreamShell](https://github.com/DC-SWAT/DreamShell)
+and KallistiOS. NeXT adds exFAT boot/storage support, a controller-friendly app
+launcher, a QWERTY keyboard and directory browser, and reliable GD ripping with
+checkpoints, catalog verification and targeted recovery.
 
+**[Download the full NeXT 1.0.0 release](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/v1.0.0)**
+— includes the complete DS folder, boot CDs, firmware and desktop tools.
+Read [installation and release notes](RELEASE-NOTES.md) before updating.
+Copy the whole DS folder together; a working NeXT bootloader 3.0 CD can be reused.
+
+![DreamShell NeXT boot splash](resources/boot-preview.png)
+
+- [exFAT compatibility and installation](utils/README.exfat.md)
+- [Keyboard, directory picker and FAT32 regression check](utils/README.input-ui.md)
+- [GD dump verification](utils/README.gd-verify.md)
+- [CRC read-back diagnostics](utils/README.readback-diagnostic.md)
+- [Upstream changes reviewed for this release](docs/upstream-review.md)
+
+NeXT's 1.0.0 release number is independent of the DreamShell 4.0.5 Beta 3 core/API
+version. Original DreamShell, KallistiOS and third-party credits remain in the
+source and distributed notices. Other apps and hardware combinations are built
+but are not all validated on a physical console.
 
 ## Build
 
@@ -15,7 +31,7 @@ There are also large subproject is the ISO Loader, which contains emulation of B
 sudo apt update
 sudo apt install -y gawk patch bzip2 tar make cmake pkg-config
 sudo apt install -y gettext wget bison flex sed meson ninja-build
-sudo apt install -y build-essential diffutils curl python3 rake
+sudo apt install -y build-essential diffutils curl python3 rake exfatprogs dosfstools
 sudo apt install -y genisoimage squashfs-tools texinfo git
 sudo apt install -y libgmp-dev libmpfr-dev libmpc-dev libelf-dev libisofs-dev
 sudo apt install -y libpng-dev libjpeg-dev liblzo2-dev liblua5.2-dev
@@ -32,12 +48,14 @@ cd /usr/local/dc/kos
 git clone https://github.com/KallistiOS/kos-ports.git
 git clone https://github.com/DC-SWAT/KallistiOS.git kos
 cd /usr/local/dc/kos/kos
-git clone https://github.com/DC-SWAT/DreamShell.git ds
+git clone https://github.com/TPMJB/DreamShell_NeXT.git ds
 git checkout `cat ds/sdk/doc/KallistiOS.txt`
 cp ds/sdk/toolchain/environ.sh environ.sh
 cp ds/sdk/toolchain/patches/*.diff utils/kos-chain/patches
 cd /usr/local/dc/kos/kos/ds
-git submodule update --init --recursive
+git -C .. apply "$PWD"/sdk/kos-patches/cdrom-timeout-deadlock.patch \
+  "$PWD"/sdk/kos-patches/sd-interface-query.patch \
+  "$PWD"/sdk/kos-patches/w5500-interface-query.patch
 ```
 ##### Toolchain
 ```console

@@ -41,7 +41,9 @@ prepare)
 
 	log "Apply DreamShell KallistiOS fixes"
 	git -C "${KOS_BASE}" apply \
-		"${DS_SRC}/sdk/kos-patches/cdrom-timeout-deadlock.patch"
+		"${DS_SRC}/sdk/kos-patches/cdrom-timeout-deadlock.patch" \
+		"${DS_SRC}/sdk/kos-patches/sd-interface-query.patch" \
+		"${DS_SRC}/sdk/kos-patches/w5500-interface-query.patch"
 
 	ln -sfn "${DS_SRC}" "${KOS_BASE}/ds"
 	cp "${DS_SRC}/sdk/toolchain/environ.sh" "${KOS_BASE}/environ.sh"

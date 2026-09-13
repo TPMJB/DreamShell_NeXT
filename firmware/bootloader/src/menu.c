@@ -650,7 +650,7 @@ void menu_frame() {
 
 	/* Draw title */
 	draw_box(90, 90, 640-180, 26, 100.0f, alpha * 0.6f, 0.0f, 0.0f, 0.0f);
-	draw_string(320.0f - (12*sizeof(title))/2, 92.0f, 101.0f, alpha, 1, 1, 1, (char*)title, sizeof(title));
+	draw_string(320.0f - (12*strlen(title))/2, 92.0f, 101.0f, alpha, 1, 1, 1, (char*)title, strlen(title));
 	
 	/* Draw background plane */
 	draw_box(90, 90+26, 640-180, 480-(180+26), 100.0f, alpha * 0.3f, 0.0f, 0.0f, 0.0f);

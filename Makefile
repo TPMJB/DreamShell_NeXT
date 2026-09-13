@@ -22,7 +22,8 @@ VER_BUILD = 0x13
 BUILD_TYPE_BASE = $(if $(filter 0x3%,$(VER_BUILD)),Release,$(if $(filter 0x2%,$(VER_BUILD)),RC,$(if $(filter 0x1%,$(VER_BUILD)),Beta,$(if $(filter 0x0%,$(VER_BUILD)),Alpha,Release))))
 BUILD_NUM = $(lastword $(subst 0x2,,$(subst 0x1,,$(subst 0x0,,$(subst 0x3,,$(VER_BUILD))))))
 BUILD_TYPE_NAME = $(if $(filter Release,$(BUILD_TYPE_BASE)),$(BUILD_TYPE_BASE),$(BUILD_TYPE_BASE)$(BUILD_NUM))
-TARGET_NAME = DreamShell_v$(VER_MAJOR).$(VER_MINOR).$(VER_MICRO)_$(BUILD_TYPE_NAME)
+NEXT_VERSION = $(shell cat $(DS_BASE)/VERSION 2>/dev/null || cat VERSION)
+TARGET_NAME = DreamShell-NeXT-v$(NEXT_VERSION)
 TARGET_BIN = $(TARGET)_CORE.BIN
 TARGET_BIN_CD = 1$(TARGET_BIN)
 IDE_IMG_SIZE ?= 0
@@ -158,15 +159,13 @@ logo: $(KOS_ROMDISK_DIR)/logo.kmg.gz
 $(KOS_ROMDISK_DIR)/logo.kmg.gz: $(DS_RES)/logo_sq.png
 	$(KOS_BASE)/utils/kmgenc/kmgenc -v $(DS_RES)/logo_sq.png
 	mv $(DS_RES)/logo_sq.kmg logo.kmg
-	gzip -9 logo.kmg
+	gzip -n -9 -f logo.kmg
 	mv logo.kmg.gz $(KOS_ROMDISK_DIR)/logo.kmg.gz
 
 sfx: $(KOS_ROMDISK_DIR)/startup.raw.gz $(SFX_TARGETS)
 $(KOS_ROMDISK_DIR)/startup.raw.gz: $(DS_RES)/sfx/startup.wav
-	ffmpeg -i $(DS_RES)/sfx/startup.wav -af "apad=pad_dur=2" $(DS_RES)/sfx/startup_pad.wav
-	ffmpeg -i $(DS_RES)/sfx/startup_pad.wav -acodec adpcm_yamaha -fs 327680 -f s16le $(KOS_ROMDISK_DIR)/startup.raw
-	rm -f $(DS_RES)/sfx/startup_pad.wav
-	gzip -9 $(KOS_ROMDISK_DIR)/startup.raw
+	ffmpeg -v error -y -i $(DS_RES)/sfx/startup.wav -ac 2 -ar 44100 -c:a adpcm_yamaha -f s16le $(KOS_ROMDISK_DIR)/startup.raw
+	gzip -n -9 -f $(KOS_ROMDISK_DIR)/startup.raw
 
 $(DS_BUILD)/sfx/%.wav: $(DS_RES)/sfx/%.wav
 	@mkdir -p $(DS_BUILD)/sfx
@@ -243,6 +242,11 @@ release: build cdi
 	@cp $(DS_BASE)/utils/make_gd_redump_db.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/README.gd-verify.md $(DS_BASE)/release/host-tools/README.md
 	@cp $(DS_BASE)/utils/README.exfat.md $(DS_BASE)/release/exfat-guide.md
+	@cp $(DS_BASE)/utils/README.input-ui.md $(DS_BASE)/release/input-ui-guide.md
+	@cp $(DS_BASE)/utils/README.readback-diagnostic.md $(DS_BASE)/release/readback-guide.md
+	@cp $(DS_BASE)/RELEASE-NOTES.md $(DS_BASE)/release/README-FIRST.md
+	@cp $(DS_BASE)/docs/upstream-review.md $(DS_BASE)/release/upstream-review.md
+	@cp $(DS_BASE)/VERSION $(DS_BASE)/release/$(TARGET)/NEXT_VERSION
 	@echo Compressing...
 	@cd $(DS_BASE)/release && zip -q -r $(TARGET_NAME).zip * 2> /dev/null
 	@echo 

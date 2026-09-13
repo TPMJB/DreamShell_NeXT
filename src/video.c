@@ -11,7 +11,8 @@
 #include "img/load.h"
 #include <kmg/kmg.h>
 #include <zlib/zlib.h>
-#include <dc/sci.h>
+#include <dc/sd.h>
+#include <dc/net/w5500_adapter.h>
 
 static int sdl_dc_no_ask_60hz = 0;
 static int sdl_dc_default_60hz = 0;
@@ -499,7 +500,8 @@ int InitVideo(int w, int h, int bpp) {
 	}
 
 	/* Disable PVR DMA if SCI-SPI DMA is used due to conflict (?) */
-	if(sci_spi_rw_byte(0, NULL) != SCI_ERR_NOT_INITIALIZED) {
+	if(sd_get_interface() == SD_IF_SCI ||
+		w5500_adapter_interface() == W5500_IF_SCI) {
 		video_dma = 0;
 	}
 
@@ -752,8 +754,9 @@ void ShowLogo() {
 
 	kos_img_t img;
 	float opacity = 0.0f;
-	float w = native_width;
-	float h = native_height;
+	/* The boot artwork occupies 640x480 texels, independent of video mode. */
+	float w = 640.0f;
+	float h = 480.0f;
 	float u1, v1, u2, v2;
 
 	pvr_poly_cxt_t cxt;
@@ -781,7 +784,7 @@ void ShowLogo() {
 		logo_h = img.h;
 
 	u1 = 0.3f * (1.0f / ((float)logo_w));
-	v1 = 0.3f * (1.0f / ((float)logo_w));
+	v1 = 0.3f * (1.0f / ((float)logo_h));
 	u2 = (w + 0.5f) * (1.0f / ((float)logo_w));
 	v2 = (h + 0.5f) * (1.0f / ((float)logo_h));
 
@@ -843,10 +846,11 @@ void ShowLogo() {
 void HideLogo() {
 
 	float opacity = 1.0f;
-	float w = native_width;
-	float h = native_height;
+	/* The boot artwork occupies 640x480 texels, independent of video mode. */
+	float w = 640.0f;
+	float h = 480.0f;
 	float u1 = 0.3f * (1.0f / ((float)logo_w));
-	float v1 = 0.3f * (1.0f / ((float)logo_w));
+	float v1 = 0.3f * (1.0f / ((float)logo_h));
 	float u2 = (w + 0.5f) * (1.0f / ((float)logo_w));
 	float v2 = (h + 0.5f) * (1.0f / ((float)logo_h));
 
