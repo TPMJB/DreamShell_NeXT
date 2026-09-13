@@ -246,7 +246,7 @@ DRESULT disk_read_part (
 	BYTE drv,		/* Physical drive nmuber (0..) */
 	BYTE *buff,		/* Data buffer to store read data */
 	LBA_t sector,	/* Sector address (LBA) */
-	DWORD bytes		/* Bytes to read */
+	UINT bytes		/* Bytes to read */
 )
 {
 

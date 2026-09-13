@@ -55,6 +55,12 @@ toolchain)
 	test -x "${TOOLCHAIN_ROOT}/sh-elf/bin/sh-elf-gcc"
 	;;
 
+loaders)
+	load_kos_env
+	log "Check all standalone ISO Loader variants"
+	make -C "${DS_SRC}/firmware/isoldr/loader" -j"$(nproc)"
+	;;
+
 kos)
 	load_kos_env
 	log "Build KallistiOS"
@@ -101,7 +107,7 @@ release)
 	;;
 
 *)
-	echo "Usage: $0 {prepare|toolchain|kos|ports|release}" >&2
+	echo "Usage: $0 {prepare|toolchain|loaders|kos|ports|release}" >&2
 	exit 2
 	;;
 esac

@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: dreamshell-exfat-build
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -97,6 +97,9 @@ jobs:
 
       - name: Verify toolchain
         run: test -x /opt/toolchains/dc/sh-elf/bin/sh-elf-gcc
+
+      - name: Check ISO Loader SH-4 builds
+        run: bash .github/scripts/dev-build.sh loaders
 
       - name: Save toolchain cache
         if: steps.cache-toolchain.outputs.cache-hit != 'true'
