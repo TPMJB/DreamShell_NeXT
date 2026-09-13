@@ -1,16 +1,3 @@
-#ifndef DS_ISOLDR_FFCONF_H
-#define DS_ISOLDR_FFCONF_H
-#ifndef DREAMSHELL_ISO_LOADER
-#define DREAMSHELL_ISO_LOADER 1
-#endif
-#ifndef _FS_READONLY
-#define _FS_READONLY 1
-#endif
-#if defined(DEV_TYPE_IDE) && defined(DEV_TYPE_SD)
-#define DS_LOADER_VOLUMES 2
-#else
-#define DS_LOADER_VOLUMES 1
-#endif
 /* DreamShell: UTF-8 paths, FAT12/16/32 + exFAT, 512-byte sectors.
  * VFS operations are serialized by dc.c; LFN buffers use the heap. */
 /*---------------------------------------------------------------------------/
@@ -23,14 +10,14 @@
 / Function Configurations
 /---------------------------------------------------------------------------*/
 
-#define FF_FS_READONLY	_FS_READONLY
+#define FF_FS_READONLY	0
 /* This option switches read-only configuration. (0:Read/Write or 1:Read-only)
 /  Read-only configuration removes writing API functions, f_write(), f_sync(),
 /  f_unlink(), f_mkdir(), f_chmod(), f_rename(), f_truncate(), f_getfree()
 /  and optional writing functions as well. */
 
 
-#define FF_FS_MINIMIZE	2
+#define FF_FS_MINIMIZE	0
 /* This option defines minimization level to remove some basic API functions.
 /
 /   0: Basic functions are fully enabled.
@@ -45,7 +32,7 @@
 /  f_findnext(). (0:Disable, 1:Enable 2:Enable with matching altname[] too) */
 
 
-#define FF_USE_MKFS		0
+#define FF_USE_MKFS		1
 /* This option switches f_mkfs(). (0:Disable or 1:Enable) */
 
 
@@ -57,12 +44,12 @@
 /* This option switches f_expand(). (0:Disable or 1:Enable) */
 
 
-#define FF_USE_CHMOD	0
+#define FF_USE_CHMOD	1
 /* This option switches attribute control API functions, f_chmod() and f_utime().
 /  (0:Disable or 1:Enable) Also FF_FS_READONLY needs to be 0 to enable this option. */
 
 
-#define FF_USE_LABEL	0
+#define FF_USE_LABEL	1
 /* This option switches volume label API functions, f_getlabel() and f_setlabel().
 /  (0:Disable or 1:Enable) */
 
@@ -168,7 +155,7 @@
 /  on character encoding. When LFN is not enabled, these options have no effect. */
 
 
-#define FF_FS_RPATH		0
+#define FF_FS_RPATH		2
 /* This option configures support for relative path feature.
 /
 /   0: Disable relative path and remove related API functions.
@@ -177,7 +164,7 @@
 */
 
 
-#define FF_PATH_DEPTH	1
+#define FF_PATH_DEPTH	16
 /*  This option defines maximum depth of directory in the exFAT volume. It is NOT
 /   relevant to FAT/FAT32 volume.
 /   For example, FF_PATH_DEPTH = 3 will able to follow a path "/dir1/dir2/dir3/file"
@@ -193,7 +180,7 @@
 / Drive/Volume Configurations
 /---------------------------------------------------------------------------*/
 
-#define FF_VOLUMES		DS_LOADER_VOLUMES
+#define FF_VOLUMES		8
 /* Number of volumes (logical drives) to be used. (1-10) */
 
 
@@ -251,7 +238,7 @@
 / System Configurations
 /---------------------------------------------------------------------------*/
 
-#define FF_FS_TINY		1
+#define FF_FS_TINY		0
 /* This option switches tiny buffer configuration. (0:Normal or 1:Tiny)
 /  At the tiny configuration, size of file object (FIL) is reduced FF_MAX_SS bytes.
 /  Instead of private sector buffer eliminated from the file object, common sector
@@ -295,7 +282,7 @@
 */
 
 
-#define FF_FS_LOCK		0
+#define FF_FS_LOCK		16
 /* The option FF_FS_LOCK switches file lock function to control duplicated file open
 /  and illegal operation to open objects. This option must be 0 when FF_FS_READONLY
 /  is 1.
@@ -326,13 +313,3 @@
 
 
 /*--- End of configuration options ---*/
-
-#define _VOLUMES FF_VOLUMES
-#define _USE_FASTSEEK FF_USE_FASTSEEK
-#define _FS_TINY FF_FS_TINY
-#define _FS_MINIMIZE FF_FS_MINIMIZE
-#define _USE_MKFS FF_USE_MKFS
-#define _MAX_SS FF_MAX_SS
-#define _MIN_SS FF_MIN_SS
-#define _USE_LFN FF_USE_LFN
-#endif

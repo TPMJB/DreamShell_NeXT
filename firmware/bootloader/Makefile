@@ -4,8 +4,8 @@
 #
 
 TARGET = bootloader
-VER_MAJOR = 2
-VER_MINOR = 9
+VER_MAJOR = 3
+VER_MINOR = 0
 VER_MICRO = 0
 VERSION = $(VER_MAJOR).$(VER_MINOR)
 TARGET_NAME = DreamShell_$(TARGET)_v$(VERSION)
@@ -95,6 +95,8 @@ release: all cdi install
 	@mv $(TARGET).cdi $(TARGET_NAME).cdi
 
 install: $(TARGET).bin
+	@test $$(wc -c < $(TARGET).bin) -le $$(($(WIDESCREEN_PATCH_OFFSET) - $(BOOTLOADER_ROM_OFFSET))) || \
+		{ echo "Bootloader exceeds reserved BIOS space"; exit 1; }
 	@mkdir -p $(FW_DIR)
 	@set -e; \
 	for spec in $(BIOS_INSTALL_SPECS); do \

@@ -261,8 +261,17 @@ int open(const char *path, int flags) {
 		return FS_ERR_NOFILE;
 	}
 
-	if((flags & O_APPEND) && file->fp.fsize > 0) {
-		f_lseek(&file->fp, file->fp.fsize);
+	/* Game-loader offsets remain signed 32-bit. The DreamShell core has
+	 * separate 64-bit APIs for storage files; never truncate sizes here. */
+	if (f_size(&file->fp) > 0x7fffffffULL) {
+		f_close(&file->fp);
+		fs_enable_dma(old_dma_mode);
+		LOGFF("Image file exceeds the loader's 2 GiB offset range\n");
+		return FS_ERR_PARAM;
+	}
+
+	if((flags & O_APPEND) && file->fp.obj.objsize > 0) {
+		f_lseek(&file->fp, file->fp.obj.objsize);
 	}
 
 #if _USE_FASTSEEK
@@ -535,7 +544,7 @@ int write(int fd, void *ptr, unsigned int size) {
 	}
 
 	if(file->oflags & O_APPEND) {
-		if(f_lseek(&file->fp, file->fp.fsize) != FR_OK) {
+		if(f_lseek(&file->fp, file->fp.obj.objsize) != FR_OK) {
 			fs_enable_dma(old_dma_mode);
 			return FS_ERR_SYSERR;
 		}
@@ -570,7 +579,7 @@ long int lseek(int fd, long int offset, int whence) {
 			r = f_lseek(&file->fp, file->fp.fptr + offset);
 			break;
 		case SEEK_END:
-			r = f_lseek(&file->fp, file->fp.fsize + offset);
+			r = f_lseek(&file->fp, file->fp.obj.objsize + offset);
 			break;
 		default:
 			break;
@@ -586,7 +595,7 @@ long int tell(int fd) {
 
 unsigned long total(int fd) {
 	CHECK_FD();
-	return file->fp.fsize;
+	return file->fp.obj.objsize;
 }
 
 int ioctl(int fd, int cmd, void *data) {
@@ -594,7 +603,7 @@ int ioctl(int fd, int cmd, void *data) {
 	switch(cmd) {
 		case FS_IOCTL_GET_LBA:
 		{
-			unsigned long sec = clust2sect(file->fp.fs, file->fp.sclust);
+			unsigned long sec = ds_fat_file_lba(&file->fp);
 			memcpy(data, &sec, sizeof(sec));
 			return 0;
 		}

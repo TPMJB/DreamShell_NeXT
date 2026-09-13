@@ -5,7 +5,7 @@
 #include "diskio.h"
 #include <assert.h>
 
-PARTITION VolToPart[_VOLUMES];
+PARTITION VolToPart[FF_VOLUMES];
 static BYTE *disk;
 static DWORD sectors;
 static FIL files[16];
@@ -132,9 +132,12 @@ int main(int argc, char **argv) {
     assert(disk);
     FATFS volume = {0};
     assert(f_mount(&volume, "0:", 0) == FR_OK);
-    assert(f_mkfs("0:", 1, 512) == FR_OK);
+    unsigned char work[4096];
+    MKFS_PARM format = { .fmt = (atoi(argv[1]) == 32 ? FM_FAT32 :
+        !strcmp(argv[1], "exfat") ? FM_EXFAT : FM_FAT) | FM_SFD, .au_size = 512 };
+    assert(f_mkfs("0:", &format, work, sizeof(work)) == FR_OK);
     assert(f_mount(&volume, "0:", 1) == FR_OK);
-    assert(volume.fs_type == (atoi(argv[1]) == 32 ? FS_FAT32 : FS_FAT16));
+    assert(volume.fs_type == (atoi(argv[1]) == 32 ? FS_FAT32 : !strcmp(argv[1], "exfat") ? FS_EXFAT : FS_FAT16));
     assert(f_mkdir("/TIME_STALKERS") == FR_OK);
     strcpy(self.sync_mount, "/sd");
 

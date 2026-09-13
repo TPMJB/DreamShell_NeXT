@@ -163,8 +163,8 @@ DSTATUS disk_status (
 DRESULT disk_read (
 	BYTE drv,		/* Physical drive nmuber (0..) */
 	BYTE *buff,		/* Data buffer to store read data */
-	DWORD sector,	/* Sector address (LBA) */
-	DWORD count		/* Number of sectors to read */
+	LBA_t sector,	/* Sector address (LBA) */
+	UINT count		/* Number of sectors to read */
 )
 {
 
@@ -204,8 +204,8 @@ DRESULT disk_read (
 DRESULT disk_read_async (
 	BYTE drv,		/* Physical drive nmuber (0..) */
 	BYTE *buff,		/* Data buffer to store read data */
-	DWORD sector,	/* Sector address (LBA) */
-	DWORD count		/* Number of sectors to read */
+	LBA_t sector,	/* Sector address (LBA) */
+	UINT count		/* Number of sectors to read */
 )
 {
 
@@ -245,7 +245,7 @@ DRESULT disk_read_async (
 DRESULT disk_read_part (
 	BYTE drv,		/* Physical drive nmuber (0..) */
 	BYTE *buff,		/* Data buffer to store read data */
-	DWORD sector,	/* Sector address (LBA) */
+	LBA_t sector,	/* Sector address (LBA) */
 	DWORD bytes		/* Bytes to read */
 )
 {
@@ -263,8 +263,8 @@ DRESULT disk_read_part (
 
 DRESULT disk_pre_read (
 	BYTE drv,		/* Physical drive nmuber (0..) */
-	DWORD sector,	/* Sector address (LBA) */
-	DWORD count		/* Number of sectors to read */
+	LBA_t sector,	/* Sector address (LBA) */
+	UINT count		/* Number of sectors to read */
 )
 {
 
@@ -308,8 +308,8 @@ DRESULT disk_pre_read (
 DRESULT disk_write (
 	BYTE drv,			/* Physical drive nmuber (0..) */
 	const BYTE *buff,	/* Data to be written */
-	DWORD sector,		/* Sector address (LBA) */
-	DWORD count			/* Number of sectors to write */
+	LBA_t sector,		/* Sector address (LBA) */
+	UINT count			/* Number of sectors to write */
 )
 {
 

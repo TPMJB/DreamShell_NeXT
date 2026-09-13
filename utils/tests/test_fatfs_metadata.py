@@ -12,7 +12,7 @@ class FatMetadataTests(unittest.TestCase):
     def setUpClass(cls):
         fat = ROOT / 'lib/fatfs/fatfs/src'
         if not (fat / 'ff.c').is_file():
-            raise RuntimeError('Initialize the pinned submodule: git submodule update --init lib/fatfs')
+            raise RuntimeError('Missing vendored FatFs source')
         cls.build = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.build.cleanup)
         cls.exe = Path(cls.build.name) / 'fat-metadata-test'
@@ -23,7 +23,7 @@ class FatMetadataTests(unittest.TestCase):
             '-Iutils/tests/console_shim', '-Iinclude/SDL', '-I' + str(fat),
             'utils/tests/fatfs_harness.c', 'applications/gd_ripper/modules/checksum.c',
             'applications/gd_ripper/modules/recovery.c',
-            str(fat / 'ff.c'), str(fat / 'option/unicode.c'),
+            str(fat / 'ff.c'), str(fat / 'ffunicode.c'), str(fat / 'ffsystem.c'),
             '-Wl,--gc-sections', '-lz', '-o', str(cls.exe),
         ], cwd=ROOT, check=True)
 
@@ -32,3 +32,6 @@ class FatMetadataTests(unittest.TestCase):
 
     def test_log_and_crc_creation_on_fat32(self):
         subprocess.run([str(self.exe), '32'], check=True)
+
+    def test_log_crc_and_recovery_on_exfat(self):
+        subprocess.run([str(self.exe), 'exfat'], check=True)

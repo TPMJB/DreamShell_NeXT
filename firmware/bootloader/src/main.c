@@ -111,6 +111,7 @@ static void start_callback(void) {
 
 static void show_boot_message(void) {
 	dbglog(DBG_INFO, "         %s\n", title);
+	dbglog(DBG_INFO, "         FAT16 / FAT32 / exFAT\n");
 	dbglog(DBG_INFO, "  !!! Press START to enter the boot menu !!!\n\n");
 }
 

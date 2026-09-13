@@ -242,6 +242,7 @@ release: build cdi
 	@cp $(DS_BASE)/utils/repair_timestalkers.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/make_gd_redump_db.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/README.gd-verify.md $(DS_BASE)/release/host-tools/README.md
+	@cp $(DS_BASE)/utils/README.exfat.md $(DS_BASE)/release/exfat-guide.md
 	@echo Compressing...
 	@cd $(DS_BASE)/release && zip -q -r $(TARGET_NAME).zip * 2> /dev/null
 	@echo 

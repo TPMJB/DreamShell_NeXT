@@ -1,0 +1,1333 @@
+/*
+ * FatFs for the Sega Dreamcast
+ *
+ * This file is part of the FatFs module, a generic FAT filesystem
+ * module for small embedded systems. This version has been ported and
+ * optimized specifically for the Sega Dreamcast platform.
+ *
+ * Copyright (c) 2007-2026 Ruslan Rostovtsev
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include <malloc.h>
+#include <stdio.h>
+#include <errno.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
+#include <inttypes.h>
+#include <time.h>
+
+#include <arch/arch.h>
+#include <arch/rtc.h>
+#include <dc/g1ata.h>
+#include <dc/sd.h>
+#include <kos/dbglog.h>
+#include <kos/fs.h>
+#include <kos/mutex.h>
+#include <fatfs.h>
+
+#include "ff.h"
+#include "diskio.h"
+#include <limits.h>
+
+#define MAX_FAT_MOUNTS        FF_VOLUMES
+#define MAX_FAT_FILES         16
+#define FATFS_LINK_TBL_SIZE   32
+
+typedef struct fatfs_mnt {
+
+    FATFS *fs;
+    vfs_handler_t *vfsh;
+    kos_blockdev_t *dev;
+    kos_blockdev_t *dev_dma;
+
+    DSTATUS dev_stat;
+    BYTE dev_id;
+    int io_dirty;
+
+    TCHAR dev_path[16];
+
+#ifdef FATFS_USE_DMA_BUF
+    uint8_t *dmabuf;
+    UINT dma_sectors;
+#endif
+
+} fatfs_mnt_t;
+
+typedef struct fatfs {
+
+    FIL fil __attribute__((aligned(32)));
+    DIR dir;
+    int type;
+    int used;
+    int mode;
+
+    DWORD lktbl[FATFS_LINK_TBL_SIZE];
+    dirent_t dent;
+
+    fatfs_mnt_t *mnt;
+
+} fatfs_t;
+
+static mutex_t fat_mutex = MUTEX_INITIALIZER;
+#define FAT_LOCK() mutex_lock(&fat_mutex);
+#define FAT_LOCK_SCOPED() mutex_lock_scoped(&fat_mutex);
+#define FAT_UNLOCK() mutex_unlock(&fat_mutex);
+
+static int initted = 0;
+static fatfs_t fh[MAX_FAT_FILES] __attribute__((aligned(32)));
+static fatfs_mnt_t fat_mnt[MAX_FAT_MOUNTS] __attribute__((aligned(32)));
+
+#if FF_MULTI_PARTITION	/* Volume - Partition resolution table */
+
+/* Physical drive number; Partition: 0:Auto detect, 1-4:Forced partition) */
+
+PARTITION VolToPart[FF_VOLUMES];
+
+#endif
+
+
+#ifdef FATFS_DEBUG
+
+#   define DBG(x) dbglog x
+
+static void put_rc(FRESULT rc, const char *func) {
+    const char *p;
+    static const char str[] =
+        "OK\0" "DISK_ERR\0" "INT_ERR\0" "NOT_READY\0" "NO_FILE\0" "NO_PATH\0"
+        "INVALID_NAME\0" "DENIED\0" "EXIST\0" "INVALID_OBJECT\0" "WRITE_PROTECTED\0"
+        "INVALID_DRIVE\0" "NOT_ENABLED\0" "NO_FILE_SYSTEM\0" "MKFS_ABORTED\0" "TIMEOUT\0"
+        "LOCKED\0" "NOT_ENOUGH_CORE\0" "TOO_MANY_OPEN_FILES\0";
+
+    FRESULT i;
+
+    for (p = str, i = 0; i != rc && *p; ++i) {
+        while(*p++);
+    }
+    DBG((DBG_DEBUG, "FATFS: %s: %u FR_%s\n", func, (UINT)rc, p));
+}
+
+#else
+#   define DBG(x)
+#   define put_rc(r, f)
+#endif
+
+static void fatfs_set_errno(FRESULT rc) {
+    switch (rc) {
+        case FR_OK:					/* (0) Succeeded */
+            errno = 0;
+            break;
+        case FR_DISK_ERR:				/* (1) A hard error occurred in the low level disk I/O layer */
+            errno = EIO;
+            break;
+        case FR_INT_ERR:				/* (2) Assertion failed */
+            errno = EFAULT;
+            break;
+        case FR_NOT_READY:			/* (3) The physical drive cannot work */
+            errno = ENODEV;
+            break;
+        case FR_NO_FILE:				/* (4) Could not find the file */
+        case FR_NO_PATH:				/* (5) Could not find the path */
+            errno = ENOENT;
+            break;
+        case FR_INVALID_NAME:			/* (6) The path name format is invalid */
+            errno = EINVAL;
+            break;
+        case FR_DENIED:				/* (7) Access denied due to prohibited access or directory full */
+            errno = ENOSPC;
+            break;
+        case FR_EXIST:				/* (8) Access denied due to prohibited access */
+            errno = EEXIST;
+            break;
+        case FR_INVALID_OBJECT:		/* (9) The file/directory object is invalid */
+            errno = EBADF;
+            break;
+        case FR_WRITE_PROTECTED:		/* (10) The physical drive is write protected */
+            errno = EROFS;
+            break;
+        case FR_INVALID_DRIVE:		/* (11) The logical drive number is invalid */
+            errno = ENXIO;
+            break;
+        case FR_NOT_ENABLED:			/* (12) The volume has no work area */
+            errno = EIDRM;
+            break;
+        case FR_NO_FILESYSTEM:		/* (13) There is no valid FAT volume */
+            errno = EIO;
+            break;
+        case FR_MKFS_ABORTED:			/* (14) The f_mkfs() aborted due to any parameter error */
+            errno = EINVAL;
+            break;
+        case FR_TIMEOUT:				/* (15) Could not get a grant to access the volume within defined period */
+            errno = ETIME;
+            break;
+        case FR_LOCKED:				/* (16) The operation is rejected according to the file sharing policy */
+            errno = EAGAIN;
+            break;
+        case FR_NOT_ENOUGH_CORE:		/* (17) LFN working buffer could not be allocated */
+            errno = ENOMEM;
+            break;
+        case FR_TOO_MANY_OPEN_FILES:	/* (18) Number of open files > _FS_SHARE */
+            errno = EMFILE;
+            break;
+        case FR_INVALID_PARAMETER:	/* (19) Given parameter is invalid */
+            errno = EINVAL;
+            break;
+        default:
+            errno = 0;
+            break;
+    }
+}
+
+static FRESULT fat_create_linkmap(fatfs_t *sf) {
+    FRESULT rc;
+
+    if (sf->fil.cltbl != NULL) {
+        return FR_OK;
+    }
+
+    memset(&sf->lktbl, 0, FATFS_LINK_TBL_SIZE * sizeof(DWORD));
+    sf->fil.cltbl = sf->lktbl;           /* Enable fast seek feature */
+    sf->lktbl[0] = FATFS_LINK_TBL_SIZE;  /* Set table size to the first item */
+
+    /* Create CLMT */
+    rc = f_lseek(&sf->fil, CREATE_LINKMAP);
+
+    if (rc == FR_NOT_ENOUGH_CORE) {
+
+        DBG((DBG_DEBUG, "FATFS: Creating linkmap %d < %ld, retry...",
+            FATFS_LINK_TBL_SIZE, sf->lktbl[0]));
+
+        size_t lms = sf->fil.cltbl[0];
+        sf->fil.cltbl = (DWORD *) calloc(lms, sizeof(DWORD));
+
+        if (sf->fil.cltbl != NULL) {
+            sf->fil.cltbl[0] = lms;
+            rc = f_lseek(&sf->fil, CREATE_LINKMAP);
+
+            if (rc != FR_OK) {
+                free(sf->fil.cltbl);
+            }
+        }
+    }
+
+    if (rc != FR_OK) {
+        sf->fil.cltbl = NULL;
+        DBG((DBG_ERROR, "FATFS: Create linkmap %ld error: %d", sf->lktbl[0], rc));
+    }
+    else {
+        DBG((DBG_DEBUG, "FATFS: Created linkmap %ld dwords\n", sf->lktbl[0]));
+    }
+    return rc;
+}
+
+
+#define FAT_GET_HND(hnd, rv)              \
+    file_t fd = (file_t)(uintptr_t)hnd - 1;        \
+    fatfs_t *sf = NULL;                   \
+    FAT_LOCK_SCOPED();                    \
+    if (fd > -1 && fd < MAX_FAT_FILES && fh[fd].used) {  \
+        sf = &fh[fd];                     \
+    } else {                              \
+        errno = ENFILE;                   \
+        return rv;                        \
+    }
+
+
+static void *fat_open(vfs_handler_t *vfs, const char *fn, int flags) {
+    file_t fd;
+    fatfs_t *sf;
+    fatfs_mnt_t *mnt;
+    FRESULT rc;
+    int fat_flags = 0, mode = (flags & (O_RDONLY | O_WRONLY | O_RDWR));
+
+    FAT_LOCK_SCOPED();
+    mnt = (fatfs_mnt_t *)vfs->privdata;
+
+    if (mnt == NULL) {
+        dbglog(DBG_ERROR, "FATFS: Error, not mounted.\n");
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    for (fd = 0; fd < MAX_FAT_FILES; ++fd) {
+        if (fh[fd].used == 0) {
+            sf = &fh[fd];
+            break;
+        }
+    }
+
+    if (fd >= MAX_FAT_FILES) {
+        errno = ENFILE;
+        dbglog(DBG_ERROR, "FATFS: The maximum number of opened files exceeded.\n");
+        return NULL;
+    }
+
+    memset(sf, 0, sizeof(fatfs_t));
+    rc = f_chdrive(mnt->dev_path);
+
+    if (rc != FR_OK) {
+        dbglog(DBG_ERROR, "FATFS: Error change drive to - %s\n", mnt->dev_path);
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return NULL;
+    }
+
+    sf->mode = flags;
+    sf->mnt = mnt;
+
+    /* Directory */
+    if (flags & O_DIR) {
+
+        DBG((DBG_DEBUG, "FATFS: Opening directory - %s%s\n", mnt->dev_path, fn));
+        rc = f_opendir(&sf->dir, (const TCHAR*)(fn == NULL ? "/" : fn));
+
+        if (rc != FR_OK) {
+            DBG((DBG_ERROR, "FATFS: Can't open directory - %s%s\n", mnt->dev_path, fn));
+            put_rc(rc, __func__);
+            fatfs_set_errno(rc);
+            return NULL;
+        }
+
+        sf->used = 1;
+        sf->type = STAT_TYPE_DIR;
+
+        return (void *)(uintptr_t)(fd + 1);
+    }
+
+    /* File */
+    if (mode == O_RDWR) {
+        fat_flags = FA_READ | FA_WRITE;
+    }
+    else if (mode == O_WRONLY) {
+        fat_flags = FA_WRITE;
+    }
+    else if (mode == O_RDONLY) {
+        fat_flags = FA_READ;
+    }
+    else {
+        DBG((DBG_ERROR, "FATFS: Uknown flags\n"));
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) {
+        fat_flags |= FA_CREATE_NEW;
+    }
+    else if (flags & O_TRUNC) {
+        fat_flags |= FA_CREATE_ALWAYS;
+    }
+    else if (flags & O_CREAT) {
+        fat_flags |= FA_OPEN_ALWAYS;
+    }
+    else {
+        fat_flags |= FA_OPEN_EXISTING;
+    }
+
+    DBG((DBG_DEBUG, "FATFS: Opening file - %s%s 0x%02x\n", mnt->dev_path, fn, (uint8)(fat_flags & 0xff)));
+
+    sf->type = STAT_TYPE_FILE;
+    rc = f_open(&sf->fil, (const TCHAR*)(fn == NULL ? "/" : fn), fat_flags);
+
+    if (rc != FR_OK) {
+        DBG((DBG_ERROR, "FATFS: Can't open file - %s%s\n", mnt->dev_path, fn));
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return NULL;
+    }
+
+    /* Check the very first metadata flush as well as later checkpoints. */
+    if (fat_flags & FA_WRITE) rc = f_sync(&sf->fil);
+    if (rc == FR_OK && (flags & O_APPEND))
+        rc = f_lseek(&sf->fil, f_size(&sf->fil));
+    if (rc != FR_OK) {
+        f_close(&sf->fil);
+        fatfs_set_errno(rc);
+        return NULL;
+    }
+
+    sf->used = 1;
+    return (void *)(uintptr_t)(fd + 1);
+}
+
+static int fat_close(void *hnd) {
+    FAT_GET_HND(hnd, -1);
+    sf->used = 0;
+    FRESULT rc = FR_OK;
+
+    DBG((DBG_DEBUG, "FATFS: Closing file - %d\n", fd));
+
+    switch (sf->type) {
+        case STAT_TYPE_FILE:
+            rc = f_close(&sf->fil);
+            if (sf->fil.cltbl != (DWORD*)&sf->lktbl && sf->fil.cltbl != NULL) {
+                DBG((DBG_DEBUG, "FATFS: Freeing linktable\n"));
+                free(sf->fil.cltbl);
+            }
+            sf->fil.cltbl = NULL;
+            break;
+        case STAT_TYPE_DIR:
+            rc = f_closedir(&sf->dir);
+            break;
+        default:
+            return -1;
+    }
+
+    if (rc != FR_OK) {
+        DBG((DBG_ERROR, "FATFS: Closing error\n"));
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return -1;
+    }
+
+    return 0;
+}
+
+static ssize_t fat_read(void *hnd, void *buffer, size_t size) {
+
+    UINT rs = 0;
+    FRESULT rc;
+
+    FAT_GET_HND(hnd, -1);
+
+    if (sf->fil.cltbl == NULL &&
+        (sf->mode & O_MODE_MASK) == O_RDONLY &&
+        f_size(&sf->fil) > (DWORD)(sf->mnt->fs->csize * (1 << sf->mnt->dev->l_block_size)))
+    {
+        /* Using fast seek feature for files larger than the cluster size */
+        rc = fat_create_linkmap(sf);
+    }
+
+    /* We can use first fs_read just for preparing fast seek feature */
+    if(size == 0) {
+        return 0;
+    }
+
+    rc = f_read(&sf->fil, buffer, (UINT) size, &rs);
+
+    if (rc != FR_OK) {
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return -1;
+    }
+
+//	DBG((DBG_DEBUG, "FATFS: Read %d %d\n", size, rs));
+    return (ssize_t) rs;
+}
+
+static ssize_t fat_write(void *hnd, const void *buffer, size_t cnt) {
+    UINT bw = 0;
+    FRESULT rc;
+    FAT_GET_HND(hnd, -1);
+
+    if (sf->mode & O_APPEND) {
+        rc = f_lseek(&sf->fil, sf->fil.obj.objsize);
+        if (rc != FR_OK) {
+            put_rc(rc, __func__);
+            fatfs_set_errno(rc);
+            return -1;
+        }
+    }
+
+    rc = f_write(&sf->fil, buffer, (UINT) cnt, &bw);
+
+    if (rc != FR_OK) {
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return -1;
+    }
+
+//	DBG((DBG_DEBUG, "FATFS: Write %d %d\n", cnt, bw));
+//	f_sync(&sf->fil);
+    return (ssize_t)bw;
+}
+
+/* KOS retains 32-bit legacy operations; expose full exFAT sizes through
+ * its existing 64-bit VFS hooks and reject overflow in the legacy hooks. */
+static _off64_t fat_tell64(void *hnd) {
+    FAT_GET_HND(hnd, -1);
+    return (_off64_t)f_tell(&sf->fil);
+}
+
+static _off64_t fat_seek64(void *hnd, _off64_t offset, int whence) {
+    FAT_GET_HND(hnd, -1);
+    uint64_t base, pos;
+    if (sf->type != STAT_TYPE_FILE) { errno = EISDIR; return -1; }
+    switch (whence) {
+        case SEEK_SET: base = 0; break;
+        case SEEK_CUR: base = f_tell(&sf->fil); break;
+        case SEEK_END: base = f_size(&sf->fil); break;
+        default: errno = EINVAL; return -1;
+    }
+    if (offset < 0) {
+        uint64_t amount = (uint64_t)(-(offset + 1)) + 1;
+        if (amount > base) { errno = EINVAL; return -1; }
+        pos = base - amount;
+    } else {
+        if (base > INT64_MAX - (uint64_t)offset) { errno = EOVERFLOW; return -1; }
+        pos = base + (uint64_t)offset;
+    }
+    FRESULT rc = f_lseek(&sf->fil, pos);
+    if (rc != FR_OK) { fatfs_set_errno(rc); return -1; }
+    return (_off64_t)f_tell(&sf->fil);
+}
+
+static uint64_t fat_total64(void *hnd) {
+    FAT_GET_HND(hnd, UINT64_MAX);
+    return f_size(&sf->fil);
+}
+
+static off_t fat_tell(void *hnd) {
+    _off64_t pos = fat_tell64(hnd);
+    if (pos > INT32_MAX) { errno = EOVERFLOW; return -1; }
+    return (off_t)pos;
+}
+
+static off_t fat_seek(void *hnd, off_t offset, int whence) {
+    /* Check before seeking, so an overflow does not move the file position. */
+    _off64_t base = whence == SEEK_CUR ? fat_tell64(hnd) :
+                    whence == SEEK_END ? (_off64_t)fat_total64(hnd) : 0;
+    if (base < 0) return -1;
+    if (base + offset > INT32_MAX) { errno = EOVERFLOW; return -1; }
+    return (off_t)fat_seek64(hnd, offset, whence);
+}
+
+static size_t fat_total(void *hnd) {
+    uint64_t size = fat_total64(hnd);
+    if (size > UINT32_MAX) { errno = EOVERFLOW; return (size_t)-1; }
+    return (size_t)size;
+}
+
+static const dirent_t *fat_readdir(void *hnd) {
+    FILINFO inf;
+    FRESULT rc;
+    FAT_GET_HND(hnd, NULL);
+
+    memset(&sf->dent, 0, sizeof(dirent_t));
+
+
+    rc = f_readdir(&sf->dir, &inf);
+
+    if (rc != FR_OK) {
+        DBG((DBG_ERROR, "FATFS: Error reading directory entry\n"));
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return NULL;
+    }
+
+    if (inf.fname[0] == 0) {
+        return NULL;
+    }
+
+    snprintf(sf->dent.name, sizeof(sf->dent.name), "%s", inf.fname);
+
+    // TODO: date and time parsing
+    sf->dent.time = (time_t) inf.ftime;
+
+    if (inf.fattrib & AM_DIR) {
+        sf->dent.attr = O_DIR;
+        sf->dent.size = -1;
+    }
+    else {
+        sf->dent.attr = 0;
+        sf->dent.size = inf.fsize > INT32_MAX ? INT32_MAX : (int32_t)inf.fsize;
+    }
+
+    return &sf->dent;
+}
+
+static int fat_rewinddir(void *hnd) {
+    FRESULT rc;
+    FAT_GET_HND(hnd, -1);
+
+    rc = f_rewinddir(&sf->dir);
+
+    if (rc != FR_OK) {
+        DBG((DBG_ERROR, "FATFS: Error rewind directory\n"));
+        put_rc(rc, __func__);
+        fatfs_set_errno(rc);
+        return -1;
+    }
+
+    return 0;
+}
+
+/* !=0: Sector number, 0: Failed - invalid cluster# */
+static LBA_t clust2sect(const FATFS *fs, DWORD clst) {
+    return clst >= 2 && clst < fs->n_fatent ?
+        fs->database + (LBA_t)(clst - 2) * fs->csize : 0;
+}
+
+static int fat_ioctl(void *hnd, int cmd, va_list ap) {
+    DRESULT rc = RES_OK;
+    FAT_GET_HND(hnd, -1);
+    void *data = va_arg(ap, void *);
+
+    switch (cmd) {
+        case FATFS_IOCTL_GET_BOOT_SECTOR_DATA:
+            rc = disk_read(sf->fil.obj.fs->pdrv, (BYTE *)data, 0, 1);
+            break;
+        case FATFS_IOCTL_GET_FD_LBA:
+        {
+            DWORD lba = clust2sect(sf->fil.obj.fs, sf->fil.obj.sclust);
+
+            if (lba > 0) {
+                *(uint32_t *)data = lba;
+                rc = RES_OK;
+            }
+            else {
+                rc = RES_ERROR;
+            }
+
+            break;
+        }
+        case FATFS_IOCTL_GET_FD_LINK_MAP:
+        {
+            if (fat_create_linkmap(sf) == FR_OK) {
+                memcpy(data, sf->fil.cltbl, sf->fil.cltbl[0] * sizeof(DWORD));
+            }
+            else {
+                memset(data, 0, sizeof(DWORD));
+            }
+            break;
+        }
+        default:
+            rc = disk_ioctl(sf->fil.obj.fs->pdrv, (BYTE)cmd, data);
+            break;
+    }
+
+    return rc == RES_OK ? 0 : -1;
+}
+
+
+#define FAT_GET_MNT()                      \
+    FRESULT rc = FR_OK;                    \
+    fatfs_mnt_t *mnt;                      \
+    FAT_LOCK_SCOPED();                     \
+    mnt = (fatfs_mnt_t*)vfs->privdata;     \
+    if (mnt == NULL)                        \
+        goto error;                        \
+    if (f_chdrive(mnt->dev_path) != FR_OK)  \
+        goto error
+
+
+static int fat_rename(struct vfs_handler *vfs, const char *fn1, const char *fn2) {
+    FAT_GET_MNT();
+
+    if ((rc = f_rename((const TCHAR*)fn1, (const TCHAR*)fn2)) != FR_OK) {
+        goto error;
+    }
+
+    return 0;
+
+error:
+    fatfs_set_errno(rc);
+    put_rc(rc, __func__);
+    return -1;
+}
+
+static int fat_unlink(struct vfs_handler *vfs, const char *fn) {
+    FAT_GET_MNT();
+
+    if ((rc = f_unlink((const TCHAR *)fn)) != FR_OK) {
+        goto error;
+    }
+
+    return 0;
+
+error:
+    fatfs_set_errno(rc);
+    put_rc(rc, __func__);
+    return -1;
+}
+
+static void *fat_mmap(void * hnd) {
+    uint8_t *data = NULL;
+    int64_t length = fat_total64(hnd);
+    if (length <= 0) return NULL;
+    /* Mapping means allocating the whole file in the Dreamcast's RAM. */
+    if (length > INT32_MAX) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
+    size_t size = (size_t)length;
+
+    if (size) {
+
+        data = (uint8_t *) memalign(32, size);
+        if (!data) {
+            errno = ENOMEM;
+            return NULL;
+        }
+        ssize_t cnt = fat_read(hnd, data, size);
+
+        if (cnt < 0 || (size_t)cnt != size) {
+            free(data);
+            return NULL;
+        }
+
+        return (void*) data;
+    }
+
+    return NULL;
+}
+
+static int fat_complete(void *hnd, ssize_t *rv) {
+    FRESULT rc;
+    if (rv) *rv = 0;
+
+    FAT_GET_HND(hnd, -1);
+
+    DBG((DBG_DEBUG, "FATFS: fs_complete\n"));
+
+    if ((rc = f_sync(&sf->fil)) != FR_OK) {
+        goto error;
+    }
+
+    return 0;
+
+error:
+    fatfs_set_errno(rc);
+    put_rc(rc, __func__);
+    return -1;
+}
+
+static int fat_mkdir(struct vfs_handler *vfs, const char *fn) {
+    FAT_GET_MNT();
+
+    if ((rc = f_mkdir((const TCHAR *)fn)) != FR_OK) {
+        goto error;
+    }
+
+    return 0;
+
+error:
+    fatfs_set_errno(rc);
+    put_rc(rc, __func__);
+    return -1;
+}
+
+static int fat_rmdir(struct vfs_handler *vfs, const char *fn) {
+    FAT_GET_MNT();
+
+    if ((rc = f_unlink((const TCHAR *)fn)) != FR_OK) {
+        goto error;
+    }
+
+    return 0;
+
+error:
+    fatfs_set_errno(rc);
+    put_rc(rc, __func__);
+    return -1;
+}
+
+static int fat_fcntl(void *hnd, int cmd, va_list ap) {
+    int rv = -1;
+    (void)ap;
+
+    FAT_GET_HND(hnd, -1);
+
+    switch (cmd) {
+        case F_GETFL:
+            rv = sf->mode;
+            break;
+
+        case F_SETFL:
+        case F_GETFD:
+        case F_SETFD:
+            rv = 0;
+            break;
+        default:
+            errno = EINVAL;
+    }
+
+    return rv;
+}
+
+static time_t fat_datetime_to_unix(WORD fdate, WORD ftime) {
+    struct tm tm_time;
+
+    if (fdate == 0 && ftime == 0) {
+        return 0;
+    }
+    memset(&tm_time, 0, sizeof(tm_time));
+
+    tm_time.tm_sec = (ftime & 0x1F) * 2;
+    tm_time.tm_min = (ftime >> 5) & 0x3F;
+    tm_time.tm_hour = (ftime >> 11) & 0x1F;
+    tm_time.tm_mday = fdate & 0x1F;
+    tm_time.tm_mon = ((fdate >> 5) & 0x0F) - 1;
+    tm_time.tm_year = ((fdate >> 9) & 0x7F) + 80;
+
+    return mktime(&tm_time);
+}
+
+static int fat_stat(struct vfs_handler *vfs, const char *path, struct stat *st, int flag) {
+    FILINFO inf;
+    FAT_GET_MNT();
+    size_t len = strlen(path);
+    (void)flag;
+
+    memset(&inf, 0, sizeof(inf));
+    memset(st, 0, sizeof(struct stat));
+    st->st_dev = (dev_t)((uintptr_t)vfs);
+    st->st_mode = S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH;
+    st->st_nlink = 1;
+
+    /* Root directory */
+    if (len == 0 || (len == 1 && *path == '/') || (len > 1 && path[len - 1] == '.')) {
+        st->st_mode |= S_IFDIR;
+        st->st_size = -1;
+        return 0;
+    }
+
+    if ((rc = f_stat((const TCHAR*)path, &inf)) != FR_OK) {
+        goto error;
+    }
+
+    st->st_atime = fat_datetime_to_unix(inf.fdate, inf.ftime);
+    st->st_mtime = st->st_atime;
+    st->st_ctime = st->st_atime;
+
+    if (inf.fattrib & AM_DIR) {
+        st->st_mode |= S_IFDIR;
+        st->st_size = -1;
+    }
+    else {
+        st->st_mode |= S_IFREG;
+        if (inf.fsize > INT32_MAX) { errno = EOVERFLOW; return -1; }
+        st->st_size = (int32_t)inf.fsize;
+        st->st_blksize = 1 << mnt->dev->l_block_size;
+        st->st_blocks = inf.fsize >> mnt->dev->l_block_size;
+
+        if (inf.fsize & (st->st_blksize - 1)) {
+            ++st->st_blocks;
+        }
+    }
+    return 0;
+
+error:
+    fatfs_set_errno(rc);
+    put_rc(rc, __func__);
+    return -1;
+}
+
+
+static int fat_fstat(void *hnd, struct stat *st) {
+    FAT_GET_HND(hnd, -1);
+    memset(st, 0, sizeof(struct stat));
+
+    st->st_nlink = 1;
+    st->st_blksize = 1 << sf->mnt->dev->l_block_size;
+    st->st_dev = (dev_t)((uintptr_t)sf->mnt->dev);
+    st->st_mode = S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH;
+
+    if (sf->type == STAT_TYPE_DIR) {
+        st->st_mode |= S_IFDIR;
+        st->st_size = -1;
+    }
+    else {
+        st->st_mode |= S_IFREG;
+        if (sf->fil.obj.objsize > INT32_MAX) { errno = EOVERFLOW; return -1; }
+        st->st_size = (int32_t)sf->fil.obj.objsize;
+        st->st_blocks = sf->fil.obj.objsize >> sf->mnt->dev->l_block_size;
+
+        if (sf->fil.obj.objsize & (st->st_blksize - 1)) {
+            ++st->st_blocks;
+        }
+    }
+    return 0;
+}
+
+#define FAT_GET_MOUNT()                                                        \
+    fatfs_mnt_t *mnt = NULL;                                                   \
+    if (pdrv < MAX_FAT_MOUNTS && fat_mnt[pdrv].dev != NULL) {                  \
+        mnt = &fat_mnt[pdrv];                                                  \
+    }                                                                          \
+    else {                                                                     \
+        DBG((DBG_ERROR, "FATFS: %s[%d] pdrv error\n", __func__, pdrv));        \
+        return STA_NOINIT;                                                     \
+    }
+
+DSTATUS disk_initialize (
+    BYTE pdrv				/* Physical drive nmuber (0..) */
+) {
+    FAT_GET_MOUNT();
+
+    if (mnt->dev->init(mnt->dev) < 0) {
+        mnt->dev_stat |= STA_NOINIT;
+    }
+    else {
+        mnt->dev_stat &= ~STA_NOINIT;
+    }
+
+    if (mnt->dev_dma) {
+        if (mnt->dev_dma->init(mnt->dev_dma) < 0) {
+            mnt->dev_stat |= STA_NOINIT;
+        }
+    }
+
+    DBG((DBG_DEBUG, "FATFS: %s[%d] 0x%02x\n", __func__, pdrv, mnt->dev_stat));
+    return mnt->dev_stat;
+}
+
+
+/*-----------------------------------------------------------------------*/
+/* Get Disk Status                                                       */
+/*-----------------------------------------------------------------------*/
+
+DSTATUS disk_status (
+    BYTE pdrv		/* Physical drive nmuber (0..) */
+) {
+    FAT_GET_MOUNT();
+//	DBG((DBG_DEBUG, "FATFS: %s[%d] 0x%02x\n", __func__, pdrv, mnt->dev_stat));
+    return mnt->dev_stat;
+}
+
+
+/*-----------------------------------------------------------------------*/
+/* Read Sector(s)                                                        */
+/*-----------------------------------------------------------------------*/
+
+DRESULT disk_read (
+    BYTE pdrv,		/* Physical drive nmuber (0..) */
+    BYTE *buff,		/* Data buffer to store read data */
+    LBA_t sector,	/* Sector address (LBA) */
+    UINT count		/* Number of sectors to read */
+) {
+    FAT_GET_MOUNT();
+    uint8_t *dest = buff;
+    kos_blockdev_t *dev = mnt->dev;
+    int rv;
+
+    if (count > 1 && mnt->dev_dma) {
+        if (mnt->io_dirty) {
+            if (mnt->dev->flush(mnt->dev) < 0) { errno = EIO; return RES_ERROR; }
+            mnt->io_dirty = 0;
+        }
+        if (((uintptr_t)buff & 31) == 0) {
+            dev = mnt->dev_dma;
+        }
+#ifdef FATFS_USE_DMA_BUF
+        else if (mnt->dmabuf && count <= mnt->dma_sectors) {
+            dest = mnt->dmabuf;
+            dev = mnt->dev_dma;
+        }
+#endif
+    }
+
+    DBG((DBG_DEBUG, "FATFS: %s[%d] %s %ld %d %p %p\n",
+        __func__, pdrv, (dev == mnt->dev_dma ? "dma" : "pio"),
+        sector, (int)count, (void *)buff, (void *)dest));
+
+    rv = dev->read_blocks(dev, sector, count, dest);
+
+#ifdef FATFS_USE_DMA_BUF
+    if (rv >= 0 && dest != buff) {
+        memcpy(buff, dest, count << dev->l_block_size);
+    }
+#endif
+
+    if (rv < 0) {
+        DBG((DBG_ERROR, "FATFS: %s[%d] %s error: %d\n",
+            __func__, pdrv, (dev == mnt->dev_dma ? "dma" : "pio"), errno));
+        return (errno == EOVERFLOW ? RES_PARERR : RES_ERROR);
+    }
+    return RES_OK;
+}
+
+
+/*-----------------------------------------------------------------------*/
+/* Write Sector(s)                                                       */
+/*-----------------------------------------------------------------------*/
+
+#if !FF_FS_READONLY
+DRESULT disk_write (
+    BYTE pdrv,			/* Physical drive nmuber (0..) */
+    const BYTE *buff,	/* Data to be written */
+    LBA_t sector,		/* Sector address (LBA) */
+    UINT count			/* Number of sectors to write */
+) {
+    FAT_GET_MOUNT();
+    uint8_t *src = (uint8_t *)buff;
+    kos_blockdev_t *dev = mnt->dev;
+    int rv;
+
+    if (hardware_sys_mode(NULL) == HW_TYPE_NAOMI && mnt->dev_dma) {
+        if (mnt->io_dirty) {
+            if (mnt->dev->flush(mnt->dev) < 0) { errno = EIO; return RES_ERROR; }
+            mnt->io_dirty = 0;
+        }
+        if (((uintptr_t)buff & 31) == 0) {
+            dev = mnt->dev_dma;
+        }
+#ifdef FATFS_USE_DMA_BUF
+        else if (mnt->dmabuf && count <= mnt->dma_sectors) {
+            src = mnt->dmabuf;
+            dev = mnt->dev_dma;
+            memcpy(src, buff, count << dev->l_block_size);
+        }
+#endif
+    }
+    DBG((DBG_DEBUG, "FATFS: %s[%d] %s %ld %d %p %p\n",
+        __func__, pdrv, (dev == mnt->dev_dma ? "dma" : "pio"),
+        sector, (int)count, (const void *)buff, (const void *)src));
+
+    rv = dev->write_blocks(dev, sector, count, src);
+
+    if (rv < 0) {
+        DBG((DBG_ERROR, "FATFS: %s[%d] %s error: %d\n",
+            __func__, pdrv,
+            (dev == mnt->dev_dma ? "dma" : "pio"),
+            errno));
+        return errno == EOVERFLOW ? RES_PARERR : RES_ERROR;
+    }
+    if (mnt->dev_dma) {
+        mnt->io_dirty = 1;
+    }
+    return RES_OK;
+}
+#endif
+
+
+/*-----------------------------------------------------------------------*/
+/* Miscellaneous Functions                                               */
+/*-----------------------------------------------------------------------*/
+
+#if 1
+DRESULT disk_ioctl (
+    BYTE pdrv,		/* Physical drive nmuber (0..) */
+    BYTE cmd,		/* Control code */
+    void *buff		/* Buffer to send/receive control data */
+) {
+    FAT_GET_MOUNT();
+
+    switch (cmd) {
+        case CTRL_SYNC:
+            if (mnt->dev->flush(mnt->dev) < 0) { errno = EIO; return RES_ERROR; }
+            mnt->io_dirty = 0;
+            DBG((DBG_DEBUG, "FATFS: %s[%d] Sync\n", __func__, pdrv));
+            return RES_OK;
+        case GET_SECTOR_COUNT:
+            if (mnt->dev->count_blocks(mnt->dev) > UINT32_MAX) return RES_PARERR;
+            *(LBA_t*)buff = (LBA_t)mnt->dev->count_blocks(mnt->dev);
+            DBG((DBG_DEBUG, "FATFS: %s[%d] Sector count: %d\n", __func__, pdrv, *(ushort*)buff));
+            return RES_OK;
+        case GET_SECTOR_SIZE:
+            *(ushort*)buff = (1 << mnt->dev->l_block_size);
+            DBG((DBG_DEBUG, "FATFS: %s[%d] Sector size: %d\n", __func__, pdrv, *(ushort*)buff));
+            return RES_OK;
+        case GET_BLOCK_SIZE:
+            *(DWORD*)buff = 1; /* Unknown erase geometry, in sectors. */
+            DBG((DBG_DEBUG, "FATFS: %s[%d] Block size: %d\n", __func__, pdrv, *(ushort*)buff));
+            return RES_OK;
+        case CTRL_TRIM:
+            DBG((DBG_DEBUG, "FATFS: %s[%d] Trim sector\n", __func__, pdrv));
+            return RES_PARERR; /* No discard implementation. */
+        default:
+            DBG((DBG_ERROR, "FATFS: %s[%d] Unknown control code: %d\n", __func__, pdrv, cmd));
+            return RES_PARERR;
+    }
+}
+#endif
+
+DWORD get_fattime() {
+    struct tm *time;
+    time_t unix_time;
+    DWORD tmr = 0;
+
+    unix_time = rtc_unix_secs();
+    time = gmtime(&unix_time);
+
+    if (time != NULL) {
+        tmr = (((DWORD)(time->tm_year - 80)) << 25)   /* tm_year is years since 1900; FAT starts from 1980 */
+             | ((DWORD)(time->tm_mon + 1) << 21)      /* tm_mon ranges from 0 to 11; add 1 for FAT */
+             | ((DWORD)(time->tm_mday) << 16)         /* tm_mday ranges from 1 to 31 */
+             | ((DWORD)(time->tm_hour) << 11)         /* tm_hour ranges from 0 to 23 */
+             | ((DWORD)(time->tm_min) << 5)           /* tm_min ranges from 0 to 59 */
+             | ((DWORD)(time->tm_sec / 2));           /* tm_sec ranges from 0 to 59; FAT stores seconds in 2-second steps */
+    }
+
+    return tmr;
+}
+
+/* This is a template that will be used for each mount */
+static vfs_handler_t vh = {
+    /* Name Handler */
+    {
+        { 0 },                  /* name */
+        0,                      /* in-kernel */
+        0x00010000,             /* Version 1.0 */
+        NMMGR_FLAGS_NEEDSFREE,  /* We malloc each VFS struct */
+        NMMGR_TYPE_VFS,         /* VFS handler */
+        NMMGR_LIST_INIT         /* list */
+    },
+    0, NULL,            /* no cacheing, privdata */
+    fat_open,           /* open */
+    fat_close,          /* close */
+    fat_read,           /* read */
+    fat_write,          /* write */
+    fat_seek,           /* seek */
+    fat_tell,           /* tell */
+    fat_total,          /* total */
+    fat_readdir,        /* readdir */
+    fat_ioctl,          /* ioctl */
+    fat_rename,         /* rename */
+    fat_unlink,         /* unlink */
+    fat_mmap,           /* mmap */
+    fat_complete,       /* complete */
+    fat_stat,           /* stat */
+    fat_mkdir,          /* mkdir */
+    fat_rmdir,          /* rmdir */
+    fat_fcntl,          /* fcntl */
+    NULL,               /* poll */
+    NULL,               /* link */
+    NULL,               /* symlink */
+    fat_seek64,         /* seek64 */
+    fat_tell64,         /* tell64 */
+    fat_total64,        /* total64 */
+    NULL,               /* readlink */
+    fat_rewinddir,      /* rewinddir */
+    fat_fstat           /* fstat */
+};
+
+static void fs_fat_free(fatfs_mnt_t *mnt) {
+    if (mnt == NULL) {
+        return;
+    }
+    if (mnt->vfsh) {
+        free(mnt->vfsh);
+    }
+    if (mnt->fs) {
+        f_mount(NULL, mnt->dev_path, 0);
+        free(mnt->fs);
+    }
+    if (mnt->dev) {
+        mnt->dev->shutdown(mnt->dev);
+    }
+    if (mnt->dev_dma) {
+        mnt->dev_dma->shutdown(mnt->dev_dma);
+    }
+#ifdef FATFS_USE_DMA_BUF
+    if (mnt->dmabuf) {
+        free(mnt->dmabuf);
+    }
+#endif
+    memset(mnt, 0, sizeof(fatfs_mnt_t));
+}
+
+int fs_fat_mount(const char *mp, kos_blockdev_t *dev_pio, kos_blockdev_t *dev_dma, int partition) {
+
+    fatfs_mnt_t *mnt = NULL;
+    FRESULT rc;
+    int i;
+
+    if (!initted || !mp || strlen(mp) >= sizeof(vh.nmmgr.pathname) ||
+        !dev_pio || dev_pio->l_block_size != 9 || partition < -1 || partition > 3) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    FAT_LOCK_SCOPED();
+
+    for (i = 0; i < MAX_FAT_MOUNTS; ++i) {
+        if (fat_mnt[i].dev == NULL) {
+            mnt = &fat_mnt[i];
+            memset(mnt, 0, sizeof(fatfs_mnt_t));
+            mnt->dev_id = i;
+            DBG((DBG_DEBUG, "FATFS: Mounting device %d to %s\n", mnt->dev_id, mp));
+            break;
+        }
+    }
+
+    if (mnt == NULL) {
+        dbglog(DBG_ERROR, "FATFS: The maximum number of mounts exceeded.\n");
+        goto error;
+    }
+
+    mnt->dev = dev_pio;
+    mnt->dev_dma = dev_dma;
+    if (dev_pio->init(dev_pio) < 0) {
+        dbglog(DBG_ERROR, "FATFS: Can't initialize block device for PIO: %d\n", errno);
+        goto error;
+    }
+
+    mnt->dev = dev_pio;
+    mnt->dev_dma = dev_dma;
+
+    if (dev_dma && dev_dma->init(dev_dma) < 0) {
+        dbglog(DBG_ERROR, "FATFS: Can't initialize block device for DMA: %d\n", errno);
+        dev_dma->shutdown(dev_dma);
+        mnt->dev_dma = NULL;
+    }
+
+    VolToPart[mnt->dev_id].pd = mnt->dev_id;
+    VolToPart[mnt->dev_id].pt = partition + 1;
+
+    /* Create a VFS structure */
+    if (!(mnt->vfsh = (vfs_handler_t *)malloc(sizeof(vfs_handler_t)))) {
+        dbglog(DBG_ERROR, "FATFS: Out of memory for creating vfs handler\n");
+        goto error;
+    }
+
+    memcpy(mnt->vfsh, &vh, sizeof(vfs_handler_t));
+    strcpy(mnt->vfsh->nmmgr.pathname, mp);
+    mnt->vfsh->privdata = mnt;
+
+    /* Create a FATFS structure */
+    if (!(mnt->fs = (FATFS *)malloc(sizeof(FATFS)))) {
+        dbglog(DBG_ERROR, "FATFS: Out of memory for creating FATFS native mount structure\n");
+        goto error;
+    }
+
+    snprintf((TCHAR *)mnt->dev_path, sizeof(mnt->dev_path), "%d:", mnt->dev_id);
+    rc = f_mount(mnt->fs, mnt->dev_path, 1);
+
+    if (rc != FR_OK) {
+        fatfs_set_errno(rc);
+        dbglog(DBG_ERROR, "FATFS: Error %d in mounting a logical drive %d\n", errno, mnt->dev_id);
+#ifdef FATFS_DEBUG
+        put_rc(rc, __func__);
+#endif
+        goto error;
+    }
+
+    uint32_t sect_size = (1 << mnt->dev->l_block_size);
+
+#ifdef FATFS_USE_DMA_BUF
+    if (mnt->dev_dma) {
+        /* exFAT clusters can be 16 MiB. A cluster-sized bounce buffer could
+         * consume all Dreamcast RAM. Larger unaligned I/O uses PIO safely. */
+        mnt->dma_sectors = mnt->fs->csize < 64 ? mnt->fs->csize : 64;
+        mnt->dmabuf = memalign(32, mnt->dma_sectors * sect_size);
+    }
+#endif
+    /* Do not scan allocation tables/bitmaps just to print free space at boot. */
+    dbglog(DBG_INFO, "FATFS: mounted %s (%s), cluster %lu KiB\n", mp,
+        mnt->fs->fs_type == FS_EXFAT ? "exFAT" : "FAT",
+        (unsigned long)mnt->fs->csize * sect_size / 1024);
+
+    /* Register with the VFS */
+    if (nmmgr_handler_add(&mnt->vfsh->nmmgr)) {
+        dbglog(DBG_ERROR, "FATFS: Couldn't add vfs to nmmgr\n");
+        goto error;
+    }
+
+    return 0;
+
+error:
+    fs_fat_free(mnt);
+    return -1;
+}
+
+
+int fs_fat_unmount(const char *mp) {
+    fatfs_mnt_t *mnt;
+    int found = 0, rv = 0, i;
+
+    FAT_LOCK_SCOPED();
+
+    for (i = 0; i < MAX_FAT_MOUNTS; i++) {
+        if (fat_mnt[i].vfsh != NULL && !strcmp(mp, fat_mnt[i].vfsh->nmmgr.pathname)) {
+            mnt = &fat_mnt[i];
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+        for (i = 0; i < MAX_FAT_FILES; i++) {
+            if (!fh[i].used || fh[i].mnt != mnt) {
+                continue;
+            }
+            fh[i].used = 0;
+            FRESULT rc = FR_OK;
+            switch (fh[i].type) {
+                case STAT_TYPE_FILE:
+                    rc = f_close(&fh[i].fil);
+                    if (fh[i].fil.cltbl != (DWORD *)&fh[i].lktbl && fh[i].fil.cltbl != NULL) {
+                        free(fh[i].fil.cltbl);
+                    }
+                    fh[i].fil.cltbl = NULL;
+                    break;
+                case STAT_TYPE_DIR:
+                    rc = f_closedir(&fh[i].dir);
+                    break;
+            }
+            if (rc != FR_OK) {
+                fatfs_set_errno(rc);
+                rv = -1;
+            }
+        }
+        f_mount(NULL, mnt->dev_path, 0);
+        nmmgr_handler_remove(&mnt->vfsh->nmmgr);
+        fs_fat_free(mnt);
+    }
+    else {
+        errno = ENOENT;
+        rv = -1;
+    }
+    return rv;
+}
+
+
+int fs_fat_is_mounted(const char *mp) {
+    int i, found = 0;
+
+    FAT_LOCK_SCOPED();
+
+    for (i = 0; i < MAX_FAT_MOUNTS; ++i) {
+        if (fat_mnt[i].vfsh != NULL && !strcmp(mp, fat_mnt[i].vfsh->nmmgr.pathname)) {
+            found = i + 1;
+            break;
+        }
+    }
+
+    return found;
+}
+
+
+int fs_fat_init(void) {
+    if (initted) {
+        return 0;
+    }
+    /* Reset mounts */
+    memset(fat_mnt, 0, sizeof(fat_mnt));
+
+    /* Reset fd's */
+    memset(fh, 0, sizeof(fh));
+
+    initted = 1;
+    return 0;
+}
+
+int fs_fat_shutdown(void) {
+    if (!initted) {
+        return 0;
+    }
+
+    /* Clean up SD and IDE resources */
+    fs_fat_unmount_sd();
+    fs_fat_unmount_ide();
+
+    initted = 0;
+    return 0;
+}
