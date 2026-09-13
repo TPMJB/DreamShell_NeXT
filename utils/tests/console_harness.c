@@ -63,7 +63,17 @@ file_t fs_open(const char *p,int f) {
 }
 ssize_t fs_total(file_t f) {struct stat st;return fstat(f,&st)?-1:st.st_size;}
 ssize_t fs_read(file_t f,void *p,size_t n) {ssize_t rv=read(f,p,n);if(rv>0)read_bytes+=rv;return rv;}
-ssize_t fs_write(file_t f,const void *p,size_t n) {return write(f,p,n);}
+ssize_t fs_write(file_t f,const void *p,size_t n) {
+    if ((fault == 4 || fault == 5) && n == 2352 * 16 && !injected++) {
+        if (fault == 5) {
+            ssize_t rv = write(f,p,n);
+            ((uint8_t *)p)[100] ^= 1; /* Mutation after the last byte was copied. */
+            return rv;
+        }
+        ((uint8_t *)p)[100] ^= 1; /* Mutation while the storage call owns the buffer. */
+    }
+    return write(f,p,n);
+}
 int fs_close(file_t f) {return close(f);}
 off_t fs_seek(file_t f,off_t o,int w) {return lseek(f,o,w);}
 int fs_complete(file_t f,ssize_t *n) {*n=0;return fsync(f);}

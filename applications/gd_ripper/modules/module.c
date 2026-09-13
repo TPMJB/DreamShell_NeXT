@@ -1663,9 +1663,30 @@ static int restore_stream_crc(const char *path, uint64_t existing, uint32_t tn,
         self.sync_mount[0] != '\0');
 }
 
-static void stream_written(uint32_t crc_before_write, size_t bytes) {
+static int stream_written(const void *data, uint32_t crc_before_write, size_t bytes,
+        const char *path, uint32_t tn, uint32_t track_sector, uint32_t fad,
+        uint32_t secbyte) {
+    uint32_t after = crc32(self.current_crc, data, bytes);
+    if (after != crc_before_write) {
+        /* The storage call may yield. Never bless a CRC sampled before an
+           observed buffer mutation, or let resume forget the affected span. */
+        self.crc_failed = true;
+        rip_log("Memory buffer changed during track %lu write at FAD %lu: before=%08lx after=%08lx, %lu bytes",
+            (unsigned long)tn, (unsigned long)fad, (unsigned long)crc_before_write,
+            (unsigned long)after, (unsigned long)bytes);
+        for (uint32_t i = 0; i < bytes / secbyte; ++i) {
+            if (record_bad_sector(path, tn, track_sector + i, fad + i, secbyte) != CMD_OK)
+                return storage_error("Untrusted-sector map write failed", path, errno);
+        }
+        self.failure_stage = "Memory changed during write";
+        snprintf(self.failure_detail, sizeof(self.failure_detail),
+            "Track %lu FAD %lu: the source buffer changed during a storage write. Run a saved-dump scan before resuming; the affected sectors are recorded in .bad.",
+            (unsigned long)tn, (unsigned long)fad);
+        return CMD_ERROR;
+    }
     self.current_crc = crc_before_write;
     self.crc_bytes += bytes;
+    return CMD_OK;
 }
 
 static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
@@ -1816,7 +1837,11 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 				free(buffer);
 				return CMD_ERROR;
 			}
-			stream_written(crc_before_write, bytes_to_write);
+			if (stream_written(buffer, crc_before_write, bytes_to_write, dst_file,
+					tn, original_count - count, first, secbyte) != CMD_OK) {
+				checkpoint_track(hnd, tn, original_count - count, first);
+				fs_close(hnd); free(buffer); return CMD_ERROR;
+			}
 			self.processed_sectors += nsects; self.session_sectors += nsects;
 		}
 		else {
@@ -1943,7 +1968,11 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					return CMD_ERROR;
 				}
 
-				stream_written(crc_before_write, secbyte);
+				if (stream_written(buffer, crc_before_write, secbyte, dst_file,
+						tn, track_sector, fad, secbyte) != CMD_OK) {
+					checkpoint_track(hnd, tn, track_sector, fad);
+					fs_close(hnd); free(buffer); return CMD_ERROR;
+				}
 				self.processed_sectors++; self.session_sectors++;
 
 				if (cdstat != ERR_OK &&

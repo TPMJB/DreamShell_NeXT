@@ -27,9 +27,14 @@ assess whether further corruption occurs, including after validation.
 Normal raw Mode 1 ripping now always checks sync, address and EDC and retries
 invalid reads. Advanced CRC adds ECC parity validation and repair of existing
 suspects. The log records the selected checks; `verify.log` explicitly labels
-an unperformed storage scan `NOT_RUN`. Stream CRC is sampled before writing,
-then committed after a successful write. It still does not replace storage
-read-back or revalidate an old completed track on resume.
+an unperformed storage scan `NOT_RUN`. Stream CRC is sampled before writing
+and checked again against the RAM buffer after the write. A detected mutation
+stops with **Memory changed during write** and records the entire uncertain
+write span in `.bad`. The previously trusted CRC prefix is retained; resume
+cannot approve that span without a scan/repair. In this case `.bad` marks
+untrusted output, not deliberate zero-fill. Both CRC samples still come from
+RAM: they do not replace storage read-back or detect every possible transient
+mutation, and old completed tracks are not revalidated on normal resume.
 
 ### Recover the diagnosed Time Stalkers dump on a PC
 
@@ -252,7 +257,7 @@ The current Redump Dreamcast DAT can be obtained from
 The verifier prints CRC32, MD5, and SHA-1 for every track, then exits with:
 
 - `0`: clean DreamShell metadata and the requested comparison passed;
-- `1`: incomplete/zero-filled dump, hash mismatch, or partial-only result;
+- `1`: incomplete/untrusted dump, hash mismatch, or partial-only result;
 - `2`: invalid input or an unreadable file.
 
 ## Find mismatched sectors on a PC
@@ -308,7 +313,7 @@ Before consulting a DAT, the tool checks:
 - all files named by the GDI exist and have sector-aligned sizes;
 - each file has exactly the size recorded in `rip.state`;
 - `rip.complete` exists;
-- no `trackXX.bin.bad` map records zero-filled unreadable sectors.
+- no `trackXX.bin.bad` map records zero-filled or untrusted sectors.
 
 You can run those checks without a DAT:
 

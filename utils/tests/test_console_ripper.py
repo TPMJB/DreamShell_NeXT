@@ -170,6 +170,30 @@ class ConsoleTests(unittest.TestCase):
         self.assertGreater(int(result[1]), 2)
         self.assertEqual(self.track.read_bytes(), self.disc_data)
 
+    def test_write_buffer_mutation_stops_and_resume_cannot_approve_corrupted_data(self):
+        result = self.rip(fault=4)
+        self.assertEqual(result[0], '-1')
+        self.assertEqual(result[2:4], ['0', '00000000'])
+        self.assertNotEqual(self.track.read_bytes(), self.disc_data[:16*2352])
+        rows = (self.path/'track03.bin.bad').read_text().splitlines()
+        self.assertEqual(len(rows), 17)  # Conservatively flag the whole write.
+        self.assertEqual(rows[1].split(',')[1:4], ['0', '45000', '45150'])
+        resumed = self.rip()
+        self.assertEqual(resumed[0], '0')
+        self.assertNotEqual(int(resumed[3], 16), zlib.crc32(self.disc_data))
+        self.assertEqual(self.run_c('verify', self.path, self.db, 1)[0], '8')
+        self.run_c('verify', self.path, self.db, 0)
+        self.rip(advanced=1)
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
+        self.assertEqual(self.run_c('verify', self.path, self.db, 0)[0], '7')
+
+    def test_post_copy_buffer_mutation_requires_scan_even_when_saved_bytes_are_good(self):
+        result = self.rip(fault=5)
+        self.assertEqual(result[0], '-1')
+        self.assertEqual(result[2:4], ['0', '00000000'])
+        self.assertEqual(self.track.read_bytes(), self.disc_data[:16*2352])
+        self.assertTrue((self.path/'track03.bin.bad').exists())
+
     def test_pause_resume_preserves_exact_prefix_and_crc(self):
         failed=self.rip(advanced=1,fault=2)
         self.assertEqual(failed[0],'-1');self.assertEqual(failed[2],'1')

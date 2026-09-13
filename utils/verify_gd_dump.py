@@ -353,7 +353,7 @@ def inspect_dump(value: str, announce: bool = False) -> Dump:
     dump.zero_filled_sectors = _count_bad_sectors(dump)
     if dump.zero_filled_sectors:
         dump.problems.append(
-            f"Bad-sector maps record {dump.zero_filled_sectors} zero-filled sector(s)"
+            f"Bad-sector maps record {dump.zero_filled_sectors} zero-filled or untrusted sector(s)"
         )
     copied_sectors = sum(track.sectors or 0 for track in dump.tracks)
     if dump.complete_sectors is not None and dump.complete_sectors != copied_sectors:
@@ -630,7 +630,7 @@ def _print_dump(dump: Dump, title: str = "DreamShell dump") -> None:
 def _dat_verdict(dump: Dump, match: Match) -> Tuple[str, bool]:
     data_tracks = [track for track in dump.tracks if track.kind == "data"]
     if dump.zero_filled_sectors:
-        return "NOT VERIFIED - dump contains zero-filled sectors", False
+        return "NOT VERIFIED - dump contains zero-filled or untrusted sectors", False
     if match.full_match:
         return "FULL TRACK MATCH", True
     if match.all_data_match:
