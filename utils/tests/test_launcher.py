@@ -38,3 +38,6 @@ class LauncherTests(unittest.TestCase):
 
     def test_missing_artwork_unknown_apps_and_empty_list(self):
         self.assertIn('passed', self.run_c('faults'))
+
+    def test_startup_fallback_and_native_texture_dimensions(self):
+        self.assertIn('passed', self.run_c('textures'))

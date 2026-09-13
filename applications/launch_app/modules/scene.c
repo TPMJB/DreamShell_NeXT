@@ -203,7 +203,7 @@ static void DrawCursor(void) { if(self.mouse_visible) SDL_DS_Blit_Cursor(); }
 
 void InitScene(void) {
     int i;
-    char name[32], path[NAME_MAX];
+    char name[32];
     self.selection = (Rectangle *)APP_GET_TSU_DRAWABLE("selection");
     self.selection_edge = (Rectangle *)APP_GET_TSU_DRAWABLE("selection_edge");
     self.category_label = (Label *)APP_GET_TSU_DRAWABLE("detail-category");
@@ -218,8 +218,9 @@ void InitScene(void) {
         snprintf(name, sizeof(name), "detail-description-%d", i);
         self.description[i] = (Label *)APP_GET_TSU_DRAWABLE(name);
     }
-    snprintf(path, sizeof(path), "%s/gui/icons/normal/default_app.png", getenv("PATH"));
-    self.fallback_icon = LoadSmallTexture(path, 64);
+    /* The shared SDL default_app.png is 48x48 and cannot be uploaded directly
+     * to the PVR. Our bundled launcher icon is a native 64x64 texture. */
+    self.fallback_icon = LoadSmallTexture(self.app->icon, 64);
     TSU_AppSetDrawTransparentPolyEvent(self.app->tsunami, DrawCursor);
 }
 

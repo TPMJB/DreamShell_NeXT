@@ -4,7 +4,13 @@
 #include "app_internal.h"
 #include <strings.h>
 
-/* Reject oversized image headers before the decoder allocates RAM/VRAM. */
+static int NativeTextureDimension(unsigned int size, unsigned int max_side) {
+    return size >= 8 && size <= 1024 && size <= max_side && !(size & (size - 1));
+}
+
+/* Native PVR textures require powers of two, even when an SDL image with the
+ * same dimensions is valid. Check before decoding/uploading: KOS asserts on
+ * unsupported sizes inside pvr_txr_load_kimg(), so a post-load check is too late. */
 Texture *LoadSmallTexture(const char *path, unsigned int max_side) {
     unsigned char h[64];
     unsigned int w = 0, height = 0;
@@ -29,9 +35,10 @@ Texture *LoadSmallTexture(const char *path, unsigned int max_side) {
             }
         }
     }
-    if(!w || !height || w > max_side || height > max_side) return NULL;
+    if(!NativeTextureDimension(w, max_side) || !NativeTextureDimension(height, max_side)) return NULL;
     texture = TSU_TextureCreateFromFile(path, true, false, 0);
-    if(texture && (TSU_TextureGetW(texture) > (int)max_side || TSU_TextureGetH(texture) > (int)max_side)) {
+    if(texture && (!NativeTextureDimension(TSU_TextureGetW(texture), max_side) ||
+                   !NativeTextureDimension(TSU_TextureGetH(texture), max_side))) {
         TSU_TextureDestroy(&texture);
     }
     return texture;

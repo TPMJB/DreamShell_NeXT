@@ -1,9 +1,14 @@
 # DreamShell NeXT launcher preview
 
-Launch App 2.0 replaces the animated app grid with a controller-operated list and
+Launch App 2.0.1 replaces the animated app grid with a controller-operated list and
 an app details pane. It uses DreamShell's existing Tsunami renderer at 640x480.
 Installed apps and saved Lua/DSC shortcuts remain discoverable. The original
 Main application is available in the list as **Classic launcher**.
+
+Version 2.0.1 fixes a startup abort in 2.0.0: the launcher tried to upload the
+shared 48x48 SDL fallback icon as a native PVR texture before the splash was
+dismissed. The fallback now uses the bundled 64x64 launcher icon. Artwork with
+unsupported dimensions is rejected before decoding and GPU upload.
 
 This preview is based on exFAT commit `6958fdc`. It does not change the
 filesystem, bootloader, ISO Loader or GD Ripper behavior. The core adds the
@@ -69,8 +74,8 @@ relative to `DS/apps/launch_app/`. For example:
        preview="../gd_ripper/images/preview.png" />
 ```
 
-Use small PNG or PVR images, no more than 512 pixels on either side. Prefer
-power-of-two dimensions such as 256x256 or 512x256 for native textures. Keep text
+Use small PNG or PVR images with power-of-two dimensions, at least 8 and no more
+than 512 pixels on either side, such as 256x256 or 512x256. Keep text
 in the description, where it stays readable on a television. This build falls
 back to the existing app icon when no preview is supplied; it does not bundle
 new application screenshots or video playback.
@@ -87,7 +92,9 @@ The host harness compiles the production launcher C and parses the production
 XML using DreamShell's bundled Mini-XML. It exercises navigation, held-input
 repeat, mouse click cancellation, deletion confirmation, remembered selection,
 text fitting with the shipped font, missing images, preview caching and stale
-loads. The release workflow also runs the existing storage and ripper tests,
+loads. Its texture backend enforces KOS's native dimension restrictions; the
+original 48x48 startup fallback reproduces an assertion failure in this check.
+The release workflow also runs the existing storage and ripper tests,
 then compiles the full SH-4 release.
 
 Host checks do not emulate controller timing, the PowerVR renderer or serial

@@ -145,12 +145,17 @@ jobs:
               'DS/DS_CORE.BIN',
               'DS/apps/launch_app/app.xml',
               'DS/apps/launch_app/catalog.xml',
+              'DS/apps/launch_app/images/icon.png',
               'DS/apps/launch_app/modules/app_launch_app.klf',
               'DS/fonts/txf/helvetica.txf',
           }
           with ZipFile('DreamShell-launcher.zip') as full:
               assert full.testzip() is None, 'Release ZIP is damaged'
               assert required <= set(full.namelist()), 'Launcher files missing'
+              import struct
+              icon = full.read('DS/apps/launch_app/images/icon.png')
+              assert icon[:8] == b'\x89PNG\r\n\x1a\n', 'Launcher fallback must be PNG'
+              assert struct.unpack('>II', icon[16:24]) == (64, 64), 'Launcher fallback must be native 64x64'
               with ZipFile('DreamShell-launcher-update.zip', 'w', ZIP_DEFLATED) as update:
                   for name in full.namelist():
                       if name.startswith('DS/apps/launch_app/') or name in ('DS/fonts/txf/helvetica.txf', 'DS/DS_CORE.BIN'):
@@ -162,7 +167,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: |
-            Launcher 2.0 preview: app list, descriptions, static artwork and direct controller navigation.
+            Launcher 2.0.1 fixes the splash-screen abort caused by uploading a 48x48 fallback icon as a native GPU texture.
+            Uses the bundled 64x64 launcher icon and rejects unsupported artwork sizes before GPU upload.
+            Includes the app list, descriptions, static artwork and direct controller navigation.
             Based on the current exFAT preview; includes a core export needed for safe texture cleanup.
             Filesystem, bootloader, ISO Loader and GD Ripper behavior are unchanged.
 

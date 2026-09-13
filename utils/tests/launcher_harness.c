@@ -76,6 +76,10 @@ Texture *TSU_TextureCreateFromFile(const char *p,bool alpha,bool flip,unsigned f
  loads++;if(strstr(p,"broken"))return NULL;
  f=open(p,O_RDONLY);if(f<0)return NULL;assert(read(f,h,24)==24);close(f);
  t=calloc(1,sizeof(*t));assert(t);t->w=(h[16]<<24)|(h[17]<<16)|(h[18]<<8)|h[19];t->h=(h[20]<<24)|(h[21]<<16)|(h[22]<<8)|h[23];
+ /* Match pvr_txr_load_kimg: PNG decoding preserves the original dimensions.
+  * Unsupported dimensions abort on hardware before the splash is dismissed. */
+ assert(t->w>=8&&t->w<=1024&&!(t->w&(t->w-1)));
+ assert(t->h>=8&&t->h<=1024&&!(t->h&(t->h-1)));
  for(i=0;i<256;i++)if(!allocated[i]){allocated[i]=t;in_flight[i]=0;break;}
  assert(i<256);
  snprintf(t->path,sizeof(t->path),"%s",p);textures++;if(textures>peak_textures)peak_textures=textures;
@@ -179,6 +183,21 @@ static void Behavior(void) {
  puts("navigation, button safety, text bounds and removal: passed");
 }
 static void PngHeader(const char *path,unsigned w,unsigned h) {unsigned char b[24]={137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82};FILE *f;for(int i=0;i<4;i++){b[19-i]=w>>(8*i);b[23-i]=h>>(8*i);}f=fopen(path,"wb");assert(f);assert(fwrite(b,1,24,f)==24);fclose(f);}
+static void NativeTextures(const char *dir) {
+ char path[NAME_MAX];int before=loads;Texture *texture;
+ const unsigned invalid[][2]={{0,64},{4,64},{64,4},{48,48},{64,48},{96,64},{256,200},{1024,256}};
+ assert(self.fallback_icon&&self.fallback_icon->w==64&&self.fallback_icon->h==64);
+ assert(!LoadSmallTexture("resources/gui/icons/normal/default_app.png",64));
+ assert(loads==before); /* The real 48x48 startup culprit never reaches the decoder. */
+ for(unsigned i=0;i<sizeof(invalid)/sizeof(invalid[0]);i++) {
+  snprintf(path,sizeof(path),"%s/invalid.png",dir);PngHeader(path,invalid[i][0],invalid[i][1]);
+  assert(!LoadSmallTexture(path,512));assert(loads==before);
+ }
+ snprintf(path,sizeof(path),"%s/valid.png",dir);PngHeader(path,512,256);
+ texture=LoadSmallTexture(path,512);assert(texture&&texture->w==512&&texture->h==256);TSU_TextureDestroy(&texture);
+ PngHeader(path,8,16);texture=LoadSmallTexture(path,64);assert(texture);TSU_TextureDestroy(&texture);
+ puts("startup fallback and native texture dimensions: passed");
+}
 static void Previews(const char *dir) {
  char p[NAME_MAX];int base=textures,before=loads;
  snprintf(p,sizeof(p),"%s/oversized.png",dir);PngHeader(p,4096,4096);assert(!LoadSmallTexture(p,512));assert(loads==before);
@@ -229,6 +248,7 @@ static void Snapshot(void) {
 int main(int argc,char **argv) {
  assert(argc>=2);Setup();
  if(!strcmp(argv[1],"behavior"))Behavior();
+ else if(!strcmp(argv[1],"textures")){assert(argc>=3);NativeTextures(argv[2]);}
  else if(!strcmp(argv[1],"previews")){assert(argc>=3);Previews(argv[2]);}
  else if(!strcmp(argv[1],"lifecycle"))Lifecycle();
  else if(!strcmp(argv[1],"faults"))Faults();
