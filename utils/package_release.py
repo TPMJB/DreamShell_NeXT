@@ -73,8 +73,12 @@ def main():
             dest.writestr('build-info.json', metadata)
             checksums.append(f'{hashlib.sha256(metadata).hexdigest()}  build-info.json\n')
             dest.writestr('SHA256SUMS', ''.join(checksums))
+    # Ubuntu 22.04's Python 3.10 predates hashlib.file_digest.
+    checksum = hashlib.sha256()
     with output.open('rb') as f:
-        digest = hashlib.file_digest(f, 'sha256').hexdigest()
+        for block in iter(lambda: f.read(1024 * 1024), b''):
+            checksum.update(block)
+    digest = checksum.hexdigest()
     (ROOT/'SHA256SUMS').write_text(f'{digest}  {output.name}\n')
     print(json.dumps(info, indent=2))
     print(f'{output.name}: {output.stat().st_size} bytes, SHA-256 {digest}')
