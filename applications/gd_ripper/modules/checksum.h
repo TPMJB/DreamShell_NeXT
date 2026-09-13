@@ -13,7 +13,8 @@
 #define GD_SECTOR_UNSUPPORTED 16
 unsigned gd_check_sector(const uint8_t *sector, uint32_t fad);
 
-/* The app serializes metadata writers. Do not use the legacy O_APPEND path. */
+/* Serialized metadata writes: explicitly create missing files, then seek to
+ * append. Avoid the pinned FAT handler's O_APPEND and plain O_CREAT paths. */
 file_t gd_open_append(const char *path);
 
 /* A journal record is published only AFTER its track has been flushed. */

@@ -124,14 +124,18 @@ cd ${KOS_BASE}/ds/firmware/hollysh && make && make install
 - make cdi image: `make cdi`
 - make IDE/SD FAT32 image: `make ide`
 
-## GD Ripper 2.0.1
+## GD Ripper 2.0.2
 
-The 2.0.1 update checks the running core's storage capabilities before ripping,
-avoids legacy append-mode handling, and identifies CRC-save, track-open,
-sector-mode and disc-read failures separately. Load the updated `DS_CORE.BIN`
-from SD as well as updating the app; the bootloader version alone is not the
-core version. See the [ripper guide](utils/README.gd-verify.md) for boot selection
-and recovery from a stop after Track 1.
+Version 2.0.2 fixes missing `rip.log` files and the failure to create the first
+CRC checkpoint. The pinned FAT library can reopen files with `O_CREAT`, but
+fails to create missing files with that flag alone. The ripper now uses explicit
+exclusive creation for new logs, CRC journals, repair backups and bad-sector
+maps, preserving existing records. Regression tests run the actual logger and
+metadata writers against the pinned FatFs on FAT16 and FAT32 volumes.
+
+If 2.0.1 is already installed, replace the entire `DS/apps/gd_ripper/` folder.
+Keep the existing dump folder and resume. See the [ripper guide](utils/README.gd-verify.md)
+for installation and recovery from a stop after Track 1.
 
 GD Ripper now calculates CRC while ripping, checkpoints it for resume, and
 compares completed tracks with bundled TOSEC and Redump catalogs. Normal

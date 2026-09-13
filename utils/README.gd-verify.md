@@ -1,14 +1,28 @@
-# DreamShell GD Ripper 2.0.1
+# DreamShell GD Ripper 2.0.2
 
 ## Install and diagnose an early stop
 
+Version 2.0.2 fixes **Rip log creation failed** and the earlier stop at the end
+of Track 1. The pinned FAT implementation maps `O_CREAT` to `FA_OPEN_ALWAYS`,
+but omits that flag from the branch that creates a missing file. It can reopen
+an existing file, so 2.0.1's storage probe passed while the first log or CRC
+journal could not be created. The app now opens existing metadata for writing,
+or explicitly creates a missing file with `O_CREAT | O_EXCL`, then seeks to
+its end. Existing records are preserved. The fix is tested using the production
+logger/checkpoint code and the pinned FatFs on in-memory FAT16/FAT32 volumes.
+
+If you already installed 2.0.1, replace the entire `DS/apps/gd_ripper/` folder
+and confirm **2.0.2** on screen. This fix needs no further bootloader change.
+Keep the existing dump files and choose **Start / Resume** in the same folder.
+
+For a first installation or an upgrade from an older recovery build:
 Merge the release's entire `DS` folder onto the SD card, including `DS_CORE.BIN`.
 The bootloader and the loaded DreamShell core are separate binaries. During
 boot, press/hold Start to enter the boot menu, select **Boot from SD**, and use
 left/right to show the full path. Confirm `/sd/DS/DS_CORE.BIN` before pressing A.
 Updating only the ripper or the bootloader can leave an older core running.
 
-Version 2.0.1 checks create/reopen/seek/sync/read-back on a small temporary file
+The ripper checks create/reopen/seek/sync/read-back on a small temporary file
 before changing a dump. Old FAT handlers may reject append opens or refuse to
 reopen an existing file for writing. Metadata now uses explicit seek-to-end;
 cores that still cannot reopen files stop before track extraction with a core

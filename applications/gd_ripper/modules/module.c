@@ -1171,7 +1171,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.0.1: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.0.2: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -1581,14 +1581,9 @@ static int record_bad_sector(const char *dst_file, uint32_t tn,
 	if (get_existing_file_size(path, &existing_size) < 0) {
 		return CMD_ERROR;
 	}
-	hnd = fs_open(path, O_WRONLY | O_CREAT);
+	hnd = gd_open_append(path);
 	if (hnd == FILEHND_INVALID) {
 		rip_log("Can't open bad-sector map %s", path);
-		return CMD_ERROR;
-	}
-
-	if (fs_seek(hnd, 0, SEEK_END) < 0) {
-		fs_close(hnd);
 		return CMD_ERROR;
 	}
 
@@ -1609,8 +1604,7 @@ static int record_bad_sector(const char *dst_file, uint32_t tn,
 		return CMD_ERROR;
 	}
 
-	fs_close(hnd);
-	return CMD_OK;
+	return fs_close(hnd) ? CMD_ERROR : CMD_OK;
 }
 
 static int checkpoint_track(file_t hnd, uint32_t tn, uint32_t written_sectors,

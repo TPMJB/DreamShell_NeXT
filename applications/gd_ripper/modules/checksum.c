@@ -68,7 +68,15 @@ unsigned gd_check_sector(const uint8_t *s, uint32_t fad) {
 
 file_t gd_open_append(const char *path) {
     errno = 0;
-    file_t fd = fs_open(path, O_WRONLY | O_CREAT);
+    file_t fd = fs_open(path, O_WRONLY);
+    if (fd == FILEHND_INVALID && errno == ENOENT) {
+        /* The pinned FatFs maps plain O_CREAT to FA_OPEN_ALWAYS, but its
+         * f_open() omits that flag from the creation branch. It can reopen
+         * existing files, yet returns FR_NO_FILE for new logs/journals.
+         * Create explicitly and exclusively; never truncate a saved record. */
+        errno = 0;
+        fd = fs_open(path, O_WRONLY | O_CREAT | O_EXCL);
+    }
     if (fd == FILEHND_INVALID) return fd;
     off_t size = fs_total(fd);
     if (size < 0 || fs_seek(fd, size, SEEK_SET) != size) {
