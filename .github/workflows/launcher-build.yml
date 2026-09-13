@@ -98,6 +98,11 @@ jobs:
       - name: Verify toolchain
         run: test -x /opt/toolchains/dc/sh-elf/bin/sh-elf-gcc
 
+      - name: Check launcher SH-4 compilation
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          make -C applications/launch_app/modules module.o items.o scene.o manage.o exports.o
+
       - name: Check ISO Loader SH-4 builds
         run: bash .github/scripts/dev-build.sh loaders
 
