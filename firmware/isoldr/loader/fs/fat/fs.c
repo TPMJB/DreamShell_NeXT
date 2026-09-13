@@ -78,7 +78,9 @@ static int fs_mount_volume(int vol, BYTE pdrv, int disk_part) {
 	path[0] = '0' + vol;
 
 	VolToPart[vol].pd = pdrv;
-	VolToPart[vol].pt = disk_part;
+	/* /sd1 and /ide1 are MBR slot 1 (FatFs partition 2).
+	 * Slot 0 uses autodetection, including whole-device volumes. */
+	VolToPart[vol].pt = disk_part ? disk_part + 1 : 0;
 
 	if(disk_initialize(pdrv) != 0) {
 		return -1;
@@ -109,6 +111,8 @@ static int fs_mount_sd(int vol, int disk_part) {
 
 
 int fs_init(int disk_part) {
+
+	if (disk_part < 0 || disk_part > 3) return FS_ERR_PARAM;
 
 	_files = (FILE *) malloc(sizeof(FILE) * MAX_OPEN_FILES);
 

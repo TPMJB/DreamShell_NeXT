@@ -44,7 +44,7 @@ typedef enum fatfs_ioctl {
     FATFS_IOCTL_CTRL_SYNC = 0,        /**< Flush disk cache (for write functions). */
     FATFS_IOCTL_GET_SECTOR_COUNT,     /**< Get media size (for f_mkfs()), 4-byte unsigned. */
     FATFS_IOCTL_GET_SECTOR_SIZE,      /**< Get sector size (for multiple sector size (_MAX_SS >= 1024)), 2-byte unsigned. */
-    FATFS_IOCTL_GET_BLOCK_SIZE,       /**< Get erase block size (for f_mkfs()), 2-byte unsigned. */
+    FATFS_IOCTL_GET_BLOCK_SIZE,       /**< Get erase block size in sectors (for f_mkfs()), 4-byte unsigned. */
     FATFS_IOCTL_CTRL_ERASE_SECTOR,    /**< Force erase a block of sectors (for _USE_ERASE). */
     FATFS_IOCTL_GET_BOOT_SECTOR_DATA, /**< Get first sector data, ffconf.h _MAX_SS bytes. */
     FATFS_IOCTL_GET_FD_LBA,           /**< Get file LBA, 4-byte unsigned. */
@@ -72,7 +72,7 @@ int fs_fat_shutdown(void);
  * \param mp Mount point path.
  * \param dev_pio Pointer to the block device for PIO.
  * \param dev_dma Pointer to the block device for DMA.
- * \param partition Partition number (reset to 0 for start block).
+ * \param partition MBR slot 0-3, or -1 for whole-device/autodetection.
  * \return 0 on success, or a negative value if an error occurred.
  */
 int fs_fat_mount(const char *mp, kos_blockdev_t *dev_pio,

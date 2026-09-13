@@ -39,6 +39,7 @@ class ExfatStorageTests(unittest.TestCase):
             subprocess.run(common + [
                 '-DDEV_TYPE_SD=1', '-D_FS_ASYNC=1', f'-D_FS_READONLY={readonly}',
                 '-I' + loader + 'include', 'utils/tests/isoldr_fatfs_harness.c',
+                'firmware/isoldr/loader/kos/src/strchr.c',
                 loader + 'src/ff.c', loader + 'src/ffunicode.c', '-o', str(target),
             ], cwd=ROOT, check=True)
 
