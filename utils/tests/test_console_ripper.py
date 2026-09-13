@@ -52,7 +52,8 @@ class ConsoleTests(unittest.TestCase):
                         'utils/tests/console_harness.c',
                         'applications/gd_ripper/modules/verify.c',
                         'applications/gd_ripper/modules/checksum.c',
-                        'applications/gd_ripper/modules/recovery.c','-lz','-o',str(cls.exe)],
+                        'applications/gd_ripper/modules/recovery.c',
+                        'applications/gd_ripper/modules/readback.c','-lz','-o',str(cls.exe)],
                        cwd=ROOT, check=True)
         cls.disc_data = b''.join(make_sector(45150+i,i) for i in range(32))
         cls.transition_data = b''.join(make_sector(150+i,i) for i in range(300))
@@ -426,6 +427,99 @@ class ConsoleTests(unittest.TestCase):
         self.db.write_text('DREAMSHELL_REDUMP_CRC_V1\nG\t1\tUnknown\nT\t3\t75264\t00000000\nE\n')
         self.assertEqual(self.run_c('verify',self.path,self.db,1)[0],'3')
         self.assertIn('inconclusive',(self.path/'verify.log').read_text())
+
+    def scan_fault(self, fault):
+        return self.run_c('verify', self.path, self.db, 0, fault)
+
+    def test_readback_detects_transient_bad_bytes_without_repairing_or_replacing_crc(self):
+        self.rip()
+        journal = (self.path/'track03.bin.crc').read_bytes()
+        result = self.scan_fault(1)
+        self.assertEqual(result[:2], ['9','1'])
+        self.assertEqual(int(result[2]), len(self.disc_data)+2*2352)
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
+        self.assertEqual((self.path/'track03.bin.crc').read_bytes(), journal)
+        report = (self.path/'verify.log').read_text()
+        self.assertIn('readback_disagreements 1\n', report)
+        self.assertIn('buffer_changes 0\n', report)
+        self.assertIn('result STORAGE READ-BACK INCONSISTENT\n', report)
+        samples = (self.path/'readback.bin').read_bytes()
+        self.assertEqual(len(samples), 3*2352)
+        expected = self.disc_data[15*2352:16*2352]
+        self.assertNotEqual(samples[:2352], expected)
+        self.assertEqual(samples[2352:], expected*2)
+        damaged = bytearray(self.disc_data)
+        damaged[15*2352:16*2352] = samples[:2352]
+        self.assertIn(f'{zlib.crc32(damaged):08x} size_ok', report)
+        self.assertIn('diff 2336 ', (self.path/'readback.log').read_text())
+        self.assertTrue((self.path/'readback.unstable').exists())
+
+    def test_readback_reports_repeatable_invalid_read_without_claiming_transience(self):
+        self.rip()
+        self.assertEqual(self.scan_fault(2)[:2], ['8','1'])
+        report = (self.path/'verify.log').read_text()
+        self.assertIn('readback_disagreements 0\n', report)
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
+        samples = (self.path/'readback.bin').read_bytes()
+        self.assertEqual(samples, samples[:2352]*3)
+        self.assertNotEqual(samples[:2352], self.disc_data[15*2352:16*2352])
+
+    def test_readback_detects_buffer_change_during_progress_even_when_crc_matches(self):
+        self.rip()
+        self.assertEqual(self.scan_fault(3)[0], '9')
+        report = (self.path/'verify.log').read_text()
+        self.assertIn('catalog_result FULL TRACK MATCH\n', report)
+        self.assertIn('buffer_changes 1\n', report)
+        self.assertIn('phase progress-and-yield', (self.path/'readback.log').read_text())
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
+
+    def test_readback_detects_buffer_change_during_suspect_map_write(self):
+        self.rip()
+        damaged = bytearray(self.disc_data); damaged[100] ^= 1
+        self.track.write_bytes(damaged)
+        self.assertEqual(self.scan_fault(4)[0], '9')
+        self.assertIn('phase diagnostics-and-map', (self.path/'readback.log').read_text())
+        self.assertEqual(self.track.read_bytes(), damaged)
+
+    def test_readback_reread_errors_and_cancellation_preserve_files_and_existing_guard(self):
+        self.rip()
+        damaged = bytearray(self.disc_data); damaged[100] ^= 1
+        self.track.write_bytes(damaged)
+        marker = self.path/'readback.unstable'; marker.write_text('previous disagreement\n')
+        self.assertEqual(self.scan_fault(5)[0], '-1')
+        self.assertIn('reread_error pass 1', (self.path/'readback.log').read_text())
+        self.assertTrue(marker.exists())
+        self.assertEqual(self.scan_fault(6)[0], '0')
+        self.assertEqual(len((self.path/'readback.bin').read_bytes()), 2*2352)
+        self.assertEqual(self.track.read_bytes(), damaged)
+        self.assertTrue(marker.exists())
+
+    def test_readback_samples_are_bounded_on_heavily_damaged_track(self):
+        self.track.write_bytes(bytes(2352*64))
+        (self.path/'rip.state').write_text('DreamShell GD Ripper state v1\ndisc_type 128\nuse_bin 1\ntracks 1\n3 45150 64 4 2352 track03.bin\n')
+        (self.path/'rip.complete').write_text('Complete: 64 sectors\n')
+        self.assertEqual(self.scan_fault(0)[:2], ['8','64'])
+        report = (self.path/'verify.log').read_text()
+        self.assertIn('diagnostic_sectors 32\n', report)
+        self.assertIn('diagnostic_skipped 32\n', report)
+        self.assertEqual(len((self.path/'readback.bin').read_bytes()), 32*3*2352)
+
+    def test_consistent_full_storage_scan_clears_guard_but_stream_check_does_not(self):
+        self.rip()
+        marker = self.path/'readback.unstable'; marker.write_text('previous disagreement\n')
+        self.assertEqual(self.run_c('verify', self.path, self.db, 1)[0], '7')
+        self.assertTrue(marker.exists())
+        self.assertEqual(self.scan_fault(0)[0], '7')
+        self.assertFalse(marker.exists())
+
+    def test_readback_guard_blocks_disc_repair_before_track_modification(self):
+        self.thread()
+        folder = self.path/'fixture'
+        before = (folder/'track03.bin').read_bytes()
+        (folder/'readback.unstable').write_text('previous disagreement\n')
+        result = self.thread(recovery=1)
+        self.assertEqual(result[2], 'Storage reads disagree')
+        self.assertEqual((folder/'track03.bin').read_bytes(), before)
 
     def test_tosec_catalog_is_searched(self):
         self.rip()

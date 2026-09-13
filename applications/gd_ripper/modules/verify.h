@@ -15,7 +15,8 @@ typedef enum {
 	GD_VERIFY_IDENTIFIED,
 	GD_VERIFY_DATA_MATCH,
 	GD_VERIFY_FULL_MATCH,
-	GD_VERIFY_INTEGRITY_FAILED
+	GD_VERIFY_INTEGRITY_FAILED,
+	GD_VERIFY_READBACK_UNSTABLE
 } gd_verify_result_t;
 
 typedef struct {
@@ -26,6 +27,10 @@ typedef struct {
 	bool sector_scan;
 	uint32_t suspect_sectors;
 	uint32_t unsupported_sectors;
+	uint32_t readback_disagreements;
+	uint32_t buffer_changes;
+	uint32_t diagnostic_sectors, diagnostic_skipped;
+	bool diagnostic_written;
 	char catalog[32];
 	bool report_written;
 	uint32_t track_count;

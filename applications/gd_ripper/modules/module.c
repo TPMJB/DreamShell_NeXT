@@ -10,6 +10,7 @@
 #include "ds.h"
 #include "isofs/isofs.h"
 #include "verify.h"
+#include "readback.h"
 #include "checksum.h"
 #include "recovery.h"
 #include "app_module.h"
@@ -1321,6 +1322,13 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
+    if (gd_readback_blocked(dst_folder)) {
+        storage_error("Storage reads disagree", dst_folder, EIO);
+        snprintf(self.failure_detail, sizeof(self.failure_detail),
+            "Run Scan saved dump again; keep readback.log and readback.bin. Disc repair is blocked until storage reads agree.");
+        goto out;
+    }
+
 	area_count = disc_type == CD_GDROM ? 2 : 1;
 	if (collect_track_info(area_count, disc_type) != CMD_OK) {
 		ds_printf("DS_ERROR: Failed to read disc track information\n");
@@ -1356,7 +1364,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.1.0: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.1.1 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -1702,15 +1710,18 @@ static void show_verify_result(const gd_verify_summary_t *summary,
 		case GD_VERIFY_NO_DATABASE: label = "Hashed - no database"; break;
 		case GD_VERIFY_INCOMPATIBLE: label = "Verify needs BIN tracks"; break;
 		case GD_VERIFY_INTEGRITY_FAILED: label = "Dump integrity FAILED"; break;
+		case GD_VERIFY_READBACK_UNSTABLE: label = "Storage reads disagree"; break;
 		case GD_VERIFY_CANCELLED: label = rip_label ? rip_label : "Verify cancelled"; break;
 		default: label = "Verification failed"; break;
 	}
+    bool failed = result == GD_VERIFY_INTEGRITY_FAILED || result == GD_VERIFY_READBACK_UNSTABLE;
     GUI_LabelSetTextColor(self.track_label,
-        result == GD_VERIFY_NO_MATCH || result == GD_VERIFY_PARTIAL_MATCH || result == GD_VERIFY_INTEGRITY_FAILED ? 255 : 83,
-        result == GD_VERIFY_INTEGRITY_FAILED ? 154 : 225,
-        result == GD_VERIFY_INTEGRITY_FAILED ? 136 : 227);
+        result == GD_VERIFY_NO_MATCH || result == GD_VERIFY_PARTIAL_MATCH || failed ? 255 : 83,
+        failed ? 154 : 225, failed ? 136 : 227);
     GUI_LabelSetText(self.track_label, label);
-    if (summary->suspect_sectors) {
+    if (result == GD_VERIFY_READBACK_UNSTABLE) {
+        set_message("Console read-back is inconsistent. Keep the dump; do not run disc repair. Save verify.log, readback.log and readback.bin for diagnosis.");
+    } else if (summary->suspect_sectors) {
         char message[160];
         snprintf(message, sizeof(message), "%lu suspect sectors. To reread them: turn Advanced CRC ON, then Start / Resume with the same disc and folder.",
             (unsigned long)summary->suspect_sectors);

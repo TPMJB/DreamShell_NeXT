@@ -13,6 +13,9 @@ static uint32_t drive_base = 45150;
 static uint64_t clock_ms = 1000, read_bytes;
 static unsigned recovery_pass, recovered_count, stop_after;
 static int recovery_fault, full_thread;
+static int scan_fault, scan_injected, scan_map_fd = -1;
+static uint8_t *scan_buffer;
+static size_t scan_buffer_size;
 GUI_Widget *host_widget(const char *name) {
     for (int i=0;i<nw;++i) if (!strcmp(widget_names[i],name)) return &widgets[i];
     assert(nw < 64); snprintf(widget_names[nw],64,"%s",name); return &widgets[nw++];
@@ -46,7 +49,11 @@ uint64_t timer_ms_gettime64(void) {return clock_ms;}
 kthread_t *thd_create(int d,void *(*f)(void*),void *a) {(void)d;(void)f;(void)a;static kthread_t thread;return &thread;}
 int thd_join(kthread_t *t,void **r) {(void)t;(void)r;abort();}
 void thd_sleep(unsigned ms) {clock_ms+=ms;if(auto_test && clock_ms>=10000)self.shutdown=1;}
-void thd_pass(void) {clock_ms++;}
+void thd_pass(void) {
+    clock_ms++;
+    if (scan_fault == 3 && scan_buffer && !scan_injected++)
+        scan_buffer[scan_buffer_size - 16] ^= 1;
+}
 void ds_printf(const char *f,...) {(void)f;}
 const char *lib_get_name(void) {return "fixture";}
 void GetAppPath(char *b,size_t n,const char *f) {(void)f;snprintf(b,n,"/tmp");}
@@ -61,11 +68,31 @@ file_t fs_open(const char *p,int f) {
     if(fail_crc && strlen(p)>4 && !strcmp(p+strlen(p)-4,".crc") && (f&(O_WRONLY|O_RDWR))) {
         errno=ENOSPC;return -1;
     }
-    return open(p,f&~O_DIR,0600);
+    int fd = open(p,f&~O_DIR,0600);
+    if (scan_fault && strstr(p,".suspect")) scan_map_fd = fd;
+    return fd;
 }
 ssize_t fs_total(file_t f) {struct stat st;return fstat(f,&st)?-1:st.st_size;}
-ssize_t fs_read(file_t f,void *p,size_t n) {ssize_t rv=read(f,p,n);if(rv>0)read_bytes+=rv;return rv;}
+ssize_t fs_read(file_t f,void *p,size_t n) {
+    off_t offset = lseek(f,0,SEEK_CUR);
+    if (scan_fault == 5 && n == 2352) { errno = EIO; return -1; }
+    ssize_t rv=read(f,p,n);
+    if(rv>0)read_bytes+=rv;
+    if (scan_fault && n == 2352*16 && rv > 0) {
+        scan_buffer = p; scan_buffer_size = rv;
+        if (scan_fault == 1 && !scan_injected++) {
+            const uint8_t overwrite[] = {0x60,0x2c,0x25,0x8c,0x03,0x00,0x74,0x0c};
+            memcpy((uint8_t *)p + rv - 16, overwrite, sizeof(overwrite));
+        }
+    }
+    if (scan_fault == 2 && offset <= 15*2352+2336 && offset+rv > 15*2352+2336)
+        ((uint8_t *)p)[15*2352+2336-offset] ^= 1;
+    if (scan_fault == 6 && n == 2352) self.rip_active = 0;
+    return rv;
+}
 ssize_t fs_write(file_t f,const void *p,size_t n) {
+    if (scan_fault == 4 && f == scan_map_fd && scan_buffer && !scan_injected++)
+        scan_buffer[scan_buffer_size - 16] ^= 1;
     if (recovery_fault == 4 && n == 2352 && recovery_pass &&
             lseek(f,0,SEEK_CUR) % 2352 == 0 && !injected++)
         return write(f, p, 77); /* A torn in-place sector write. */
@@ -210,6 +237,7 @@ int main(int argc,char **argv) {
     }
     if(!strcmp(argv[1],"verify")) {
         gd_verify_summary_t summary;
+        scan_fault = argc > 5 ? atoi(argv[5]) : 0;
         gd_verify_result_t rv=gd_verify_dump_ex(argv[2],argv[3],false,&self.rip_active,NULL,NULL,&summary,atoi(argv[4]),true);
         printf("%d %u %llu\n",rv,summary.suspect_sectors,(unsigned long long)read_bytes);return 0;
     }
