@@ -34,17 +34,19 @@
 #define EVENT_ACTION_UPDATE 1
 #define EVENT_ACTION_RENDER 0
 #define APP_GET_WIDGET(n) host_widget(n)
+#define APP_GET_FONT(n) NULL
 typedef unsigned irq_mask_t;
 static inline irq_mask_t irq_disable(void) { return 0; }
 static inline void irq_restore(irq_mask_t m) { (void)m; }
 typedef int file_t;
-typedef struct { char name[256]; int size; } dirent_t;
+typedef struct { char name[256]; int size; int attr; } dirent_t;
 typedef struct { int flags, state; char text[512]; } GUI_Widget;
 typedef GUI_Widget GUI_Screen;
 typedef struct { int unused; } kthread_t;
 typedef struct { int state; kthread_t *thd; char *fn; } App_t;
 typedef struct { int unused; } Event_t;
 typedef void Event_func(void *,void *,int);
+SDL_Rect GUI_FontGetTextSize(void *, const char *);
 GUI_Widget *host_widget(const char *name);
 GUI_Widget *GUI_ButtonGetCaption(GUI_Widget *w);
 GUI_Screen *GUI_GetScreen(void);
@@ -67,6 +69,7 @@ void GUI_CardStackShowIndex(GUI_Widget *w,int i);
 void GUI_EnableInput(void);
 void GUI_DisableInput(void);
 int OpenMainApp(void);
+int ConsoleIsVisible(void);
 Event_t *AddEvent(const char *,int,int,Event_func *,void *);
 int RemoveEvent(Event_t *e);
 int SetEventActive(Event_t *e,int active);

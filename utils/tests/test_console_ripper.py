@@ -572,6 +572,17 @@ class ConsoleTests(unittest.TestCase):
         subprocess.run(['gcc','-Ilib/mxml',str(src),*map(str,(ROOT/'lib/mxml').glob('mxml-*.c')),'-o',str(exe)],cwd=ROOT,check=True)
         subprocess.run([str(exe),str(xml)],check=True)
 
+    def test_app_consumes_events_after_forwarding_once(self):
+        self.assertEqual(self.run_c('input-once'), ['ok'])
+
+    def test_browse_directories_pages_cancel_and_select_existing_dump(self):
+        root = self.path/'mount'; root.mkdir()
+        for name in ['00 dump', '01 empty'] + [f'{i:02} folder' for i in range(2,19)]:
+            (root/name).mkdir()
+        (root/'00 dump'/'rip.state').write_text('fixture')
+        (root/'a file.bin').write_text('not a folder')
+        self.assertEqual(self.run_c('folders', root), ['ok'])
+
     def test_stop_returns_and_focus_skips_disabled_buttons(self):
         self.assertEqual(self.run_c('controls'),['ok'])
 

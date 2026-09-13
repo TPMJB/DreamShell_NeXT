@@ -1,0 +1,173 @@
+name: Keyboard and folder picker build
+
+on:
+  push:
+    branches:
+      - codex/input-ui
+  workflow_dispatch:
+
+concurrency:
+  group: dreamshell-input-ui-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    name: Build and publish input UI
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GIT_TERMINAL_PROMPT: "0"
+      REQUIRE_EXFAT_TESTS: "1"
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup || true
+          sudo apt-get clean || true
+          df -hT
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gawk patch bzip2 tar make cmake pkg-config \
+            gettext wget bison flex sed meson ninja-build \
+            build-essential diffutils curl python3 rake zlib1g-dev exfatprogs dosfstools \
+            genisoimage squashfs-tools texinfo git zip \
+            libgmp-dev libmpfr-dev libmpc-dev libelf-dev libisofs-dev \
+            libpng-dev libjpeg-dev liblzo2-dev liblua5.2-dev lua5.2
+
+      - name: Install tolua
+        run: |
+          git clone --depth 1 https://github.com/LuaDist/tolua.git /tmp/tolua
+          cmake -S /tmp/tolua -B /tmp/tolua/build
+          make -C /tmp/tolua/build -j"$(nproc)"
+          sudo make -C /tmp/tolua/build install
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Test storage interoperability and GD Ripper
+        run: python3 -m unittest discover -s utils/tests -v
+
+      - name: Prepare directories
+        run: |
+          sudo mkdir -p /usr/local/dc/kos /opt/toolchains/dc
+          sudo chown -R "$(id -u):$(id -g)" /usr/local/dc /opt/toolchains
+
+      - name: Resolve kos-ports SHA
+        id: ports
+        run: echo "sha=$(git ls-remote https://github.com/KallistiOS/kos-ports.git HEAD | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore toolchain cache
+        id: cache-toolchain
+        uses: actions/cache/restore@v5
+        with:
+          path: /opt/toolchains/dc
+          key: dc-toolchain-${{ runner.os }}-${{ hashFiles('sdk/toolchain/Makefile.cfg', 'sdk/toolchain/patches/*.diff', 'sdk/doc/KallistiOS.txt') }}
+
+      - name: Restore kos-ports cache
+        id: cache-ports
+        uses: actions/cache/restore@v5
+        with:
+          path: /usr/local/dc/kos/kos-ports
+          key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
+
+      - name: Clone kos-ports
+        if: steps.cache-ports.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --filter=blob:none \
+            https://github.com/KallistiOS/kos-ports.git /usr/local/dc/kos/kos-ports
+
+      - name: Prepare KallistiOS tree
+        run: bash .github/scripts/dev-build.sh prepare
+
+      - name: Build toolchain
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: bash .github/scripts/dev-build.sh toolchain
+
+      - name: Verify toolchain
+        run: test -x /opt/toolchains/dc/sh-elf/bin/sh-elf-gcc
+
+      - name: Check input UI SH-4 compilation
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          make -C modules/vkb module.o vkb.o exports.o
+          make -C applications/gd_ripper/modules module.o exports.o
+          make -C applications/launch_app/modules module.o items.o scene.o manage.o exports.o
+
+      - name: Check ISO Loader SH-4 builds
+        run: bash .github/scripts/dev-build.sh loaders
+
+      - name: Save toolchain cache
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: /opt/toolchains/dc
+          key: dc-toolchain-${{ runner.os }}-${{ hashFiles('sdk/toolchain/Makefile.cfg', 'sdk/toolchain/patches/*.diff', 'sdk/doc/KallistiOS.txt') }}
+
+      - name: Build KallistiOS
+        run: bash .github/scripts/dev-build.sh kos
+
+      - name: Build kos-ports
+        run: bash .github/scripts/dev-build.sh ports
+
+      - name: Save kos-ports cache
+        if: steps.cache-ports.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: /usr/local/dc/kos/kos-ports
+          key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
+
+      - name: Build DreamShell release
+        run: bash .github/scripts/dev-build.sh release
+
+      - name: Package keyboard and folder picker update
+        run: |
+          python3 - <<'PY_PACKAGE'
+          from zipfile import ZipFile, ZIP_DEFLATED
+          from pathlib import Path
+          with ZipFile('DreamShell-dev.zip') as full:
+              assert full.testzip() is None, 'Release ZIP is damaged'
+              prefixes = ('DS/apps/gd_ripper/', 'DS/apps/launch_app/')
+              files = {'DS/DS_CORE.BIN', 'DS/modules/vkb.klf', 'DS/fonts/ttf/arial_lite.ttf'}
+              assert files <= set(full.namelist()), 'Core, keyboard or font missing'
+              assert b'version="2.2.0"' in full.read(prefixes[0]+'app.xml')
+              assert b'version="2.0.2"' in full.read(prefixes[1]+'app.xml')
+              with ZipFile('DreamShell-input-ui-update.zip', 'w', ZIP_DEFLATED) as update:
+                  for name in full.namelist():
+                      if name.startswith(prefixes) or name in files:
+                          update.writestr(name, full.read(name))
+                  update.write('utils/README.input-ui.md', 'input-ui-guide.md')
+                  update.write('utils/README.readback-diagnostic.md', 'readback-guide.md')
+          PY_PACKAGE
+
+      - name: Publish input UI prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: |
+            QWERTY keyboard with text preview, cursor editing, Shift/symbol pages, Done and Cancel.
+            Fixes duplicate input and prevents keyboard presses reaching the app underneath.
+            GD Ripper 2.2.0 browses SD / IDE / PC folders and selects saved dumps without typing.
+            Includes launcher 2.0.2 and retains the CRC read-back diagnostic instrumentation.
+            Merge the entire update's DS folder: the new core and keyboard must be installed together.
+            Keep the current exFAT-capable boot CD. See input-ui-guide.md for the FAT32 regression check.
+
+            - Commit: ${{ github.sha }}
+            - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if gh release view input-ui >/dev/null 2>&1; then
+            gh release delete input-ui --yes --cleanup-tag
+          fi
+          gh release create input-ui DreamShell-input-ui-update.zip \
+            --title "DreamShell NeXT Keyboard and Folder Picker" \
+            --prerelease --latest=false --target "${{ github.sha }}" --notes "$RELEASE_NOTES"

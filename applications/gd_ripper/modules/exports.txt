@@ -18,3 +18,4 @@ gd_ripper_Destination
 gd_ripper_ShowFileBrowser
 gd_ripper_ShowMainPage
 gd_ripper_FileBrowserConfirm
+gd_ripper_Folder

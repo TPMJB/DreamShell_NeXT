@@ -9,6 +9,7 @@ DEFAULT_MODULE_HEADER(vkb);
 int lib_open(klibrary_t *lib) {
 	if(VirtKeyboardInit() < 0) {
 		ds_printf("DS_ERROR: Can't initialize virtual keyboard.\n");
+        return -1;
 	}
 	return nmmgr_handler_add(&ds_vkb_hnd.nmmgr);
 }

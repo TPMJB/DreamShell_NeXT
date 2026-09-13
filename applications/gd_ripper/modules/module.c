@@ -14,6 +14,7 @@
 #include "checksum.h"
 #include "recovery.h"
 #include "app_module.h"
+#include "folders.h"
 #include <zlib/zlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -39,6 +40,7 @@ static void set_message(const char *text);
 static bool claim_worker(void);
 static int check_storage(const char *folder);
 static void select_page(int page);
+static void focus_step(int direction);
 static int check_disc_identity(const char *folder, bool resume, int disc_type);
 static int retire_repaired_bad_map(const char *path, uint32_t first, uint32_t count);
 static int repair_suspects(const char *path, uint32_t first, uint32_t count);
@@ -135,6 +137,8 @@ static struct self {
     kthread_t *worker;
     Event_t *input_event, *video_event;
     int page, focus;
+    folder_browser_t folders;
+    char chosen_name[NAME_MAX];
     uint32_t current_crc, crc_tag;
     uint64_t crc_bytes;
     char crc_path[NAME_MAX];
@@ -460,7 +464,9 @@ void gd_ripper_Gamename()
 {
 	char text[NAME_MAX];
 
-	sanitize_rip_name(text, sizeof(text), GUI_TextEntryGetText(self.gname));
+	if (self.chosen_name[0] && !strcmp(self.chosen_name, GUI_TextEntryGetText(self.gname))) return;
+    self.chosen_name[0] = 0;
+    sanitize_rip_name(text, sizeof(text), GUI_TextEntryGetText(self.gname));
 	GUI_TextEntrySetText(self.gname, text);
 }
 
@@ -650,7 +656,9 @@ static void queue_operation(int operation) {
         snprintf(self.rip_name, sizeof(self.rip_name), "%s", self.recovery_name);
         snprintf(self.rip_destination, sizeof(self.rip_destination), "%s", self.recovery_destination);
     } else {
-        sanitize_rip_name(self.rip_name, sizeof(self.rip_name), GUI_TextEntryGetText(self.gname));
+        if (self.chosen_name[0] && !strcmp(self.chosen_name, GUI_TextEntryGetText(self.gname)))
+            snprintf(self.rip_name, sizeof(self.rip_name), "%s", self.chosen_name);
+        else sanitize_rip_name(self.rip_name, sizeof(self.rip_name), GUI_TextEntryGetText(self.gname));
         snprintf(self.rip_destination, sizeof(self.rip_destination), "%s", self.selected_path);
     }
     GUI_TextEntrySetText(self.gname, self.rip_name);
@@ -1364,7 +1372,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.1.1 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.2.0 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -2343,27 +2351,87 @@ void gd_ripper_Quit(GUI_Widget *widget) {
     if (!self.busy && !self.request) OpenMainApp();
 }
 
-void gd_ripper_ShowFileBrowser(GUI_Widget *widget) {
-	(void)widget;
-	if (!self.busy) {
-        GUI_TextEntrySetText(APP_GET_WIDGET("destination-entry"), self.selected_path);
-        select_page(1);
+static const char *folder_rows[] = {"folder-0", "folder-1", "folder-2", "folder-3", "folder-4", "folder-5", "folder-6"};
+
+static int selected_is_dump(void) {
+    char path[NAME_MAX];
+    return self.folders.valid && strlen(self.folders.path) > (size_t)folder_root(self.folders.path) && snprintf(path, sizeof(path), "%s/rip.state", self.folders.path) < (int)sizeof(path) && FileExists(path);
+}
+
+static void folder_display(void) {
+    folder_browser_t *b = &self.folders;
+    char line[120];
+    size_t len = strlen(b->path);
+    snprintf(line, sizeof(line), "%s%s", len > 68 ? "..." : "", b->path + (len > 68 ? len-68 : 0));
+    GUI_LabelSetText(APP_GET_WIDGET("folder-path"), line);
+    for (unsigned i = 0; i < FOLDER_ROWS; ++i) {
+        GUI_Widget *w = APP_GET_WIDGET(folder_rows[i]);
+        GUI_WidgetSetEnabled(w, b->valid && i < b->count);
+        /* Measure with the actual font; wide names must not escape the row. */
+        snprintf(line, sizeof(line), "%s", b->names[i]);
+        size_t cut = strlen(line);
+        if (cut > sizeof(line)-4) cut = sizeof(line)-4;
+        if (GUI_FontGetTextSize(APP_GET_FONT("small"), line).w > 566 || strlen(b->names[i]) >= sizeof(line)) {
+            while (cut > 3) {
+                --cut; memcpy(line+cut, "...", 4);
+                if (GUI_FontGetTextSize(APP_GET_FONT("small"), line).w <= 566) break;
+            }
+        }
+        GUI_LabelSetText(GUI_ButtonGetCaption(w), i < b->count ? line : "");
     }
+    char parent[NAME_MAX]; strcpy(parent, b->path);
+    GUI_WidgetSetEnabled(APP_GET_WIDGET("folder-up"), folder_parent(parent));
+    GUI_WidgetSetEnabled(APP_GET_WIDGET("folder-prev"), b->valid && b->offset > 0);
+    GUI_WidgetSetEnabled(APP_GET_WIDGET("folder-next"), b->valid && b->offset+b->count < b->total);
+    GUI_WidgetSetEnabled(APP_GET_WIDGET("destination-confirm"), b->valid);
+    if (b->valid && b->count) snprintf(line, sizeof(line), "%u-%u of %u folders", b->offset+1, b->offset+b->count, b->total);
+    else snprintf(line, sizeof(line), "%s", b->valid ? "No subfolders" : "Device unavailable or folder cannot be read");
+    GUI_LabelSetText(APP_GET_WIDGET("folder-count"), line);
+    int dump = selected_is_dump();
+    GUI_LabelSetText(GUI_ButtonGetCaption(APP_GET_WIDGET("destination-confirm")), dump ? "Select this dump" : "Use this folder");
+    GUI_LabelSetText(APP_GET_WIDGET("destination-error"), !b->valid ? "Choose another device or go Up." : dump ?
+        "Existing dump: selects its folder name for Resume / Verify." : "New dumps will get their own named folder here.");
+}
+
+void gd_ripper_ShowFileBrowser(GUI_Widget *widget) {
+    (void)widget;
+    if (self.busy) return;
+    snprintf(self.folders.path, sizeof(self.folders.path), "%s", self.selected_path);
+    folder_scan(&self.folders, 0);
+    folder_display();
+    select_page(1);
 }
 
 void gd_ripper_ShowMainPage(GUI_Widget *widget) {
-	(void)widget;
-	select_page(0);
+    (void)widget;
+    select_page(0);
+}
+
+void gd_ripper_Folder(GUI_Widget *widget) {
+    if (self.busy) return;
+    int rv = 0;
+    if (widget == APP_GET_WIDGET("folder-up")) { folder_parent(self.folders.path); rv = folder_scan(&self.folders, 0); }
+    else if (widget == APP_GET_WIDGET("folder-prev")) rv = folder_scan(&self.folders, -1);
+    else if (widget == APP_GET_WIDGET("folder-next")) rv = folder_scan(&self.folders, 1);
+    else for (unsigned i = 0; i < FOLDER_ROWS; ++i) if (widget == APP_GET_WIDGET(folder_rows[i])) {
+        rv = folder_enter(&self.folders, i); break;
+    }
+    folder_display();
+    if (rv) GUI_LabelSetText(APP_GET_WIDGET("destination-error"), "Cannot open folder: unavailable, or path is too long.");
+    self.focus = 3; focus_step(1); /* First folder, or the next available action. */
 }
 
 void gd_ripper_FileBrowserConfirm(GUI_Widget *widget) {
     (void)widget;
-    if (self.busy) return;
-    const char *path = GUI_TextEntryGetText(APP_GET_WIDGET("destination-entry"));
-    if (!path || path[0] != '/' || strlen(path) >= sizeof(self.selected_path) ||
-        !DirExists(path) || !strncmp(path, "/cd", 3)) {
-        GUI_LabelSetText(APP_GET_WIDGET("destination-error"), "Choose an existing writable folder on SD, IDE or PC.");
-        return;
+    if (self.busy || !self.folders.valid) return;
+    char path[NAME_MAX]; strcpy(path, self.folders.path);
+    self.chosen_name[0] = 0;
+    if (selected_is_dump()) {
+        const char *name = strrchr(path, '/');
+        if (!name || name == path || strlen(name+1) > 254) return;
+        strcpy(self.chosen_name, name+1);
+        folder_parent(path);
+        GUI_TextEntrySetText(self.gname, self.chosen_name);
     }
     snprintf(self.selected_path, sizeof(self.selected_path), "%s", path);
     GUI_LabelSetText(self.destination_path, self.selected_path);
@@ -2456,10 +2524,12 @@ static void *service_thread(void *arg) {
 
 static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn"};
 static const char *advanced_focus[] = {"recover-btn", "edc-btn", "verify-btn", "bad_btn", "use_bin_btn", "num-read", "advanced-back"};
-static const char *destination_focus[] = {"device-sd", "device-ide", "device-pc", "destination-entry", "destination-confirm", "destination-back"};
+static const char *destination_focus[] = {"device-sd", "device-ide", "device-pc", "folder-up",
+    "folder-0", "folder-1", "folder-2", "folder-3", "folder-4", "folder-5", "folder-6",
+    "folder-prev", "folder-next", "destination-confirm", "destination-back"};
 static const char *recovery_focus[] = {"recovery-start", "recovery-later"};
 
-static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : 6; }
+static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : self.page == 1 ? 15 : 6; }
 
 static GUI_Widget *focus_widget(int index) {
     const char **names = self.page == 3 ? recovery_focus : self.page == 2 ? advanced_focus :
@@ -2513,7 +2583,9 @@ void gd_ripper_Toggle(GUI_Widget *widget) {
 void gd_ripper_Destination(GUI_Widget *widget) {
     const char *path = widget == APP_GET_WIDGET("device-sd") ? "/sd" :
         widget == APP_GET_WIDGET("device-ide") ? "/ide" : "/pc";
-    GUI_TextEntrySetText(APP_GET_WIDGET("destination-entry"), path);
+    snprintf(self.folders.path, sizeof(self.folders.path), "%s", path);
+    folder_scan(&self.folders, 0);
+    folder_display();
 }
 
 static void activate_focus(void) {
@@ -2525,9 +2597,14 @@ static void input_event(void *event, void *param, int action) {
     SDL_Event *e = param;
     (void)event;
     if (action != EVENT_ACTION_UPDATE || !e || !(self.app->state & APP_STATE_OPENED)) return;
+    /* Console input and system shortcuts retain their global handlers. */
+    if (ConsoleIsVisible() || (e->type == SDL_KEYDOWN &&
+        (e->key.keysym.sym == SDLK_F1 || e->key.keysym.sym == SDLK_PRINT ||
+         (e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT))))) return;
     /* Let text entry / DreamShell's keyboard process actual typing. */
     if (GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
+        e->type = SDL_NOEVENT; /* GUI_Input must not type it a second time. */
         return;
     }
     if (e->type == SDL_JOYHATMOTION && e->jhat.hat == 0) {
@@ -2540,7 +2617,10 @@ static void input_event(void *event, void *param, int action) {
     } else if (e->type == SDL_JOYBUTTONDOWN) {
         if (e->jbutton.button == SDL_DC_A) activate_focus();
         else if (e->jbutton.button == SDL_DC_B) {
-            if (self.busy) gd_ripper_CancelRip(NULL); else if (self.page) select_page(0);
+            if (self.busy) gd_ripper_CancelRip(NULL);
+            else if (self.page == 1 && folder_root(self.folders.path) && strlen(self.folders.path) > (size_t)folder_root(self.folders.path))
+                gd_ripper_Folder(APP_GET_WIDGET("folder-up"));
+            else if (self.page) select_page(0);
         }
     } else if (e->type == SDL_KEYDOWN) {
         switch (e->key.keysym.sym) {
@@ -2554,6 +2634,7 @@ static void input_event(void *event, void *param, int action) {
         /* Real mouse remains optional; the controller never moves a pointer. */
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
     }
+    e->type = SDL_NOEVENT; /* The app owns this input; do not replay it globally. */
 }
 
 static void video_event(void *event, void *param, int action) {

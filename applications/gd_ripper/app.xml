@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="GD Ripper" version="2.1.1" icon="images/icon.png">
+<app name="GD Ripper" version="2.2.0" icon="images/icon.png">
   <resources>
     <module src="modules/app_gd_ripper.klf" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="16" name="body" />
@@ -126,15 +126,43 @@
     <surface name="b260-44-disabled" width="260" height="44">
       <fill color="#26313B" />
     </surface>
+    <surface name="b592-27-normal" width="592" height="27">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b592-27-highlight" width="592" height="27">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="588" height="23" color="#155B71" />
+    </surface>
+    <surface name="b592-27-pressed" width="592" height="27">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="588" height="23" color="#155B71" />
+    </surface>
+    <surface name="b592-27-disabled" width="592" height="27">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b128-28-normal" width="128" height="28">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b128-28-highlight" width="128" height="28">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="124" height="24" color="#155B71" />
+    </surface>
+    <surface name="b128-28-pressed" width="128" height="28">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="124" height="24" color="#155B71" />
+    </surface>
+    <surface name="b128-28-disabled" width="128" height="28">
+      <fill color="#26313B" />
+    </surface>
   </resources>
   <body width="640" height="480" background="bg" onload="export:gd_ripper_Init()" onopen="export:gd_ripper_Open()" onclose="export:gd_ripper_Close()" onunload="export:gd_ripper_Exit()">
     <cardstack name="pages">
       <panel name="main-page" width="640" height="480">
         <label x="24" y="16" width="592" height="28" font="title" color="#E7EEF4" text="GD RIPPER  /  NeXT" align="left" valign="center" />
-        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.1.1 diagnostic  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
+        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.2.0  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
         <label x="24" y="70" width="592" height="20" font="body" color="#53E1E3" text="Waiting for disc..." align="left" valign="center" name="disc-label" />
         <label x="24" y="100" width="70" height="22" font="body" color="#9BAFC1" text="Folder:" align="left" />
-      <input type="text" name="gname-text" value="ripped_disc" x="96" y="96" width="520" height="28" size="120" font="body" fontcolor="#14202B" onblur="export:gd_ripper_Gamename()" />
+        <input type="text" name="gname-text" value="ripped_disc" x="96" y="96" width="520" height="28" size="254" font="body" fontcolor="#14202B" onblur="export:gd_ripper_Gamename()" />
         <label x="24" y="134" width="450" height="20" font="body" color="#9BAFC1" text="/sd" align="left" valign="center" name="destination-path" />
         <input type="button" x="488" y="128" width="128" height="32" name="browse-btn" onclick="export:gd_ripper_ShowFileBrowser()" normal="b128-32-normal" highlight="b128-32-highlight" pressed="b128-32-pressed" disabled="b128-32-disabled">
           <label font="body" color="#F0F6FA" text="Destination" align="center" />
@@ -164,26 +192,56 @@
         <label x="208" y="431" width="408" height="20" font="small" color="#9BAFC1" text="B: stop or back     Mouse clicks also work" align="left" valign="center" />
       </panel>
       <panel name="destination-page" width="640" height="480">
-        <label x="24" y="24" width="592" height="28" font="title" color="#E7EEF4" text="DESTINATION" align="left" valign="center" />
-        <label x="24" y="66" width="592" height="20" font="body" color="#9BAFC1" text="Choose a device, or edit the folder path below." align="left" valign="center" />
-        <input type="button" x="24" y="105" width="174" height="44" name="device-sd" onclick="export:gd_ripper_Destination()" normal="b174-44-normal" highlight="b174-44-highlight" pressed="b174-44-pressed" disabled="b174-44-disabled">
-          <label font="body" color="#F0F6FA" text="SD card /sd" align="center" />
+        <label x="24" y="18" width="592" height="28" font="title" color="#E7EEF4" text="CHOOSE A FOLDER" align="left" valign="center" />
+        <input type="button" x="24" y="58" width="128" height="28" name="device-sd" onclick="export:gd_ripper_Destination()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
+          <label font="small" color="#F0F6FA" text="SD card" align="center" />
         </input>
-        <input type="button" x="221" y="105" width="174" height="44" name="device-ide" onclick="export:gd_ripper_Destination()" normal="b174-44-normal" highlight="b174-44-highlight" pressed="b174-44-pressed" disabled="b174-44-disabled">
-          <label font="body" color="#F0F6FA" text="IDE drive /ide" align="center" />
+        <input type="button" x="164" y="58" width="128" height="28" name="device-ide" onclick="export:gd_ripper_Destination()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
+          <label font="small" color="#F0F6FA" text="IDE drive" align="center" />
         </input>
-        <input type="button" x="418" y="105" width="174" height="44" name="device-pc" onclick="export:gd_ripper_Destination()" normal="b174-44-normal" highlight="b174-44-highlight" pressed="b174-44-pressed" disabled="b174-44-disabled">
-          <label font="body" color="#F0F6FA" text="PC share /pc" align="center" />
+        <input type="button" x="304" y="58" width="128" height="28" name="device-pc" onclick="export:gd_ripper_Destination()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
+          <label font="small" color="#F0F6FA" text="PC share" align="center" />
         </input>
-        <input type="text" name="destination-entry" value="/sd" x="24" y="184" width="592" height="28" size="120" font="body" fontcolor="#14202B" />
-        <label x="24" y="224" width="592" height="20" font="small" color="#9BAFC1" text="The folder must already exist. Dumps get their own subfolder." align="left" valign="center" />
-        <label x="24" y="270" width="592" height="20" font="body" color="#E7EEF4" text="" align="left" valign="center" name="destination-error" />
-        <input type="button" x="24" y="349" width="260" height="44" name="destination-confirm" onclick="export:gd_ripper_FileBrowserConfirm()" normal="b260-44-normal" highlight="b260-44-highlight" pressed="b260-44-pressed" disabled="b260-44-disabled">
-          <label font="body" color="#F0F6FA" text="Use this folder" align="center" />
+        <input type="button" x="488" y="58" width="128" height="28" name="folder-up" onclick="export:gd_ripper_Folder()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
+          <label font="small" color="#F0F6FA" text="Up one folder" align="center" />
         </input>
-        <input type="button" x="308" y="349" width="260" height="44" name="destination-back" onclick="export:gd_ripper_ShowMainPage()" normal="b260-44-normal" highlight="b260-44-highlight" pressed="b260-44-pressed" disabled="b260-44-disabled">
-          <label font="body" color="#F0F6FA" text="Back" align="center" />
+        <label x="24" y="95" width="592" height="20" font="small" color="#9BAFC1" text="/sd" align="left" valign="center" name="folder-path" />
+        <input type="button" x="24" y="122" width="592" height="27" name="folder-0" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
         </input>
+        <input type="button" x="24" y="151" width="592" height="27" name="folder-1" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
+        </input>
+        <input type="button" x="24" y="180" width="592" height="27" name="folder-2" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
+        </input>
+        <input type="button" x="24" y="209" width="592" height="27" name="folder-3" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
+        </input>
+        <input type="button" x="24" y="238" width="592" height="27" name="folder-4" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
+        </input>
+        <input type="button" x="24" y="267" width="592" height="27" name="folder-5" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
+        </input>
+        <input type="button" x="24" y="296" width="592" height="27" name="folder-6" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
+          <label font="small" color="#F0F6FA" text="" align="left" />
+        </input>
+        <input type="button" x="24" y="334" width="128" height="28" name="folder-prev" onclick="export:gd_ripper_Folder()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
+          <label font="small" color="#F0F6FA" text="Previous page" align="center" />
+        </input>
+        <label x="166" y="337" width="300" height="20" font="small" color="#9BAFC1" text="" align="left" valign="center" name="folder-count" />
+        <input type="button" x="488" y="334" width="128" height="28" name="folder-next" onclick="export:gd_ripper_Folder()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
+          <label font="small" color="#F0F6FA" text="Next page" align="center" />
+        </input>
+        <label x="24" y="373" width="592" height="20" font="small" color="#9BAFC1" text="" align="left" valign="center" name="destination-error" />
+        <input type="button" x="24" y="403" width="260" height="44" name="destination-confirm" onclick="export:gd_ripper_FileBrowserConfirm()" normal="b260-44-normal" highlight="b260-44-highlight" pressed="b260-44-pressed" disabled="b260-44-disabled">
+          <label font="small" color="#F0F6FA" text="Use this folder" align="center" />
+        </input>
+        <input type="button" x="356" y="403" width="260" height="44" name="destination-back" onclick="export:gd_ripper_ShowMainPage()" normal="b260-44-normal" highlight="b260-44-highlight" pressed="b260-44-pressed" disabled="b260-44-disabled">
+          <label font="small" color="#F0F6FA" text="Cancel" align="center" />
+        </input>
+        <label x="24" y="453" width="592" height="18" font="small" color="#9BAFC1" text="D-pad / stick: select    A: open    B: up / cancel" align="left" valign="center" />
       </panel>
       <panel name="advanced-page" width="640" height="480">
         <label x="24" y="20" width="592" height="28" font="title" color="#E7EEF4" text="ADVANCED FEATURES" align="left" valign="center" />
