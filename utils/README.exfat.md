@@ -1,7 +1,7 @@
 # DreamShell NeXT exFAT preview
 
 This experimental build adds exFAT to bootloader **3.0**, the DreamShell core,
-and ISO Loader **0.9.0**. It uses a pinned FatFs R0.16 engine. FAT16/FAT32
+ISO Loader **0.9.0**, and the optional HollySH BIOS loader. It uses a pinned FatFs R0.16 engine. FAT16/FAT32
 remain supported. GD Ripper uses the core's filesystem services; its existing
 logging, CRC checkpoints and targeted recovery work through the same interface.
 
@@ -56,6 +56,9 @@ but coexistence, DMA and sustained GD-ROM-to-CF ripping need hardware testing.
   Legacy stat/seek operations reject overflow; directory-list size fields clamp
   at their signed 32-bit limit. ISO Loader rejects individual files above its
   signed 2 GiB offset range. Normal Dreamcast GDI track files fit that range.
+- Game loaders grow by several KiB. A low-address preset that would overlap the
+  game executable now stops with an error before launch. Select loader address
+  `0x8ce00000` or reduce emulation features if you encounter that message.
 - Filesystem paths use UTF-8. Fonts in individual applications may not contain
   every character that the filesystem can store.
 - Mounting does not scan the whole free-space bitmap/FAT just to display a

@@ -594,6 +594,20 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 		}
 	}
 
+	/* Extra filesystem code can outgrow a low-address game's preset. Check
+	 * before leaving DreamShell, so loading the executable cannot overwrite
+	 * the loader. Syscall/Bleem modes select a different address below. */
+	uint32_t loader_phys = (uint32_t)addr & 0x1fffffff;
+	uint32_t boot_phys = info->exec.addr & 0x1fffffff;
+	if (info->image_type != IMAGE_TYPE_ROM_NAOMI &&
+		info->syscalls != 1 && info->bleem != 1 &&
+		loader_phys < boot_phys && (uint64_t)loader_phys + len + 32 > boot_phys) {
+		ds_printf("DS_ERROR: Loader no longer fits below the game executable.\n"
+			"Select loader address 0x8ce00000 or fewer emulation features.\n");
+		free(loader);
+		return;
+	}
+
 	if(info->syscalls == 1) {
 
 		snprintf(fn, NAME_MAX, "%s/firmware/%s/syscalls.bin",

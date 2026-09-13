@@ -57,8 +57,12 @@ toolchain)
 
 loaders)
 	load_kos_env
-	log "Check all standalone ISO Loader variants"
+	log "Check all standalone ISO Loader variants and HollySH"
 	make -C "${DS_SRC}/firmware/isoldr/loader" -j"$(nproc)"
+	make -C "${DS_SRC}/firmware/hollysh/loader" -j"$(nproc)"
+	# The final BIOS build embeds the actual bootloader size; do not reuse
+	# these standalone objects compiled with placeholder ROM parameters.
+	make -C "${DS_SRC}/firmware/hollysh/loader" clean
 	;;
 
 kos)

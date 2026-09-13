@@ -55,6 +55,7 @@ SRCS = \
 	$(DRV_SRC_DIR)/kos/src/memset.S \
 	$(DRV_SRC_DIR)/kos/src/memcmp.c \
 	$(DRV_SRC_DIR)/kos/src/strlen.S \
+	$(DRV_SRC_DIR)/kos/src/strchr.c \
 	$(DRV_SRC_DIR)/kos/src/timer.c \
 	$(DRV_SRC_DIR)/kos/src/cache.s \
 	$(DRV_SRC_DIR)/kos/src/biosfont.c \
@@ -63,7 +64,7 @@ SRCS = \
 	$(DRV_SRC_DIR)/kos/src/dmac.c \
 	$(DRV_SRC_DIR)/kos/src/math.s \
 	$(DRV_SRC_DIR)/fs/fat/src/ff.c \
-	$(DRV_SRC_DIR)/fs/fat/src/option/ccsbcs.c \
+	$(DRV_SRC_DIR)/fs/fat/src/ffunicode.c \
 	$(DRV_SRC_DIR)/fs/fat/src/option/syscall.c \
 	$(DRV_SRC_DIR)/fs/fat/src/diskio.c \
 	$(DRV_SRC_DIR)/fs/fat/fs.c \
