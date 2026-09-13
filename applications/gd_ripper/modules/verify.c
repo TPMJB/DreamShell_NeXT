@@ -7,6 +7,7 @@
 
 #include "verify.h"
 #include "checksum.h"
+#include "readback.h"
 #include <zlib/zlib.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -206,7 +207,7 @@ static int hash_track(const char *folder, verify_track_t *track, uint8_t *buffer
 		uint64_t *processed_bytes, uint64_t total_bytes, uint32_t track_index,
 		uint32_t track_count, volatile int *active,
 		gd_verify_progress_cb_t progress_cb, void *progress_data,
-        bool scan, gd_verify_summary_t *summary) {
+        bool scan, gd_verify_summary_t *summary, gd_readback_t *diag) {
 	char path[NAME_MAX];
 	file_t hnd;
 	uLong crc = crc32(0L, Z_NULL, 0);
@@ -255,26 +256,42 @@ static int hash_track(const char *folder, verify_track_t *track, uint8_t *buffer
 		if (!bytes) {
 			break;
 		}
+        uint32_t read_crc = crc32(0L, buffer, (uInt)bytes);
         if (suspects != FILEHND_INVALID) {
             if (bytes % 2352) {
                 fs_close(suspects); fs_close(hnd); return CMD_ERROR;
             }
+            unsigned sector_flags[16];
+            for (ssize_t offset = 0; offset < bytes; offset += 2352)
+                sector_flags[offset / 2352] = gd_check_sector(buffer + offset,
+                    track->start + (uint32_t)((track_bytes + offset) / 2352));
+            gd_readback_buffer(diag, track->number, track_bytes, "sector-checks",
+                read_crc, crc32(0L, buffer, (uInt)bytes), summary);
             for (ssize_t offset = 0; offset < bytes; offset += 2352) {
                 uint32_t sector = (uint32_t)((track_bytes + offset) / 2352);
-                unsigned flags = gd_check_sector(buffer + offset, track->start + sector);
+                unsigned flags = sector_flags[offset / 2352];
                 if (flags == GD_SECTOR_UNSUPPORTED) { summary->unsupported_sectors++; continue; }
                 if (flags) {
                     char row[96];
                     int n = snprintf(row, sizeof(row), "%lu %lu %u\n",
                         (unsigned long)sector, (unsigned long)(track->start + sector), flags);
                     summary->suspect_sectors++;
+                    int status = gd_readback_sector(diag, path, track->number, sector,
+                        track->start + sector, buffer + offset, flags, active, summary);
+                    if (status != CMD_OK) {
+                        fs_close(suspects); fs_close(hnd); return status;
+                    }
                     if (fs_write(suspects, row, n) != n) {
                         fs_close(suspects); fs_close(hnd); return CMD_ERROR;
                     }
                 }
             }
         }
+        gd_readback_buffer(diag, track->number, track_bytes, "diagnostics-and-map",
+            read_crc, crc32(0L, buffer, (uInt)bytes), summary);
         crc = crc32(crc, buffer, (uInt)bytes);
+        gd_readback_buffer(diag, track->number, track_bytes, "hash",
+            read_crc, crc32(0L, buffer, (uInt)bytes), summary);
 		track_bytes += (uint64_t)bytes;
 		*processed_bytes += (uint64_t)bytes;
 		if (progress_cb) {
@@ -282,6 +299,8 @@ static int hash_track(const char *folder, verify_track_t *track, uint8_t *buffer
 				*processed_bytes, total_bytes);
 		}
 		thd_pass();
+        gd_readback_buffer(diag, track->number, track_bytes - bytes, "progress-and-yield",
+            read_crc, crc32(0L, buffer, (uInt)bytes), summary);
 	}
 
 	if (suspects != FILEHND_INVALID && fs_close(suspects) < 0) {
@@ -474,6 +493,7 @@ const char *gd_verify_result_text(gd_verify_result_t result) {
 		case GD_VERIFY_DATA_MATCH: return "DATA TRACKS MATCH";
 		case GD_VERIFY_FULL_MATCH: return "FULL TRACK MATCH";
 		case GD_VERIFY_INTEGRITY_FAILED: return "DUMP INTEGRITY FAILED";
+		case GD_VERIFY_READBACK_UNSTABLE: return "STORAGE READ-BACK INCONSISTENT";
 		default: return "VERIFICATION ERROR";
 	}
 }
@@ -519,6 +539,14 @@ static int write_report(const char *folder, const char *database_path,
         "disc stream / saved checkpoint (no storage read-back)" : "storage read-back");
     status |= report_printf(hnd, "catalog %s\n", summary->catalog);
     status |= report_printf(hnd, "sector_scan %s\n", summary->sector_scan ? "enabled" : "NOT_RUN");
+    if (!summary->streaming) {
+        status |= report_printf(hnd, "readback_disagreements %lu\nbuffer_changes %lu\n"
+            "diagnostic_sectors %lu\ndiagnostic_skipped %lu\ndiagnostic_written %d\n",
+            (unsigned long)summary->readback_disagreements, (unsigned long)summary->buffer_changes,
+            (unsigned long)summary->diagnostic_sectors, (unsigned long)summary->diagnostic_skipped,
+            summary->diagnostic_written);
+        status |= report_printf(hnd, "note First-pass CRC retained; diagnostic rereads never replace track bytes or CRCs.\n");
+    }
     if (!summary->sector_scan)
         status |= report_printf(hnd, "note Sector counters below are not a passed storage scan.\n");
     status |= report_printf(hnd, "suspect_sectors %lu\nunsupported_sectors %lu\n",
@@ -563,6 +591,7 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
 	uint64_t processed_bytes = 0;
 	bool sizes_ok = true;
 	bool compatible = true;
+	gd_readback_t diag = {.log = FILEHND_INVALID, .samples = FILEHND_INVALID};
 	gd_verify_result_t catalog_result;
 
 	memset(summary, 0, sizeof(*summary));
@@ -617,6 +646,9 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
 		free(tracks);
 		return summary->result;
 	}
+    if (!streaming && gd_readback_begin(&diag, folder) != CMD_OK) {
+        free(buffer); free(tracks); return summary->result;
+    }
 	for (uint32_t index = 0; index < track_count; index++) {
 		int hash_status;
         if (streaming) {
@@ -631,16 +663,31 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
         } else {
             hash_status = hash_track(folder, &tracks[index], buffer, &processed_bytes,
                 total_bytes, index + 1, track_count, active, progress_cb, progress_data,
-                scan, summary);
+                scan, summary, &diag);
         }
         if (hash_status != CMD_OK) {
             summary->result = hash_status == 1 ? GD_VERIFY_CANCELLED : GD_VERIFY_ERROR;
+            if (summary->readback_disagreements || summary->buffer_changes)
+                gd_readback_guard(folder, true, sync_report);
+            if (!streaming) summary->diagnostic_written = gd_readback_end(&diag, sync_report) == CMD_OK;
             summary->report_written = write_report(folder, database_path, tracks, summary, sync_report) == CMD_OK;
             free(buffer); free(tracks);
             return summary->result;
         }
 	}
 	free(buffer);
+    if (!streaming) {
+        summary->diagnostic_written = gd_readback_end(&diag, sync_report) == CMD_OK;
+        bool unstable = summary->readback_disagreements || summary->buffer_changes;
+        if ((unstable || (scan && summary->diagnostic_written)) &&
+                gd_readback_guard(folder, unstable, sync_report) != CMD_OK)
+            summary->diagnostic_written = false;
+        if (!summary->diagnostic_written) {
+            summary->result = GD_VERIFY_ERROR;
+            summary->report_written = write_report(folder, database_path, tracks, summary, sync_report) == CMD_OK;
+            free(tracks); return summary->result;
+        }
+    }
 
 	if (!compatible) {
 		catalog_result = GD_VERIFY_INCOMPATIBLE;
@@ -680,6 +727,10 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
 	summary->catalog_result = catalog_result;
 	if (summary->suspect_sectors) summary->clean = false;
 	summary->result = summary->clean ? catalog_result : GD_VERIFY_INTEGRITY_FAILED;
+    if (summary->readback_disagreements || summary->buffer_changes) {
+        summary->clean = false;
+        summary->result = GD_VERIFY_READBACK_UNSTABLE;
+    }
 	summary->report_written = write_report(folder, database_path, tracks, summary,
 		sync_report) == CMD_OK;
 
