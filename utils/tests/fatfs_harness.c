@@ -1,6 +1,5 @@
 /* Run the production logger/checkpoint writer against the pinned FatFs, on an
  * in-memory FAT volume. Only block I/O and the KOS VFS boundary are adapted. */
-#define _GNU_SOURCE
 #include "../../applications/gd_ripper/modules/module.c"
 #include "ff.h"
 #include "diskio.h"
