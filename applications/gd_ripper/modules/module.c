@@ -1488,7 +1488,7 @@ out:
 			(unsigned long long)self.total_sectors);
 		GUI_LabelSetText(self.track_label, "Rip complete");
 		GUI_ProgressBarSetPosition(self.pbar, 1.0);
-		GUI_LabelSetText(self.time_label, "Time left: 0m");
+		GUI_LabelSetText(self.time_label, "Finished");
 		GUI_LabelSetText(self.progress_percent_label, "Overall: 100.00%");
 		GUI_LabelSetText(self.sectors_total_label, final_total);
 		GUI_LabelSetText(self.sectors_processed_label, final_done);
@@ -1591,7 +1591,10 @@ static void update_ui_display(uint32_t current_sector_size, bool force) {
 			snprintf(time_text, sizeof(time_text), "Time left: %luh %lum",
 					(unsigned long)remaining_hours, (unsigned long)remaining_min);
 		}
-		else {
+		else if (remaining_time_sec < 60) {
+            snprintf(time_text, sizeof(time_text), "Time left: <1m");
+        }
+        else {
 			snprintf(time_text, sizeof(time_text), "Time left: %lum",
 				(unsigned long)remaining_min);
 		}
@@ -1667,8 +1670,9 @@ static void update_verify_display(void *data, const char *filename,
 	if (bytes_per_second > 0 && total_bytes > processed_bytes) {
 		uint64_t seconds = (uint64_t)((total_bytes - processed_bytes) /
 			bytes_per_second);
-		snprintf(time_text, sizeof(time_text), "Time left: %lum",
-			(unsigned long)((seconds + 59) / 60));
+        if (seconds < 60) snprintf(time_text, sizeof(time_text), "Time left: <1m");
+        else snprintf(time_text, sizeof(time_text), "Time left: %lum",
+            (unsigned long)((seconds + 59) / 60));
 	}
 	else {
 		snprintf(time_text, sizeof(time_text), "Time left: --");
