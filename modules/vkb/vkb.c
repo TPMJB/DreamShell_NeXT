@@ -223,6 +223,8 @@ void VirtKeyboardHide(void) {
 }
 
 void VirtKeyboardShutdown(void) {
+    /* Video traversal also visits input nodes in the shared event list. */
+    LockVideo();
     /* Core shutdown tears down the event list before unloading modules. */
     if (GetEventList()) {
         VirtKeyboardHide();
@@ -233,6 +235,7 @@ void VirtKeyboardShutdown(void) {
     if (vkb.font) TTF_CloseFont(vkb.font);
     if (vkb.small) TTF_CloseFont(vkb.small);
     memset(&vkb, 0, sizeof(vkb));
+    UnlockVideo();
 }
 
 int VirtKeyboardIsVisible(void) { return vkb.visible; }
