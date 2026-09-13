@@ -51,7 +51,8 @@ class ConsoleTests(unittest.TestCase):
                         '-Wno-format-truncation','-Iutils/tests/console_shim','-Iinclude/SDL',
                         'utils/tests/console_harness.c',
                         'applications/gd_ripper/modules/verify.c',
-                        'applications/gd_ripper/modules/checksum.c','-lz','-o',str(cls.exe)],
+                        'applications/gd_ripper/modules/checksum.c',
+                        'applications/gd_ripper/modules/recovery.c','-lz','-o',str(cls.exe)],
                        cwd=ROOT, check=True)
         cls.disc_data = b''.join(make_sector(45150+i,i) for i in range(32))
         cls.transition_data = b''.join(make_sector(150+i,i) for i in range(300))
@@ -157,6 +158,188 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(result,['7','0','0'])  # FULL_MATCH; zero storage reads
         self.assertIn('no storage read-back',(self.path/'verify.log').read_text())
         self.assertIn('sector_scan NOT_RUN',(self.path/'verify.log').read_text())
+
+    def recovery_fixture(self, indices=(1, 3, 8)):
+        self.rip()
+        data = bytearray(self.disc_data)
+        for index in indices:
+            data[index*2352:(index+1)*2352] = bytes(2352)
+        self.track.write_bytes(data)
+        journal = self.path/'track03.bin.crc'
+        tag = journal.read_text().split()[1]
+        body = f'CRC1 {tag} {len(data)} {zlib.crc32(data):08x}'
+        journal.write_text(f'\n{body} {zlib.crc32(body.encode()):08x}\n')
+        rows = ['track,track_sector,disc_lba,disc_fad,file_offset\n']
+        rows += [f'3,{i},{45000+i},{45150+i},{2352*i}\n' for i in indices]
+        (self.path/'track03.bin.bad').write_text(''.join(rows))
+        return data
+
+    def recover(self, fault=0, stop=0, kind=4, passes=3):
+        return subprocess.check_output([str(self.exe),'recover',str(self.disc),str(self.track),
+            str(fault),str(stop),str(kind),str(passes)], text=True).strip().split('|')
+
+    def test_replacement_crc_includes_large_suffix_and_many_patches(self):
+        data = bytearray(self.disc_data)
+        crc = zlib.crc32(data)
+        for index in (0, 31, 12, 7, 19):
+            before = bytes(data[index*2352:(index+1)*2352])
+            after = make_sector(45150+index,99+index)
+            crc = int(self.run_c('replace-crc',f'{crc:08x}',f'{zlib.crc32(before):08x}',
+                f'{zlib.crc32(after):08x}',len(data)-(index+1)*2352)[0],16)
+            data[index*2352:(index+1)*2352] = after
+            self.assertEqual(crc,zlib.crc32(data))
+        # Composition plus the inequality checks that suffix lengths beyond
+        # 32 bits are not truncated. Small patches use Python's zlib as oracle.
+        a = self.run_c('replace-crc','0','12345678','0',2**32+2345)[0]
+        b = self.run_c('replace-crc','0','12345678','0',2**32)[0]
+        b = self.run_c('replace-crc','0',b,'0',2345)[0]
+        self.assertEqual(a,b)
+        self.assertNotEqual(a,self.run_c('replace-crc','0','12345678','0',2345)[0])
+
+    def test_first_pass_continues_past_bad_sector_and_never_approves_hole(self):
+        result = self.run_c('firstpass',self.disc,self.track,1,2)
+        self.assertEqual(result[0],'0')
+        self.assertEqual(result[2],'32')
+        data = self.track.read_bytes()
+        self.assertEqual(data[:2352],self.disc_data[:2352])
+        self.assertEqual(data[2352:4704],bytes(2352))
+        self.assertEqual(data[4704:],self.disc_data[4704:])
+        self.assertEqual(self.run_c('verify',self.path,self.db,1)[0],'8')
+
+    def test_targeted_recovery_crc_matches_without_whole_file_readback(self):
+        self.recovery_fixture()
+        result = self.recover()
+        self.assertEqual(result[:3],['0','3','0'])
+        self.assertEqual(int(result[3],16),zlib.crc32(self.disc_data))
+        self.assertEqual(result[4],'3')
+        self.assertLess(int(result[5]),len(self.disc_data)//2)
+        self.assertEqual(self.track.read_bytes(),self.disc_data)
+        self.assertFalse((self.path/'track03.bin.bad').exists())
+        self.assertEqual(self.run_c('verify',self.path,self.db,1)[0],'7')
+
+    def test_recovery_sweeps_past_stubborn_sector_and_only_retries_remaining(self):
+        self.recovery_fixture()
+        result = self.recover(fault=1)
+        self.assertEqual(result[:3],['0','2','1'])
+        self.assertEqual(result[4],'5') # stubborn sector gets 3 tries; others one.
+        self.assertEqual(self.run_c('verify',self.path,self.db,1)[0],'8')
+        result = self.recover()
+        self.assertEqual(result[:3],['0','1','0'])
+        self.assertEqual(result[4],'1')
+        self.assertEqual(self.track.read_bytes(),self.disc_data)
+        self.assertEqual(int(result[3],16),zlib.crc32(self.disc_data))
+
+    def test_recovery_pass_budget_can_recover_on_later_pass(self):
+        self.recovery_fixture()
+        result = self.recover(fault=2)
+        self.assertEqual(result[:3],['0','3','0'])
+        self.assertEqual(result[4],'5')
+
+    def test_recovery_stop_preserves_successful_sector_and_resumes_only_others(self):
+        self.recovery_fixture()
+        result = self.recover(stop=1)
+        self.assertEqual(result[:3],['-1','1','2'])
+        self.assertTrue((self.path/'track03.bin.bad').exists())
+        self.assertFalse((self.path/'track03.bin.crc').exists())
+        result = self.recover()
+        self.assertEqual(result[:3],['0','2','0'])
+        self.assertEqual(result[4],'2')
+        self.assertEqual(int(result[3],16),zlib.crc32(self.disc_data))
+
+    def test_torn_recovery_write_is_reconciled_from_baseline_on_restart(self):
+        damaged = self.recovery_fixture()
+        result = self.recover(fault=4)
+        self.assertEqual(result[0],'-1')
+        self.assertIn('write/read-back',result[6])
+        self.assertNotEqual(self.track.read_bytes(),damaged)
+        self.assertFalse((self.path/'track03.bin.crc').exists())
+        self.assertIn(self.run_c('verify',self.path,self.db,1)[0],['-1','8'])
+        result = self.recover()
+        self.assertEqual(result[:3],['0','3','0'])
+        self.assertEqual(self.track.read_bytes(),self.disc_data)
+        self.assertEqual(int(result[3],16),zlib.crc32(self.disc_data))
+
+    def test_audio_requires_agreement_and_resume_preserves_confirmed_audio(self):
+        self.recovery_fixture()
+        result = self.recover(kind=0,fault=3)
+        self.assertEqual(result[:3],['0','0','3'])
+        result = self.recover(kind=0,stop=1)
+        self.assertEqual(result[:3],['-1','1','2'])
+        result = self.recover(kind=0)
+        self.assertEqual(result[:3],['0','2','0'])
+        self.assertEqual(result[4],'4')
+        self.assertEqual(int(result[3],16),zlib.crc32(self.disc_data))
+
+    def test_torn_audio_confirmation_requires_new_reads(self):
+        self.recovery_fixture()
+        self.recover(kind=0,stop=1)
+        journal = self.path/'track03.bin.recovery-audio'
+        journal.write_bytes(journal.read_bytes()[:-4])
+        result = self.recover(kind=0)
+        self.assertEqual(result[:3],['0','3','0'])
+        self.assertEqual(result[4],'6')
+
+    def test_corrupt_published_baseline_stops_before_patching(self):
+        self.recovery_fixture()
+        self.recover(stop=1)
+        baseline = self.path/'track03.bin.recovery-base'
+        data = bytearray(baseline.read_bytes()); data[-1] ^= 1; baseline.write_bytes(data)
+        previous = self.track.read_bytes()
+        result = self.recover()
+        self.assertEqual(result[0],'-1')
+        self.assertEqual(result[4],'0')
+        self.assertIn('baseline',result[6])
+        self.assertEqual(self.track.read_bytes(),previous)
+
+    def test_invalid_recovery_queue_never_modifies_track(self):
+        previous = self.recovery_fixture()
+        queue = self.path/'track03.bin.bad'
+        queue.write_text(queue.read_text()+'3,999,45999,46149,2352\n')
+        result = self.recover()
+        self.assertEqual(result[0],'-1')
+        self.assertEqual(result[4],'0')
+        self.assertEqual(self.track.read_bytes(),previous)
+
+    def thread(self, fault=0, recovery=0):
+        return subprocess.check_output([str(self.exe),'thread',str(self.disc),str(self.path),
+            str(fault),str(recovery)],text=True).strip().split('|')
+
+    def test_first_pass_prompts_and_withholds_completion_until_recovered(self):
+        result = self.thread(fault=2)
+        folder = self.path/'fixture'
+        self.assertEqual(result[:3],['1','3','OK'])
+        self.assertFalse((folder/'rip.complete').exists())
+        self.assertTrue((folder/'rip.first-pass').exists())
+        self.assertEqual((folder/'track03.bin').stat().st_size,len(self.disc_data))
+        # Start offers the saved queue again without automatically hammering it.
+        self.assertEqual(self.thread(fault=2)[:3],['1','3','OK'])
+        result = self.thread(recovery=1)
+        self.assertEqual(result[0],'0')
+        self.assertTrue((folder/'rip.complete').exists())
+        self.assertEqual((folder/'track03.bin').read_bytes(),self.disc_data)
+
+    def test_recovery_rejects_different_disc_before_touching_targets(self):
+        self.thread(fault=2)
+        folder = self.path/'fixture'
+        before = (folder/'track03.bin').read_bytes()
+        self.disc.write_bytes(make_sector(45150,99)+self.disc_data[2352:])
+        result = self.thread(recovery=1)
+        self.assertEqual(result[0],'0')
+        self.assertFalse((folder/'rip.complete').exists())
+        self.assertEqual((folder/'track03.bin').read_bytes(),before)
+
+    def test_clean_first_pass_finishes_without_recovery_prompt(self):
+        self.assertEqual(self.thread()[0],'0')
+        self.assertTrue((self.path/'fixture'/'rip.complete').exists())
+
+    def test_memory_fault_stops_first_pass_instead_of_becoming_disc_recovery(self):
+        result = self.thread(fault=4)
+        self.assertEqual(result[:3],['0','0','Memory changed during write'])
+        self.assertFalse((self.path/'fixture'/'rip.complete').exists())
+        self.assertFalse((self.path/'fixture'/'rip.first-pass').exists())
+
+    def test_recovery_prompt_keeps_its_folder_when_disc_auto_name_changes(self):
+        self.assertEqual(self.run_c('recovery-controls'),['ok'])
 
     def test_advanced_read_retries_silent_corruption(self):
         result = self.rip(advanced=1,fault=1)

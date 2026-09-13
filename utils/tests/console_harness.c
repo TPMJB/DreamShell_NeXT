@@ -11,6 +11,8 @@ static int auto_test;
 static int legacy_fs, reject_append, fail_crc, mode_failures;
 static uint32_t drive_base = 45150;
 static uint64_t clock_ms = 1000, read_bytes;
+static unsigned recovery_pass, recovered_count, stop_after;
+static int recovery_fault, full_thread;
 GUI_Widget *host_widget(const char *name) {
     for (int i=0;i<nw;++i) if (!strcmp(widget_names[i],name)) return &widgets[i];
     assert(nw < 64); snprintf(widget_names[nw],64,"%s",name); return &widgets[nw++];
@@ -64,6 +66,9 @@ file_t fs_open(const char *p,int f) {
 ssize_t fs_total(file_t f) {struct stat st;return fstat(f,&st)?-1:st.st_size;}
 ssize_t fs_read(file_t f,void *p,size_t n) {ssize_t rv=read(f,p,n);if(rv>0)read_bytes+=rv;return rv;}
 ssize_t fs_write(file_t f,const void *p,size_t n) {
+    if (recovery_fault == 4 && n == 2352 && recovery_pass &&
+            lseek(f,0,SEEK_CUR) % 2352 == 0 && !injected++)
+        return write(f, p, 77); /* A torn in-place sector write. */
     if ((fault == 4 || fault == 5) && n == 2352 * 16 && !injected++) {
         if (fault == 5) {
             ssize_t rv = write(f,p,n);
@@ -89,6 +94,14 @@ int cdrom_change_datatype(cd_read_sec_part_t p,int t,int size) {
 uint32_t cdrom_locate_data_track(cd_toc_t *t) {(void)t;return 45150;}
 int cdrom_exec_cmd_timed(cd_cmd_code_t c,void *p,uint32_t timeout) {
     (void)timeout;
+    if (full_thread && c == CD_CMD_GETTOC2) {
+        cd_cmd_toc_params_t *req = p;
+        memset(req->buffer, 0, sizeof(*req->buffer));
+        req->buffer->first = req->buffer->last = (req->area == CD_AREA_HIGH ? 3 : 1) << 16;
+        req->buffer->entry[req->area == CD_AREA_HIGH ? 2 : 0] = (4u << 28) | drive_base;
+        req->buffer->leadout_sector = drive_base + 32 + (req->area == CD_AREA_LOW ? 150 : 0);
+        return ERR_OK;
+    }
     if(c!=CD_CMD_PIOREAD)return ERR_OK;
     cd_read_params_t *req=p;read_calls++;
     if(fault==2 && req->start_sec<=45151 && req->start_sec+req->num_sec>45151)return ERR_SYS;
@@ -115,11 +128,56 @@ static void setup(void) {
     self.verify_btn=host_widget("verify-btn");self.browse_btn=host_widget("browse-btn");
     self.bad=host_widget("bad_btn");self.use_bin_btn=host_widget("use_bin_btn");
     self.edc_btn=host_widget("edc-btn");
+    self.recover_btn=host_widget("recover-btn");
+}
+
+static int mock_recovery_read(void *data, uint8_t *buffer, uint32_t fad) {
+    (void)data;
+    if (recovery_fault == 1 && fad == 45151) { read_calls++; return 1; }
+    if (recovery_fault == 2 && fad == 45151 && recovery_pass < 3) { read_calls++; return 1; }
+    if (recovery_fault == 5) return -1;
+    int rv = timed_cdrom_read(buffer, fad, 1);
+    if (recovery_fault == 3 && read_calls % 2) buffer[100] ^= 1; /* Disagreeing audio. */
+    return rv == ERR_OK ? 0 : 1;
+}
+
+static void mock_recovery_progress(void *data, uint32_t pass, uint32_t fad,
+        uint32_t remaining, bool recovered) {
+    (void)data; (void)fad; (void)remaining;
+    recovery_pass = pass;
+    if (recovered && ++recovered_count == stop_after) self.rip_active = 0;
 }
 
 int main(int argc,char **argv) {
     if(argc<2)return 2;
     setup();
+    if (!strcmp(argv[1], "replace-crc")) {
+        printf("%08x\n", gd_crc_replace(strtoul(argv[2],NULL,16), strtoul(argv[3],NULL,16),
+            strtoul(argv[4],NULL,16), strtoull(argv[5],NULL,10))); return 0;
+    }
+    if (!strcmp(argv[1], "recover")) {
+        gd_recovery_result_t result;
+        drive_fd = open(argv[2], O_RDONLY); assert(drive_fd >= 0);
+        uint32_t count = fs_total(drive_fd)/2352;
+        recovery_fault = atoi(argv[4]); stop_after = atoi(argv[5]);
+        int rv = gd_recover_track(argv[3], 3, 45150, count, atoi(argv[6]), true,
+            atoi(argv[7]), &self.rip_active, mock_recovery_read, mock_recovery_progress, NULL, &result);
+        printf("%d|%u|%u|%08x|%d|%llu|%s\n", rv, result.recovered, result.remaining, result.crc,
+            read_calls, (unsigned long long)read_bytes, result.error ? result.error : "OK");
+        close(drive_fd); return 0;
+    }
+    if (!strcmp(argv[1], "thread")) {
+        full_thread = 1;
+        drive_fd = open(argv[2], O_RDONLY); assert(drive_fd >= 0);
+        snprintf(self.rip_destination,sizeof(self.rip_destination),"%s",argv[3]);
+        snprintf(self.rip_name,sizeof(self.rip_name),"fixture");
+        snprintf(self.database_path,sizeof(self.database_path),"%s/redump.db",argv[3]);
+        self.recovery_mode = true; self.advanced = true; fault = atoi(argv[4]);
+        gd_ripper_thread(atoi(argv[5]) ? (void*)1 : NULL);
+        printf("%d|%d|%s|%s\n", self.recovery_prompt, self.page,
+            self.failure_stage ? self.failure_stage : "OK", self.track_label->text);
+        close(drive_fd); return 0;
+    }
     if(!strcmp(argv[1],"transition")) {
         char path[NAME_MAX];
         legacy_fs=!strcmp(argv[4],"legacy");reject_append=!strcmp(argv[4],"append");
@@ -175,9 +233,21 @@ int main(int argc,char **argv) {
         input_event(NULL,&event,EVENT_ACTION_UPDATE);assert(clicks==1);
         puts("ok");return 0;
     }
-    if(!strcmp(argv[1],"rip")) {
+    if(!strcmp(argv[1],"recovery-controls")) {
+        self.worker=(kthread_t*)1; self.disc_ready=true; self.recovery_prompt=true;
+        strcpy(self.recovery_name,"original_disc"); strcpy(self.recovery_destination,"/sd");
+        strcpy(self.selected_path,"/ide"); GUI_TextEntrySetText(self.gname,"new_disc");
+        select_page(3); focus_step(1); assert(self.focus==1);
+        queue_operation(3);
+        assert(self.request==3 && self.busy);
+        assert(!strcmp(self.rip_name,"original_disc") && !strcmp(self.rip_destination,"/sd"));
+        assert(self.recovery_mode && self.use_bin && self.advanced && !self.zero_fill);
+        puts("ok");return 0;
+    }
+    if(!strcmp(argv[1],"rip") || !strcmp(argv[1],"firstpass")) {
         drive_fd=open(argv[2],O_RDONLY);assert(drive_fd>=0);
         self.advanced=atoi(argv[4]);fault=atoi(argv[5]);self.total_sectors=fs_total(drive_fd)/2352;
+        self.recovery_mode=!strcmp(argv[1],"firstpass");
         int rv=rip_sec(3,45150,self.total_sectors,4,argv[3]);
         printf("%d %d %llu %08x %llu\n",rv,read_calls,(unsigned long long)self.processed_sectors,
             self.current_crc,(unsigned long long)read_bytes);close(drive_fd);return 0;

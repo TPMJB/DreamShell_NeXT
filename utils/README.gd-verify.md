@@ -1,9 +1,63 @@
-# DreamShell GD Ripper 2.0.3
+# DreamShell GD Ripper 2.1.0
 
-## Upgrade for mandatory sector checks
+## First pass, then optional recovery
+
+Enable **Advanced features > Recover damaged disc** before Start / Resume.
+This optional mode uses raw BIN and full Mode 1 address/EDC/ECC checks.
+Readable sectors are saved normally. After a failed bulk read, individual
+sectors get two attempts; those still unreadable are recorded in `.bad` and
+temporarily represented by zeros so the rest of the disc can be collected.
+These placeholders are unresolved holes, never recovered data. Normal ripping
+with this mode OFF retains its existing retry/stop behavior.
+
+After the first pass, a damaged dump displays **THIS DUMP'S A MESS.** with the
+flagged-sector count and **Try recovery / Later** buttons. The app does not
+create `rip.complete` while recovery holes remain. A clean first pass goes
+straight to the normal catalog CRC check without a prompt.
+
+Choosing **Try recovery** runs the selected pass limit (default 10, maximum 50)
+against unresolved sectors only. Each sweep tries each remaining location,
+alternates forward/backward order and reinitializes the drive between passes.
+Successful data reads must pass the existing sector address, EDC and P/Q ECC;
+the ripper does not manufacture parity to make damaged data look valid. Audio
+requires two matching reads. The drive may cache these reads, so agreement is
+not proof of independence; the final catalog CRC remains the reference.
+Each patched sector is backed up, flushed and read back from storage.
+
+**Stop** preserves progress. **Later** returns to the main screen. Keep the
+same disc, destination and folder; **Start / Resume** offers the saved recovery
+again, even after restarting the console. The app checks the disc identity
+before modifying tracks. If the pass budget runs out, it shows the number still
+unresolved and offers another recovery session. Drive/media changes and
+storage/memory faults stop the operation with an error instead of being hidden
+as ordinary bad-sector retries.
+
+`rip.recovery` saves the mode, and `rip.first-pass` records completed acquisition.
+Per-track `.recovery-base` files preserve a checksummed original CRC and target
+list; `.recovery-audio` records confirmed audio reads. `.repair-backup` keeps
+replaced bytes, and `.bad` continues to block clean verification until all its
+targets are resolved. Preserve these files with the dump. A damaged published
+baseline stops recovery rather than guessing at the previous contents.
+
+After a repair, CRC replacement math updates the whole-track CRC without
+reading unchanged portions of the track from SD. On resume it rereads only the
+original target sectors to reconcile even an interrupted sector write. The
+normal stream-CRC limitation still applies to the untouched data: this is not
+a full storage read-back. Once all holes are resolved, the app creates the
+completion marker and checks the resulting track CRCs against the catalogs.
+A remaining catalog mismatch stays a mismatch. A whole-track hash cannot tell
+us where to retry when every sector passes its internal checks.
+
+To upgrade a working 2.0.2/2.0.3 installation, replace the entire
+`DS/apps/gd_ripper` folder and confirm **2.1.0**. No bootloader change is needed.
+The new engine is covered by drive/storage fault tests and the pinned FAT16
+and FAT32 implementation, including interrupted recovery and remounts. Actual
+recovery yield and drive timing still require Dreamcast hardware testing.
+
+## Mandatory sector checks introduced in 2.0.3
 
 Merge the release's `DS/apps/gd_ripper` folder onto the card and confirm GD
-Ripper **2.0.3**. A working 2.0.2 installation already has the required core;
+Ripper **2.1.0**. A working 2.0.2 installation already has the required core;
 no bootloader update is required. For older installations, merge the entire
 release `DS` folder so the core and app are updated together.
 
@@ -70,7 +124,7 @@ or explicitly creates a missing file with `O_CREAT | O_EXCL`, then seeks to
 its end. Existing records are preserved. The fix is tested using the production
 logger/checkpoint code and the pinned FatFs on in-memory FAT16/FAT32 volumes.
 
-For current installations, follow the 2.0.3 upgrade above. Keep the
+For current installations, follow the upgrade above. Keep the
 existing dump files; **Start / Resume** can continue a partial rip in the same
 folder. Previously written invalid sectors require a scan/repair or the
 restricted Time Stalkers recovery described above.
@@ -122,6 +176,8 @@ IDE and PC buttons plus an editable path. Settings show ON/OFF in words.
 
 ## Advanced features
 
+- **Recover damaged disc**: collect readable data first and ask before targeted
+  recovery passes; see the workflow above. This mode forces BIN and ECC checks.
 - **Advanced CRC (ECC + repair)**: adds ECC parity checks to the mandatory raw
   Mode 1 sync/address/EDC checks and enables repair of saved suspects. Invalid
   reads fall back to individual-sector retries before writing. The console
@@ -137,7 +193,8 @@ IDE and PC buttons plus an editable path. Settings show ON/OFF in words.
 - Track format defaults to 2352-byte BIN. 2048-byte ISO cannot match these raw
   track catalogs. Read-attempt choices are 1, 5, 10, 20 and 50.
 
-To repair a previously completed dump, scan it first. If suspects were found,
+To use the older saved-dump repair path, leave Recover damaged disc OFF and
+scan the dump first. If suspects were found,
 insert the same disc, enable **Advanced CRC during rip**, keep the same
 folder/destination, then choose **Start / Resume**. The app checks the TOC and
 boot-sector identity, rereads flagged sectors, and accepts only reads that pass

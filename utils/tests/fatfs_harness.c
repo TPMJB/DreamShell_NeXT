@@ -1,5 +1,6 @@
 /* Run the production logger/checkpoint writer against the pinned FatFs, on an
  * in-memory FAT volume. Only block I/O and the KOS VFS boundary are adapted. */
+#define _GNU_SOURCE
 #include "../../applications/gd_ripper/modules/module.c"
 #include "ff.h"
 #include "diskio.h"
@@ -83,8 +84,38 @@ ssize_t fs_read(file_t fd, void *buffer, size_t size) {
 int fs_close(file_t fd) { used[fd] = false; return result(f_close(&files[fd])); }
 int fs_complete(file_t fd, ssize_t *n) { *n = 0; return result(f_sync(&files[fd])); }
 int fs_unlink(const char *path) { return result(f_unlink(path)); }
+int rename(const char *from, const char *to) { return result(f_rename(from, to)); }
+void thd_pass(void) {}
 uint64_t timer_ms_gettime64(void) { return 123456; }
 void ds_printf(const char *format, ...) { (void)format; }
+
+/* The production parser uses stdio on top of the same VFS. Adapt its read-only
+ * FILE streams to the real FAT volume, instead of silently testing host files. */
+static ssize_t cookie_read(void *cookie, char *buffer, size_t n) {
+    return fs_read(*(file_t *)cookie, buffer, n);
+}
+static int cookie_close(void *cookie) {
+    int rv = fs_close(*(file_t *)cookie); free(cookie); return rv;
+}
+FILE *fopen(const char *path, const char *mode) {
+    assert(!strcmp(mode,"r") || !strcmp(mode,"rb"));
+    file_t *cookie = malloc(sizeof(*cookie));
+    if (!cookie) return NULL;
+    *cookie = fs_open(path, O_RDONLY);
+    if (*cookie == FILEHND_INVALID) { free(cookie); return NULL; }
+    cookie_io_functions_t io = { .read = cookie_read, .close = cookie_close };
+    FILE *fp = fopencookie(cookie,"r",io);
+    if (!fp) cookie_close(cookie);
+    return fp;
+}
+
+static bool stubborn;
+static int audio_read(void *data, uint8_t *buffer, uint32_t fad) {
+    (void)data;
+    if (stubborn && fad == 45152) return 1;
+    memset(buffer, (fad-45150)*17, 2352);
+    return 0;
+}
 
 static void read_text(const char *path, char *buffer, size_t size) {
     file_t fd = fs_open(path, O_RDONLY);
@@ -139,6 +170,38 @@ int main(int argc, char **argv) {
     assert(strstr(text, "track,track_sector") == text);
     assert(!strstr(text + 1, "track,track_sector"));
 
+    /* Baseline creation/rename, in-place writes, audio confirmation and CRC
+     * updates must survive an actual FAT unmount, including an unfinished queue. */
+    const char *track_path = "/TIME_STALKERS/track03.bin";
+    uint8_t track_data[2352*3] = {0};
+    file_t fd = fs_open(track_path, O_WRONLY | O_CREAT | O_TRUNC);
+    assert(fd != FILEHND_INVALID);
+    assert(fs_write(fd, track_data, sizeof(track_data)) == sizeof(track_data));
+    assert(fs_close(fd) == 0);
+    tag = gd_crc_tag(3, 45150, 3, 2352);
+    assert(gd_crc_checkpoint(track_path, tag, sizeof(track_data), crc32(0, track_data, sizeof(track_data)), true) == CMD_OK);
+    volatile int active = 1;
+    gd_recovery_result_t recovery;
+    stubborn = true;
+    assert(gd_recover_track(track_path, 3, 45150, 3, 0, true, 1, &active,
+        audio_read, NULL, NULL, &recovery) == CMD_OK);
+    assert(recovery.recovered == 1 && recovery.remaining == 1);
+    assert(f_mount(NULL, "0:", 0) == FR_OK);
+    assert(f_mount(&volume, "0:", 1) == FR_OK);
+    stubborn = false;
+    assert(gd_recover_track(track_path, 3, 45150, 3, 0, true, 1, &active,
+        audio_read, NULL, NULL, &recovery) == CMD_OK);
+    assert(recovery.recovered == 1 && recovery.remaining == 0);
+    fd = fs_open(track_path, O_RDONLY);
+    assert(fd != FILEHND_INVALID && fs_read(fd, track_data, sizeof(track_data)) == sizeof(track_data));
+    assert(fs_close(fd) == 0);
+    assert(recovery.crc == crc32(0, track_data, sizeof(track_data)));
+    assert(track_data[2352] == 17 && track_data[4704] == 34);
+    uint64_t saved_bytes; uint32_t saved_crc;
+    assert(gd_crc_restore(track_path, tag, sizeof(track_data), 2352, &saved_bytes, &saved_crc));
+    assert(saved_bytes == sizeof(track_data) && saved_crc == recovery.crc);
+    assert(fs_open("/TIME_STALKERS/track03.bin.bad", O_RDONLY) == FILEHND_INVALID && errno == ENOENT);
+
     /* Failed opens must not turn into truncation or silent success. */
     assert(gd_open_append("/MISSING/rip.log") == FILEHND_INVALID);
     assert(f_chmod(self.log_path, AM_RDO, AM_RDO) == FR_OK);
@@ -150,7 +213,7 @@ int main(int argc, char **argv) {
     fail_writes = true;
     assert(rip_log("failed flush") == CMD_ERROR);
     fail_writes = false;
-    puts("FAT log creation, append, CRC checkpoints and failure handling passed");
+    puts("FAT log creation, recovery, remount, CRC checkpoints and failure handling passed");
     free(disk);
     return 0;
 }

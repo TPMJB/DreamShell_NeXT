@@ -22,6 +22,7 @@ class FatMetadataTests(unittest.TestCase):
             '-include', 'utils/tests/fatfs_host_types.h',
             '-Iutils/tests/console_shim', '-Iinclude/SDL', '-I' + str(fat),
             'utils/tests/fatfs_harness.c', 'applications/gd_ripper/modules/checksum.c',
+            'applications/gd_ripper/modules/recovery.c',
             str(fat / 'ff.c'), str(fat / 'option/unicode.c'),
             '-Wl,--gc-sections', '-lz', '-o', str(cls.exe),
         ], cwd=ROOT, check=True)

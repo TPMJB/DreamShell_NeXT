@@ -14,6 +14,11 @@
 unsigned gd_check_sector_edc(const uint8_t *sector, uint32_t fad);
 unsigned gd_check_sector(const uint8_t *sector, uint32_t fad);
 
+/* Update a whole-file CRC after an equal-length replacement, without reading
+ * the unchanged suffix. Both sector CRCs start from crc32(0, ...). */
+uint32_t gd_crc_replace(uint32_t whole, uint32_t before, uint32_t after,
+    uint64_t suffix_bytes);
+
 /* Serialized metadata writes: explicitly create missing files, then seek to
  * append. Avoid the pinned FAT handler's O_APPEND and plain O_CREAT paths. */
 file_t gd_open_append(const char *path);

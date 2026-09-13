@@ -141,6 +141,13 @@ GD Ripper now calculates CRC while ripping, checkpoints it for resume, and
 compares completed tracks with bundled TOSEC and Redump catalogs. Normal
 verification no longer rereads the whole dump through serial SD.
 
+GD Ripper 2.1.0 adds an optional **Recover damaged disc** mode: collect readable
+sectors first, then ask before running targeted recovery passes. Unresolved
+holes remain explicitly incomplete. Recovery resumes from its saved queue,
+validates and reads back replacements, and updates track CRCs without another
+full SD read. Replace the entire `DS/apps/gd_ripper` folder to upgrade from a
+working 2.0.2/2.0.3 installation.
+
 The redesigned interface uses direct controller/button selection, automatic
 disc-title detection, explicit Stop/error status, and an Advanced Features
 page. Optional advanced checks validate data-sector addresses and EDC/ECC,

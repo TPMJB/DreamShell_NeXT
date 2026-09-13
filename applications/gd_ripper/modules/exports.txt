@@ -9,6 +9,7 @@ gd_ripper_Gamename
 gd_ripper_Number_read
 gd_ripper_StartRip
 gd_ripper_Verify
+gd_ripper_Recover
 gd_ripper_CancelRip
 gd_ripper_Quit
 gd_ripper_Advanced

@@ -11,6 +11,7 @@
 #include "isofs/isofs.h"
 #include "verify.h"
 #include "checksum.h"
+#include "recovery.h"
 #include "app_module.h"
 #include <zlib/zlib.h>
 #include <stdint.h>
@@ -49,6 +50,7 @@ static int safe_cdrom_read_toc(cd_toc_t *toc, bool high_density);
 static int safe_cdrom_reinit(void);
 static int prepare_destination_paths(char *dst_folder, char *dst_file, char *text, int disc_type, bool *resume);
 static int process_tracks(char *dst_folder, char *dst_file);
+static int get_existing_file_size(const char *path, uint64_t *size);
 static const char *get_sector_info(uint32_t track_type, uint32_t *sector_size);
 
 typedef struct {
@@ -87,6 +89,7 @@ static struct self {
 	GUI_Widget *browse_btn;
 	GUI_Widget *edc_btn;
 	GUI_Widget *verify_btn;
+    GUI_Widget *recover_btn;
 
 	GUI_Widget *speed_label;
 	GUI_Widget *time_label;
@@ -112,6 +115,9 @@ static struct self {
 	bool zero_fill;
 	bool use_bin;
     bool advanced;
+    bool recovery_mode;
+    bool recovery_prompt;
+    char recovery_name[NAME_MAX], recovery_destination[NAME_MAX];
     volatile int busy;
     volatile int request;
     volatile int shutdown;
@@ -445,7 +451,7 @@ void gd_ripper_Number_read(void) {
     if (self.busy) return;
     self.max_attempts = self.max_attempts == 1 ? 5 : self.max_attempts == 5 ? 10 :
         self.max_attempts == 10 ? 20 : self.max_attempts == 20 ? 50 : 1;
-    snprintf(label, sizeof(label), "Read attempts per sector: %d", self.max_attempts);
+    snprintf(label, sizeof(label), "Retry / recovery pass limit: %d", self.max_attempts);
     GUI_LabelSetText(GUI_ButtonGetCaption(self.num_read), label);
 }
 
@@ -574,6 +580,7 @@ void gd_ripper_Init(App_t *app, const char* fileName)
         self.browse_btn = APP_GET_WIDGET("browse-btn");
         self.edc_btn = APP_GET_WIDGET("edc-btn");
 		self.verify_btn = APP_GET_WIDGET("verify-btn");
+        self.recover_btn = APP_GET_WIDGET("recover-btn");
 
 		self.speed_label = APP_GET_WIDGET("speed-label");
 		self.time_label = APP_GET_WIDGET("time-label");
@@ -626,28 +633,43 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 
 
 static void queue_operation(int operation) {
-    if (!self.worker || (operation == 1 && !self.disc_ready) || !claim_worker()) return;
+    if (!self.worker || (operation != 2 && !self.disc_ready) ||
+            (operation == 3 && !self.recovery_prompt) || !claim_worker()) return;
     reset_rip_state();
     if (self.max_attempts < 1) self.max_attempts = 1;
     if (self.max_attempts > 50) self.max_attempts = 50;
     self.zero_fill = !!GUI_WidgetGetState(self.bad);
     self.use_bin = !!GUI_WidgetGetState(self.use_bin_btn);
     self.advanced = !!GUI_WidgetGetState(self.edc_btn);
-    sanitize_rip_name(self.rip_name, sizeof(self.rip_name), GUI_TextEntryGetText(self.gname));
+    self.recovery_mode = !!GUI_WidgetGetState(self.recover_btn) || operation == 3;
+    if (self.recovery_mode) { self.use_bin = true; self.advanced = true; self.zero_fill = false; }
+    if (operation == 3) {
+        /* The prompt owns a frozen target. Disc auto-naming must never redirect
+         * a pending recovery into another game's folder. */
+        snprintf(self.rip_name, sizeof(self.rip_name), "%s", self.recovery_name);
+        snprintf(self.rip_destination, sizeof(self.rip_destination), "%s", self.recovery_destination);
+    } else {
+        sanitize_rip_name(self.rip_name, sizeof(self.rip_name), GUI_TextEntryGetText(self.gname));
+        snprintf(self.rip_destination, sizeof(self.rip_destination), "%s", self.selected_path);
+    }
     GUI_TextEntrySetText(self.gname, self.rip_name);
-    snprintf(self.rip_destination, sizeof(self.rip_destination), "%s", self.selected_path);
+    self.recovery_prompt = false;
     self.rip_active = 1;
     self.busy = 1;
     self.request = operation;
     select_page(0);
     refresh_controls();
-    GUI_LabelSetText(self.track_label, operation == 1 ? "Starting rip..." : "Reading saved dump...");
-    set_message(operation == 1 ? "Sector EDC and track CRC are checked while ripping." :
+    GUI_LabelSetText(self.track_label, operation == 3 ? "Preparing recovery..." :
+        operation == 1 ? "Starting rip..." : "Reading saved dump...");
+    set_message(operation == 3 ? "Checking the disc and saved recovery queue before rereading flagged sectors." :
+        operation == 1 && self.recovery_mode ? "First pass: two tries per failed sector, then defer it. Recovery will ask before starting." :
+        operation == 1 ? "Sector EDC and track CRC are checked while ripping." :
         "Advanced CRC: storage read-back + data-sector scan. This can take 30 minutes on SD.");
 }
 
 void gd_ripper_StartRip(GUI_Widget *widget) { (void)widget; queue_operation(1); }
 void gd_ripper_Verify(GUI_Widget *widget) { (void)widget; queue_operation(2); }
+void gd_ripper_Recover(GUI_Widget *widget) { (void)widget; queue_operation(3); }
 
 void gd_ripper_CancelRip(GUI_Widget *widget) {
     (void)widget;
@@ -1075,21 +1097,170 @@ static int process_tracks(char *dst_folder, char *dst_file) {
 	return CMD_OK;
 }
 
-static int write_completion_marker(const char *dst_folder) {
-	char path[NAME_MAX];
-	FILE *fp;
+/* Recovery markers are exact, durable records. A partial marker is an error,
+ * never permission to skip acquisition or bind a different disc. */
+static int recovery_marker(const char *folder, const char *name, const char *value, bool create) {
+    char path[NAME_MAX], saved[100];
+    file_t fd;
+    int length = strlen(value), rv;
+    if (length > (int)sizeof(saved)) return -1;
+    if (snprintf(path, sizeof(path), "%s/%s", folder, name) >= (int)sizeof(path)) return -1;
+    fd = fs_open(path, O_RDONLY);
+    if (fd != FILEHND_INVALID) {
+        rv = fs_total(fd) == length && fs_read(fd, saved, length) == length &&
+            !memcmp(saved, value, length) ? 1 : -1;
+        if (fs_close(fd)) rv = -1;
+        return rv;
+    }
+    if (errno != ENOENT) return -1;
+    if (!create) return 0;
+    fd = fs_open(path, O_WRONLY | O_CREAT | O_EXCL);
+    if (fd == FILEHND_INVALID) return -1;
+    rv = fs_write(fd, value, length) == length && sync_track(fd) == CMD_OK ? 1 : -1;
+    if (fs_close(fd)) rv = -1;
+    return rv;
+}
 
-	snprintf(path, sizeof(path), "%s/rip.complete", dst_folder);
-	fp = fopen(path, "w");
-	if (!fp) {
-		return CMD_ERROR;
-	}
-	fprintf(fp, "Complete: %llu sectors\n",
-		(unsigned long long)self.total_sectors);
-	if (fclose(fp) != 0) {
-		return CMD_ERROR;
-	}
-	return CMD_OK;
+static int count_recovery_targets(const char *folder, uint32_t *total) {
+    char path[NAME_MAX];
+    *total = 0;
+    for (uint32_t i = 0; i < self.track_count; ++i) {
+        track_info_t *t = &self.tracks[i];
+        uint32_t targets = 0;
+        if (snprintf(path, sizeof(path), "%s/%s", folder, t->filename) >= (int)sizeof(path) ||
+                gd_recovery_count(path, t->track_num, t->start_lba, t->sector_count, &targets) != CMD_OK)
+            return storage_error("Recovery queue invalid", path, errno);
+        *total += targets;
+    }
+    return CMD_OK;
+}
+
+static void show_recovery_prompt(uint32_t targets, bool attempted) {
+    char line[128];
+    self.recovery_prompt = true;
+    snprintf(self.recovery_name, sizeof(self.recovery_name), "%s", self.rip_name);
+    snprintf(self.recovery_destination, sizeof(self.recovery_destination), "%s", self.rip_destination);
+    GUI_LabelSetText(self.track_label, "Incomplete - recovery available");
+    snprintf(line, sizeof(line), "%lu %s sectors. Want to try recovery?", (unsigned long)targets,
+        attempted ? "unresolved" : "flagged");
+    GUI_LabelSetText(APP_GET_WIDGET("recovery-count"), line);
+    GUI_LabelSetText(APP_GET_WIDGET("recovery-folder"), self.recovery_name);
+    snprintf(line, sizeof(line), "Up to %d passes; only flagged sectors are reread.", self.max_attempts);
+    GUI_LabelSetText(APP_GET_WIDGET("recovery-limit"), line);
+    set_message("First pass saved, but this dump is incomplete. Start / Resume will offer targeted recovery again.");
+    GUI_LabelSetText(self.progress_percent_label, "Recovery needed");
+    GUI_LabelSetText(self.time_label, "Progress saved");
+    GUI_LabelSetText(self.speed_label, "First pass finished");
+    rip_log("Recovery offered: %lu %s sectors, %d pass limit; awaiting user choice",
+        (unsigned long)targets, attempted ? "unresolved" : "flagged", self.max_attempts);
+    select_page(3);
+}
+
+typedef struct { uint32_t track, type, last_pass, drive_pass; } recovery_context_t;
+
+static int recovery_read_sector(void *data, uint8_t *buffer, uint32_t fad) {
+    recovery_context_t *context = data;
+    int rv;
+    if (!self.rip_active) return -1;
+    if (context->last_pass > 1 && context->last_pass != context->drive_pass) {
+        set_io_status("Recovery reset", fad);
+        rv = safe_cdrom_reinit();
+        if (rv == ERR_OK) rv = safe_cdrom_set_sector_size(2352);
+        if (rv != ERR_OK) {
+            drive_error("Drive recovery failed", context->track, fad, rv); return -1;
+        }
+    }
+    context->drive_pass = context->last_pass;
+    set_io_status("Recovery read", fad);
+    rv = timed_cdrom_read(buffer, fad, 1);
+    if (rv == ERR_OK) {
+        unsigned flags = context->type == 4 ? gd_check_sector(buffer, fad) : 0;
+        if (!flags) return 0;
+        rip_log("Recovery track %lu FAD %lu: validation failed, flags=%u",
+            (unsigned long)context->track, (unsigned long)fad, flags);
+        return 1;
+    }
+    rip_log("Recovery track %lu FAD %lu: read error %d", (unsigned long)context->track,
+        (unsigned long)fad, rv);
+    if (rv == ERR_NO_DISC || rv == ERR_DISC_CHG) {
+        drive_error("Disc removed / changed", context->track, fad, rv); return -1;
+    }
+    if (rv == ERR_TIMEOUT) {
+        rv = safe_cdrom_reinit();
+        if (rv == ERR_OK) rv = safe_cdrom_set_sector_size(2352);
+        if (rv != ERR_OK) {
+            drive_error("Drive recovery failed", context->track, fad, rv); return -1;
+        }
+    }
+    return 1;
+}
+
+static void recovery_progress(void *data, uint32_t pass, uint32_t fad,
+        uint32_t remaining, bool recovered) {
+    recovery_context_t *context = data;
+    char line[128];
+    if (pass && pass != context->last_pass) {
+        rip_log("Recovery track %lu: pass %lu/%d, %lu remaining",
+            (unsigned long)context->track, (unsigned long)pass, self.max_attempts,
+            (unsigned long)remaining);
+        context->last_pass = pass;
+    }
+    if (recovered) rip_log("Recovered track %lu FAD %lu; %lu remaining",
+        (unsigned long)context->track, (unsigned long)fad, (unsigned long)remaining);
+    snprintf(line, sizeof(line), pass ? "Recovery T%lu pass %lu/%d" : "Checking saved recovery T%lu",
+        (unsigned long)context->track, (unsigned long)pass, self.max_attempts);
+    GUI_LabelSetText(self.track_label, line);
+    snprintf(line, sizeof(line), "Track %lu: %lu unresolved", (unsigned long)context->track,
+        (unsigned long)remaining);
+    GUI_LabelSetText(self.progress_percent_label, line);
+    GUI_LabelSetText(self.time_label, "B / Stop to pause");
+    GUI_LabelSetText(self.speed_label, "Targeted sector recovery");
+    set_io_status(pass ? "Recover" : "Reconcile", fad);
+    set_message(context->type == 4 ? "Data must pass address, EDC and ECC checks. Each repaired sector is read back from storage." :
+        "Audio needs two matching reads. Drive cache may affect independence; the final catalog CRC is still required.");
+}
+
+static int recover_tracks(const char *folder, uint32_t *remaining) {
+    *remaining = 0;
+    for (uint32_t i = 0; i < self.track_count; ++i) {
+        char path[NAME_MAX];
+        track_info_t *t = &self.tracks[i];
+        gd_recovery_result_t result;
+        recovery_context_t context = { t->track_num, t->type, 0, 0 };
+        uint32_t targets;
+        snprintf(path, sizeof(path), "%s/%s", folder, t->filename);
+        if (gd_recovery_count(path, t->track_num, t->start_lba, t->sector_count, &targets) != CMD_OK)
+            return storage_error("Recovery queue invalid", path, errno);
+        if (!targets) continue;
+        if (!self.rip_active || prepare_track_mode(t->track_num, t->start_lba, 2352) != CMD_OK)
+            return CMD_ERROR;
+        if (gd_recover_track(path, t->track_num, t->start_lba, t->sector_count, t->type,
+                self.sync_mount[0] != '\0', self.max_attempts, &self.rip_active,
+                recovery_read_sector, recovery_progress, &context, &result) != CMD_OK) {
+            rip_log("Recovery stopped: %s; queue and backups preserved", result.error ? result.error : "unknown error");
+            if (self.rip_active && !self.failure_stage)
+                storage_error(result.error ? result.error : "Recovery failed", path, errno);
+            return CMD_ERROR;
+        }
+        *remaining += result.remaining;
+        rip_log("Recovery track %lu: %lu newly recovered, %lu unresolved, CRC %08lx",
+            (unsigned long)t->track_num, (unsigned long)result.recovered,
+            (unsigned long)result.remaining, (unsigned long)result.crc);
+    }
+    return CMD_OK;
+}
+
+static int write_completion_marker(const char *dst_folder) {
+    char path[NAME_MAX], line[100];
+    int n, rv;
+    if (snprintf(path, sizeof(path), "%s/rip.complete", dst_folder) >= (int)sizeof(path)) return CMD_ERROR;
+    file_t fd = fs_open(path, O_WRONLY | O_CREAT | O_TRUNC);
+    if (fd == FILEHND_INVALID) return CMD_ERROR;
+    n = snprintf(line, sizeof(line), "Complete: %llu sectors\n", (unsigned long long)self.total_sectors);
+    rv = fs_write(fd, line, n) == n && sync_track(fd) == CMD_OK ? CMD_OK : CMD_ERROR;
+    if (fs_close(fd)) rv = CMD_ERROR;
+    if (rv != CMD_OK) fs_unlink(path);
+    return rv;
 }
 
 static void* gd_ripper_thread(void *arg) {
@@ -1102,13 +1273,17 @@ static void* gd_ripper_thread(void *arg) {
 	bool destination_ready = false;
 	bool success = false;
 	bool verification_ran = false;
+    bool deferred = false;
+    bool recovering = arg != NULL;
+    int pass_complete = 0;
+    uint32_t remaining = 0;
+    char pass_record[100];
 	bool cancelled;
 	char complete_path[NAME_MAX];
 	const char *failure_label = "Rip failed";
 	gd_verify_summary_t verification_summary;
 	gd_verify_result_t verification_result = GD_VERIFY_ERROR;
 
-	(void)arg;
 	memset(&verification_summary, 0, sizeof(verification_summary));
 	verification_summary.catalog_result = GD_VERIFY_ERROR;
 
@@ -1156,6 +1331,16 @@ static void* gd_ripper_thread(void *arg) {
 	if (!self.total_sectors) {
 		goto out;
 	}
+    int recovery_saved = recovery_marker(dst_folder, "rip.recovery", "DreamShell targeted recovery v1\n", false);
+    if (recovery_saved < 0) {
+        storage_error("Recovery marker invalid", dst_folder, errno); goto out;
+    }
+    if (recovery_saved) {
+        self.recovery_mode = true;
+        GUI_WidgetSetState(self.recover_btn, 1);
+        GUI_LabelSetText(GUI_ButtonGetCaption(self.recover_btn), "Recover damaged disc: ON (first pass + prompt)");
+    }
+    if (self.recovery_mode) { self.use_bin = true; self.advanced = true; self.zero_fill = false; }
 
 	GUI_LabelSetText(self.track_label, "Preparing...");
 	ds_printf("DS_PROCESS: Preparing destination: %s\n", dst_folder);
@@ -1171,7 +1356,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.0.3: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.1.0: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -1181,6 +1366,21 @@ static void* gd_ripper_thread(void *arg) {
         goto out;
     }
     destination_ready = true;
+    if (recovering && (!resume || !recovery_saved)) {
+        failure_label = "No saved recovery for this folder"; goto out;
+    }
+    if (self.recovery_mode && recovery_marker(dst_folder, "rip.recovery",
+            "DreamShell targeted recovery v1\n", true) != 1) {
+        storage_error("Recovery marker write failed", dst_folder, errno); goto out;
+    }
+    snprintf(pass_record, sizeof(pass_record), "First pass complete: %llu sectors\n",
+        (unsigned long long)self.total_sectors);
+    if (self.recovery_mode) {
+        pass_complete = recovery_marker(dst_folder, "rip.first-pass", pass_record, false);
+        if (pass_complete < 0) {
+            storage_error("First-pass marker invalid", dst_folder, errno); goto out;
+        }
+    }
 	if (rip_log("Started %s rip with %lu track(s), %llu total sectors, retries=%d, zero-fill=%d, sector-EDC=ON, advanced-ECC=%d",
 		resume ? "resumed" : "new", (unsigned long)self.track_count,
 		(unsigned long long)self.total_sectors, self.max_attempts, self.zero_fill, self.advanced) != CMD_OK) {
@@ -1204,15 +1404,36 @@ static void* gd_ripper_thread(void *arg) {
 	}
 
 	snprintf(complete_path, sizeof(complete_path), "%s/rip.complete", dst_folder);
-	if (FileExists(complete_path)) {
-		fs_unlink(complete_path);
-	}
+    if (fs_unlink(complete_path) && errno != ENOENT) {
+        storage_error("Completion marker cleanup failed", complete_path, errno); goto out;
+    }
 
 	ds_printf("DS_PROCESS: Starting track extraction\n");
 
-	if(process_tracks(dst_folder, dst_file) != CMD_OK) {
+	if (!pass_complete && process_tracks(dst_folder, dst_file) != CMD_OK) {
 		goto out;
 	}
+    if (pass_complete) {
+        /* Do not hash the entire track if recovery was interrupted after CRC
+         * invalidation. The recovery baseline can reconcile just its targets. */
+        for (uint32_t i = 0; i < self.track_count; ++i) {
+            uint64_t size = 0;
+            snprintf(dst_file, sizeof(dst_file), "%s/%s", dst_folder, self.tracks[i].filename);
+            if (get_existing_file_size(dst_file, &size) != 1 ||
+                    size != (uint64_t)self.tracks[i].sector_count * 2352) {
+                storage_error("First-pass track size changed", dst_file, errno); goto out;
+            }
+        }
+        self.processed_sectors = self.total_sectors;
+    }
+    if (self.recovery_mode) {
+        if (recovery_marker(dst_folder, "rip.first-pass", pass_record, true) != 1) {
+            storage_error("First-pass checkpoint failed", dst_folder, errno); goto out;
+        }
+        if (count_recovery_targets(dst_folder, &remaining) != CMD_OK) goto out;
+        if (remaining && recovering && recover_tracks(dst_folder, &remaining) != CMD_OK) goto out;
+        if (remaining) { deferred = true; goto out; }
+    }
 
 	if (write_completion_marker(dst_folder) != CMD_OK) {
 		rip_log("All tracks finished, but the completion marker could not be written");
@@ -1239,7 +1460,7 @@ static void* gd_ripper_thread(void *arg) {
 
 out:
 	cancelled = !self.rip_active;
-	if (!success && self.log_path[0]) {
+	if (!success && !deferred && self.log_path[0]) {
 		rip_log(cancelled ? "Rip cancelled; partial files preserved" :
 			"Rip paused after an error; partial files preserved for resume");
 	}
@@ -1249,7 +1470,10 @@ out:
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
 
 	GUI_WidgetSetEnabled(self.verify_btn, 1);
-	if (success && verification_ran) {
+	if (deferred) {
+        show_recovery_prompt(remaining, recovering);
+    }
+    else if (success && verification_ran) {
 		show_verify_result(&verification_summary, verification_result,
 			verification_result == GD_VERIFY_CANCELLED ?
 			"Rip complete / verify stopped" : NULL);
@@ -1697,7 +1921,7 @@ static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
         const uint8_t *sector = (const uint8_t *)buffer + i * 2352;
         unsigned flags = self.advanced ? gd_check_sector(sector, fad + i) :
             gd_check_sector_edc(sector, fad + i);
-        if (flags && flags != GD_SECTOR_UNSUPPORTED) {
+        if (flags && (self.recovery_mode || flags != GD_SECTOR_UNSUPPORTED)) {
             rip_log("Sector validation failed at FAD %lu (flags=%u: sync=1 address=2 EDC=4 ECC=8)",
                 (unsigned long)(fad + i), flags);
             return ERR_SYS;
@@ -1718,8 +1942,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 	uint8_t *buffer;
 	char bad_file[NAME_MAX];
 	char track_text[64];
-	int max_attempts = self.max_attempts;
-	bool zero_fill = self.zero_fill;
+	int max_attempts = self.recovery_mode ? 2 : self.max_attempts;
+	bool zero_fill = self.zero_fill || self.recovery_mode;
 	int size_status;
 
 	get_sector_info(type, &secbyte);
@@ -1736,7 +1960,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		return CMD_ERROR;
 	}
 
-    if (self.advanced && type == 4 && secbyte == 2352 && existing_bytes &&
+    if (!self.recovery_mode && self.advanced && type == 4 && secbyte == 2352 && existing_bytes &&
             repair_suspects(dst_file, first, existing_bytes / secbyte) != CMD_OK) {
         rip_log("Repair pass failed; original backups and partial files preserved");
         return CMD_ERROR;
@@ -1775,6 +1999,15 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 			FileExists(bad_file)) {
 			fs_unlink(bad_file);
 		}
+        /* A genuinely new track must not inherit an older recovery baseline. */
+        const char *suffixes[] = { ".recovery-base", ".recovery-base.tmp", ".recovery-audio" };
+        for (unsigned i = 0; i < sizeof(suffixes)/sizeof(suffixes[0]); ++i) {
+            if (snprintf(bad_file, sizeof(bad_file), "%s%s", dst_file, suffixes[i]) >= (int)sizeof(bad_file) ||
+                    (fs_unlink(bad_file) && errno != ENOENT)) {
+                if (hnd != FILEHND_INVALID) fs_close(hnd);
+                free(buffer); return storage_error("Old recovery cleanup failed", dst_file, errno);
+            }
+        }
 	}
 	else {
 		hnd = fs_open(dst_file, O_WRONLY);
@@ -1953,7 +2186,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 						rip_log("Failed to record zero-filled FAD %lu", (unsigned long)fad);
 						fs_close(hnd); free(buffer); return CMD_ERROR;
 					}
-					rip_log("Zero-filled unreadable FAD %lu after %d attempts",
+					rip_log(self.recovery_mode ? "Deferred FAD %lu after %d attempts; placeholder is NOT recovered data" :
+                        "Zero-filled unreadable FAD %lu after %d attempts",
 						(unsigned long)fad, max_attempts);
 				}
 
@@ -2130,6 +2364,13 @@ static void refresh_controls(void) {
     GUI_WidgetSetEnabled(self.advanced_btn, !self.busy);
     GUI_WidgetSetEnabled(self.browse_btn, !self.busy);
     GUI_WidgetSetEnabled(self.gname, !self.busy);
+    bool recovery = !!GUI_WidgetGetState(self.recover_btn);
+    GUI_WidgetSetEnabled(self.recover_btn, !self.busy);
+    GUI_WidgetSetEnabled(self.bad, !self.busy && !recovery);
+    GUI_WidgetSetEnabled(self.use_bin_btn, !self.busy && !recovery);
+    GUI_WidgetSetEnabled(self.edc_btn, !self.busy && !recovery);
+    GUI_WidgetSetEnabled(APP_GET_WIDGET("recovery-start"), !self.busy && self.disc_ready && self.recovery_prompt);
+    GUI_WidgetSetEnabled(APP_GET_WIDGET("recovery-later"), !self.busy);
 }
 
 static void *service_thread(void *arg) {
@@ -2142,6 +2383,7 @@ static void *service_thread(void *arg) {
             self.request = 0;
             self.start_time = timer_ms_gettime64();
             if (operation == 1) gd_ripper_thread(NULL);
+            else if (operation == 3) gd_ripper_thread((void *)1);
             else gd_verify_thread(NULL);
             self.busy = 0;
             self.rip_active = 0;
@@ -2198,28 +2440,33 @@ static void *service_thread(void *arg) {
 }
 
 static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn"};
-static const char *advanced_focus[] = {"edc-btn", "verify-btn", "bad_btn", "use_bin_btn", "num-read", "advanced-back"};
+static const char *advanced_focus[] = {"recover-btn", "edc-btn", "verify-btn", "bad_btn", "use_bin_btn", "num-read", "advanced-back"};
 static const char *destination_focus[] = {"device-sd", "device-ide", "device-pc", "destination-entry", "destination-confirm", "destination-back"};
+static const char *recovery_focus[] = {"recovery-start", "recovery-later"};
+
+static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : 6; }
 
 static GUI_Widget *focus_widget(int index) {
-    const char **names = self.page == 2 ? advanced_focus : self.page == 1 ? destination_focus : main_focus;
+    const char **names = self.page == 3 ? recovery_focus : self.page == 2 ? advanced_focus :
+        self.page == 1 ? destination_focus : main_focus;
     return APP_GET_WIDGET(names[index]);
 }
 
 static void focus_step(int direction) {
-    for (int i = 0; i < 6; ++i) GUI_WidgetClearFlags(focus_widget(i), WIDGET_INSIDE);
-    for (int i = 0; i < 6; ++i) {
-        self.focus = (self.focus + direction + 6) % 6;
+    int count = focus_count();
+    for (int i = 0; i < count; ++i) GUI_WidgetClearFlags(focus_widget(i), WIDGET_INSIDE);
+    for (int i = 0; i < count; ++i) {
+        self.focus = (self.focus + direction + count) % count;
         if (!(GUI_WidgetGetFlags(focus_widget(self.focus)) & (WIDGET_DISABLED | WIDGET_HIDDEN))) break;
     }
     GUI_WidgetSetFlags(focus_widget(self.focus), WIDGET_INSIDE);
 }
 
 static void select_page(int page) {
-    for (int i = 0; i < 6; ++i) GUI_WidgetClearFlags(focus_widget(i), WIDGET_INSIDE);
+    for (int i = 0; i < focus_count(); ++i) GUI_WidgetClearFlags(focus_widget(i), WIDGET_INSIDE);
     self.page = page;
     GUI_CardStackShowIndex(self.pages, page);
-    self.focus = 5;
+    self.focus = focus_count()-1;
     focus_step(1);
 }
 
@@ -2229,12 +2476,23 @@ void gd_ripper_Toggle(GUI_Widget *widget) {
     if (self.busy) return;
     int enabled = !GUI_WidgetGetState(widget);
     GUI_WidgetSetState(widget, enabled);
-    const char *label = widget == self.bad ?
+    const char *label = widget == self.recover_btn ?
+        (enabled ? "Recover damaged disc: ON (first pass + prompt)" : "Recover damaged disc: OFF") :
+        widget == self.bad ?
         (enabled ? "Zero-fill unreadable sectors: ON" : "Zero-fill unreadable sectors: OFF") :
         widget == self.edc_btn ?
         (enabled ? "Advanced CRC (ECC + repair): ON" : "Advanced CRC (ECC + repair): OFF") :
         (enabled ? "Track format: BIN (raw, recommended)" : "Track format: ISO (no catalog CRC match)");
     GUI_LabelSetText(GUI_ButtonGetCaption(widget), label);
+    if (widget == self.recover_btn && enabled) {
+        GUI_WidgetSetState(self.use_bin_btn, 1);
+        GUI_WidgetSetState(self.edc_btn, 1);
+        GUI_WidgetSetState(self.bad, 0);
+        GUI_LabelSetText(GUI_ButtonGetCaption(self.use_bin_btn), "Track format: BIN (raw, recommended)");
+        GUI_LabelSetText(GUI_ButtonGetCaption(self.edc_btn), "Advanced CRC (ECC + repair): ON");
+        GUI_LabelSetText(GUI_ButtonGetCaption(self.bad), "Zero-fill unreadable sectors: OFF");
+    }
+    refresh_controls();
 }
 
 void gd_ripper_Destination(GUI_Widget *widget) {

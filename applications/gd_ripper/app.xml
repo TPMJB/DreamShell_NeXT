@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="GD Ripper" version="2.0.3" icon="images/icon.png">
+<app name="GD Ripper" version="2.1.0" icon="images/icon.png">
   <resources>
     <module src="modules/app_gd_ripper.klf" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="16" name="body" />
@@ -131,7 +131,7 @@
     <cardstack name="pages">
       <panel name="main-page" width="640" height="480">
         <label x="24" y="16" width="592" height="28" font="title" color="#E7EEF4" text="GD RIPPER  /  NeXT" align="left" valign="center" />
-        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.0.3  |  DreamShell NeXT enhancements by TPMJB" align="left" valign="center" />
+        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.1.0  |  DreamShell NeXT enhancements by TPMJB" align="left" valign="center" />
         <label x="24" y="70" width="592" height="20" font="body" color="#53E1E3" text="Waiting for disc..." align="left" valign="center" name="disc-label" />
         <label x="24" y="100" width="70" height="22" font="body" color="#9BAFC1" text="Folder:" align="left" />
       <input type="text" name="gname-text" value="ripped_disc" x="96" y="96" width="520" height="28" size="120" font="body" fontcolor="#14202B" onblur="export:gd_ripper_Gamename()" />
@@ -188,28 +188,46 @@
       <panel name="advanced-page" width="640" height="480">
         <label x="24" y="20" width="592" height="28" font="title" color="#E7EEF4" text="ADVANCED FEATURES" align="left" valign="center" />
         <label x="24" y="56" width="592" height="20" font="small" color="#9BAFC1" text="Sector EDC + track CRC always run. No extra SD pass." align="left" valign="center" />
-        <input type="button" x="36" y="90" width="568" height="36" name="edc-btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
+        <input type="button" x="36" y="84" width="568" height="36" name="recover-btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
+          <label font="body" color="#F0F6FA" text="Recover damaged disc: OFF" align="center" />
+        </input>
+        <input type="button" x="36" y="128" width="568" height="36" name="edc-btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
           <label font="body" color="#F0F6FA" text="Advanced CRC (ECC + repair): OFF" align="center" />
         </input>
-        <label x="36" y="131" width="568" height="20" font="small" color="#9BAFC1" text="Adds ECC parity checks and repair of previously flagged sectors." align="left" valign="center" />
-        <input type="button" x="36" y="159" width="568" height="36" name="verify-btn" onclick="export:gd_ripper_Verify()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
+        <input type="button" x="36" y="172" width="568" height="36" name="verify-btn" onclick="export:gd_ripper_Verify()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
           <label font="body" color="#F0F6FA" text="Scan saved dump: read-back + sector checks (slow)" align="center" />
         </input>
-        <input type="button" x="36" y="208" width="568" height="36" name="bad_btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
+        <input type="button" x="36" y="216" width="568" height="36" name="bad_btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
           <label font="body" color="#F0F6FA" text="Zero-fill unreadable sectors: OFF" align="center" />
         </input>
-        <label x="36" y="247" width="568" height="20" font="small" color="#9BAFC1" text="Zero-fill loses data. Leave OFF to stop and preserve a partial rip." align="left" valign="center" />
-        <input type="button" x="36" y="275" width="568" height="36" name="use_bin_btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
+        <input type="button" x="36" y="260" width="568" height="36" name="use_bin_btn" onclick="export:gd_ripper_Toggle()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
           <label font="body" color="#F0F6FA" text="Track format: BIN (raw, recommended)" align="center" />
         </input>
-        <input type="button" x="36" y="322" width="568" height="36" name="num-read" onclick="export:gd_ripper_Number_read()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
-          <label font="body" color="#F0F6FA" text="Read attempts per sector: 10" align="center" />
+        <input type="button" x="36" y="304" width="568" height="36" name="num-read" onclick="export:gd_ripper_Number_read()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
+          <label font="body" color="#F0F6FA" text="Retry / recovery pass limit: 10" align="center" />
         </input>
+        <label x="36" y="346" width="568" height="20" font="small" color="#9BAFC1" text="Recovery: defer bad sectors, then ask. BIN + ECC required." align="left" valign="center" />
         <label x="36" y="369" width="275" height="20" font="body" color="#9BAFC1" text="Total: --" align="left" valign="center" name="sectors-total-label" />
         <label x="329" y="369" width="275" height="20" font="body" color="#9BAFC1" text="Done: --" align="left" valign="center" name="sectors-processed-label" />
         <input type="button" x="36" y="409" width="568" height="36" name="advanced-back" onclick="export:gd_ripper_ShowMainPage()" normal="b568-36-normal" highlight="b568-36-highlight" pressed="b568-36-pressed" disabled="b568-36-disabled">
           <label font="body" color="#F0F6FA" text="&lt; Close advanced features" align="center" />
         </input>
+      </panel>
+      <panel name="recovery-page" width="640" height="480">
+        <label x="24" y="32" width="592" height="32" font="title" color="#FF9A88" text="THIS DUMP'S A MESS." align="left" valign="center" />
+        <label x="24" y="90" width="592" height="22" font="body" color="#E7EEF4" text="" name="recovery-folder" align="left" valign="center" />
+        <label x="24" y="132" width="592" height="22" font="body" color="#E7EEF4" text="" name="recovery-count" align="left" valign="center" />
+        <label x="24" y="178" width="592" height="20" font="body" color="#D0DEE9" text="The readable data is saved. Unresolved sectors are flagged." align="left" valign="center" />
+        <label x="24" y="206" width="592" height="20" font="body" color="#D0DEE9" text="This dump stays incomplete until every hole is recovered." align="left" valign="center" />
+        <label x="24" y="250" width="592" height="20" font="body" color="#D0DEE9" text="" name="recovery-limit" align="left" valign="center" />
+        <label x="24" y="278" width="592" height="20" font="body" color="#9BAFC1" text="Recovery may take a while. Stop saves progress." align="left" valign="center" />
+        <input type="button" x="24" y="349" width="260" height="44" name="recovery-start" onclick="export:gd_ripper_Recover()" normal="b260-44-normal" highlight="b260-44-highlight" pressed="b260-44-pressed" disabled="b260-44-disabled">
+          <label font="body" color="#F0F6FA" text="Try recovery" align="center" />
+        </input>
+        <input type="button" x="308" y="349" width="260" height="44" name="recovery-later" onclick="export:gd_ripper_ShowMainPage()" normal="b260-44-normal" highlight="b260-44-highlight" pressed="b260-44-pressed" disabled="b260-44-disabled">
+          <label font="body" color="#F0F6FA" text="Later" align="center" />
+        </input>
+        <label x="24" y="414" width="592" height="20" font="small" color="#9BAFC1" text="Same disc + folder, Start / Resume: return to recovery." align="left" valign="center" />
       </panel>
     </cardstack>
   </body>
