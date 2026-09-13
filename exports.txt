@@ -55,6 +55,7 @@ include sfx.h
 include audio/snddrv.h
 
 start
+pvr_wait_render_done
 expt_init
 expt_shutdown
 expt_get_stack
@@ -1063,6 +1064,7 @@ GUI_ScreenGetSurface
 #GUI_ScreenDrawMouse
 #GUI_ScreenSetMouse
 GUI_ScreenSetJoySelectState
+GUI_ScreenGetJoySelectState
 GUI_ScreenEvent
 GUI_ScreenDoUpdate
 GUI_ScreenDraw

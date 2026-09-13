@@ -18,6 +18,7 @@ void gd_ripper_CancelRip(GUI_Widget *widget);
 void gd_ripper_Quit(GUI_Widget *widget);
 void gd_ripper_Advanced(GUI_Widget *widget);
 void gd_ripper_Toggle(GUI_Widget *widget);
+void gd_ripper_Folder(GUI_Widget *widget);
 void gd_ripper_Destination(GUI_Widget *widget);
 void gd_ripper_ShowFileBrowser(GUI_Widget *widget);
 void gd_ripper_ShowMainPage(GUI_Widget *widget);

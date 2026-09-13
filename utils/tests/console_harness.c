@@ -2,9 +2,19 @@
 #include "console_shim/ds.h"
 #include "../../applications/gd_ripper/modules/module.c"
 #include <assert.h>
+#include <dirent.h>
+static const char *mount_root;
+static DIR *dirs[1024];
+static const char *map_path(const char *p) {
+    static char mapped[2048];
+    if (mount_root && !strncmp(p,"/sd",3) && (!p[3] || p[3]=='/')) { snprintf(mapped,sizeof(mapped),"%s%s",mount_root,p+3); return mapped; }
+    return p;
+}
 
-static GUI_Widget widgets[64];
-static char widget_names[64][64];
+static GUI_Widget widgets[128];
+static char widget_names[128][64];
+static GUI_Widget *focused;
+static int screen_events;
 static int nw, drive_fd = -1, read_calls, injected, fault, clicks;
 static uint32_t mode = 2352;
 static int auto_test;
@@ -13,14 +23,18 @@ static uint32_t drive_base = 45150;
 static uint64_t clock_ms = 1000, read_bytes;
 static unsigned recovery_pass, recovered_count, stop_after;
 static int recovery_fault, full_thread;
+static int scan_fault, scan_injected, scan_map_fd = -1;
+static uint8_t *scan_buffer;
+static size_t scan_buffer_size;
 GUI_Widget *host_widget(const char *name) {
     for (int i=0;i<nw;++i) if (!strcmp(widget_names[i],name)) return &widgets[i];
-    assert(nw < 64); snprintf(widget_names[nw],64,"%s",name); return &widgets[nw++];
+    assert(nw < 128); snprintf(widget_names[nw],64,"%s",name); return &widgets[nw++];
 }
+SDL_Rect GUI_FontGetTextSize(void *f, const char *s) { (void)f; return (SDL_Rect){0,0,strlen(s)*9,16}; }
 GUI_Widget *GUI_ButtonGetCaption(GUI_Widget *w) { return w; }
 GUI_Screen *GUI_GetScreen(void) { return host_widget("screen"); }
-GUI_Widget *GUI_ScreenGetFocusWidget(GUI_Screen *s) { (void)s; return NULL; }
-void GUI_ScreenEvent(GUI_Screen *s,const SDL_Event *e,int x,int y) {(void)s;(void)e;(void)x;(void)y;}
+GUI_Widget *GUI_ScreenGetFocusWidget(GUI_Screen *s) { (void)s; return focused; }
+void GUI_ScreenEvent(GUI_Screen *s,const SDL_Event *e,int x,int y) {(void)s;(void)e;(void)x;(void)y;screen_events++;}
 void GUI_ScreenSetJoySelectState(GUI_Screen *s,int v) {(void)s;(void)v;}
 void GUI_WidgetClicked(GUI_Widget *w,int x,int y) {(void)w;(void)x;(void)y;clicks++;}
 void GUI_LabelSetText(GUI_Widget *w,const char *t) {if(w) snprintf(w->text,sizeof(w->text),"%s",t);}
@@ -39,6 +53,7 @@ void GUI_EnableInput(void) {}
 void GUI_DisableInput(void) {}
 void SDL_DC_EmulateMouse(SDL_bool v) {(void)v;}
 int OpenMainApp(void) {return 0;}
+int ConsoleIsVisible(void) {return 0;}
 Event_t *AddEvent(const char *n,int t,int p,Event_func *f,void *a) {(void)n;(void)t;(void)p;(void)f;(void)a;return NULL;}
 int RemoveEvent(Event_t *e) {(void)e;return 0;}
 int SetEventActive(Event_t *e,int a) {(void)e;(void)a;return 0;}
@@ -46,12 +61,16 @@ uint64_t timer_ms_gettime64(void) {return clock_ms;}
 kthread_t *thd_create(int d,void *(*f)(void*),void *a) {(void)d;(void)f;(void)a;static kthread_t thread;return &thread;}
 int thd_join(kthread_t *t,void **r) {(void)t;(void)r;abort();}
 void thd_sleep(unsigned ms) {clock_ms+=ms;if(auto_test && clock_ms>=10000)self.shutdown=1;}
-void thd_pass(void) {clock_ms++;}
+void thd_pass(void) {
+    clock_ms++;
+    if (scan_fault == 3 && scan_buffer && !scan_injected++)
+        scan_buffer[scan_buffer_size - 16] ^= 1;
+}
 void ds_printf(const char *f,...) {(void)f;}
 const char *lib_get_name(void) {return "fixture";}
 void GetAppPath(char *b,size_t n,const char *f) {(void)f;snprintf(b,n,"/tmp");}
-int FileExists(const char *p) {struct stat st;return !stat(p,&st)&&S_ISREG(st.st_mode);}
-int DirExists(const char *p) {struct stat st;return !stat(p,&st)&&S_ISDIR(st.st_mode);}
+int FileExists(const char *p) {struct stat st;return !stat(map_path(p),&st)&&S_ISREG(st.st_mode);}
+int DirExists(const char *p) {struct stat st;return !stat(map_path(p),&st)&&S_ISDIR(st.st_mode);}
 file_t fs_open(const char *p,int f) {
     /* DC-SWAT/FatFs before 80e27b7 masks O_APPEND into the access mode,
      * and before 89f59cc writable non-truncating opens use FA_CREATE_NEW.
@@ -61,11 +80,32 @@ file_t fs_open(const char *p,int f) {
     if(fail_crc && strlen(p)>4 && !strcmp(p+strlen(p)-4,".crc") && (f&(O_WRONLY|O_RDWR))) {
         errno=ENOSPC;return -1;
     }
-    return open(p,f&~O_DIR,0600);
+    int fd = open(map_path(p),f&~O_DIR,0600);
+    if ((f&O_DIR) && fd >= 0 && fd < 1024) dirs[fd] = fdopendir(dup(fd));
+    if (scan_fault && strstr(p,".suspect")) scan_map_fd = fd;
+    return fd;
 }
 ssize_t fs_total(file_t f) {struct stat st;return fstat(f,&st)?-1:st.st_size;}
-ssize_t fs_read(file_t f,void *p,size_t n) {ssize_t rv=read(f,p,n);if(rv>0)read_bytes+=rv;return rv;}
+ssize_t fs_read(file_t f,void *p,size_t n) {
+    off_t offset = lseek(f,0,SEEK_CUR);
+    if (scan_fault == 5 && n == 2352) { errno = EIO; return -1; }
+    ssize_t rv=read(f,p,n);
+    if(rv>0)read_bytes+=rv;
+    if (scan_fault && n == 2352*16 && rv > 0) {
+        scan_buffer = p; scan_buffer_size = rv;
+        if (scan_fault == 1 && !scan_injected++) {
+            const uint8_t overwrite[] = {0x60,0x2c,0x25,0x8c,0x03,0x00,0x74,0x0c};
+            memcpy((uint8_t *)p + rv - 16, overwrite, sizeof(overwrite));
+        }
+    }
+    if (scan_fault == 2 && offset <= 15*2352+2336 && offset+rv > 15*2352+2336)
+        ((uint8_t *)p)[15*2352+2336-offset] ^= 1;
+    if (scan_fault == 6 && n == 2352) self.rip_active = 0;
+    return rv;
+}
 ssize_t fs_write(file_t f,const void *p,size_t n) {
+    if (scan_fault == 4 && f == scan_map_fd && scan_buffer && !scan_injected++)
+        scan_buffer[scan_buffer_size - 16] ^= 1;
     if (recovery_fault == 4 && n == 2352 && recovery_pass &&
             lseek(f,0,SEEK_CUR) % 2352 == 0 && !injected++)
         return write(f, p, 77); /* A torn in-place sector write. */
@@ -79,12 +119,21 @@ ssize_t fs_write(file_t f,const void *p,size_t n) {
     }
     return write(f,p,n);
 }
-int fs_close(file_t f) {return close(f);}
+int fs_close(file_t f) {if(f>=0 && f<1024 && dirs[f]){closedir(dirs[f]);dirs[f]=NULL;} return close(f);}
 off_t fs_seek(file_t f,off_t o,int w) {return lseek(f,o,w);}
 int fs_complete(file_t f,ssize_t *n) {*n=0;return fsync(f);}
 int fs_unlink(const char *p) {return unlink(p);}
 int fs_mkdir(const char *p) {return mkdir(p,0700);}
-const dirent_t *fs_readdir(file_t f) {(void)f;return NULL;}
+const dirent_t *fs_readdir(file_t f) {
+    static dirent_t out;
+    if(f<0 || f>=1024 || !dirs[f])return NULL;
+    struct dirent *ent = readdir(dirs[f]); if(!ent)return NULL;
+    struct stat st; if(fstatat(f,ent->d_name,&st,0))return NULL;
+    snprintf(out.name,sizeof(out.name),"%s",ent->d_name);
+    out.size = S_ISDIR(st.st_mode) ? -1 : st.st_size;
+    out.attr = S_ISDIR(st.st_mode) ? O_DIR : 0;
+    return &out;
+}
 int cdrom_get_status(int *s,int *t) {*s=auto_test && clock_ms>=6000 && clock_ms<7000 ? CD_STATUS_OPEN : CD_STATUS_STANDBY;*t=CD_GDROM;return ERR_OK;}
 int cdrom_change_datatype(cd_read_sec_part_t p,int t,int size) {
     (void)p;(void)t;
@@ -151,6 +200,41 @@ static void mock_recovery_progress(void *data, uint32_t pass, uint32_t fad,
 int main(int argc,char **argv) {
     if(argc<2)return 2;
     setup();
+    if (!strcmp(argv[1], "input-once")) {
+        SDL_Event e = {.type = SDL_KEYDOWN}; e.key.keysym.sym = SDLK_a;
+        focused = self.gname; input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        assert(screen_events == 1 && e.type == SDL_NOEVENT);
+        focused = NULL; e.type = SDL_MOUSEBUTTONUP;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        assert(screen_events == 2 && e.type == SDL_NOEVENT);
+        puts("ok"); return 0;
+    }
+    if (!strcmp(argv[1], "folders")) {
+        mount_root = argv[2]; strcpy(self.selected_path,"/sd");
+        self.destination_path = host_widget("destination-path");
+        gd_ripper_ShowFileBrowser(NULL);
+        assert(self.folders.count == 7 && self.folders.total == 19);
+        assert(!strcmp(self.folders.names[0],"00 dump"));
+        char first[NAME_MAX]; strcpy(first,self.folders.names[0]);
+        gd_ripper_Folder(host_widget("folder-next")); assert(self.folders.offset == 7);
+        gd_ripper_Folder(host_widget("folder-next")); assert(self.folders.offset == 14 && self.folders.count == 5);
+        gd_ripper_Folder(host_widget("folder-prev")); assert(self.folders.offset == 7);
+        gd_ripper_Folder(host_widget("folder-prev")); assert(!strcmp(first,self.folders.names[0]));
+        gd_ripper_Folder(host_widget("folder-0")); assert(selected_is_dump());
+        gd_ripper_FileBrowserConfirm(NULL);
+        assert(!strcmp(self.selected_path,"/sd") && !strcmp(self.chosen_name,"00 dump"));
+        gd_ripper_Gamename(); assert(!strcmp(GUI_TextEntryGetText(self.gname),"00 dump"));
+        gd_ripper_ShowFileBrowser(NULL);
+        gd_ripper_Folder(host_widget("folder-1"));
+        assert(!strcmp(self.folders.path,"/sd/01 empty") && !self.folders.count);
+        gd_ripper_ShowMainPage(NULL); assert(!strcmp(self.selected_path,"/sd"));
+        gd_ripper_ShowFileBrowser(NULL); gd_ripper_Folder(host_widget("folder-up"));
+        assert(!strcmp(self.folders.path,"/sd"));
+        gd_ripper_Destination(host_widget("device-ide")); assert(!self.folders.valid);
+        gd_ripper_FileBrowserConfirm(NULL); assert(!strcmp(self.selected_path,"/sd"));
+        assert(!folder_root("/sdcard") && !folder_root("/cd"));
+        puts("ok"); return 0;
+    }
     if (!strcmp(argv[1], "replace-crc")) {
         printf("%08x\n", gd_crc_replace(strtoul(argv[2],NULL,16), strtoul(argv[3],NULL,16),
             strtoul(argv[4],NULL,16), strtoull(argv[5],NULL,10))); return 0;
@@ -210,6 +294,7 @@ int main(int argc,char **argv) {
     }
     if(!strcmp(argv[1],"verify")) {
         gd_verify_summary_t summary;
+        scan_fault = argc > 5 ? atoi(argv[5]) : 0;
         gd_verify_result_t rv=gd_verify_dump_ex(argv[2],argv[3],false,&self.rip_active,NULL,NULL,&summary,atoi(argv[4]),true);
         printf("%d %u %llu\n",rv,summary.suspect_sectors,(unsigned long long)read_bytes);return 0;
     }

@@ -489,6 +489,10 @@ static int OpenAppFinish(App_t *app, const char *args) {
 		strncpy(curAppName, app->name, sizeof(curAppName) - 1);
 		curAppName[sizeof(curAppName) - 1] = '\0';
 
+        /* Set the default before onopen. Apps with their own controller input
+         * can disable GUI_Input/mouse emulation without it being re-enabled
+         * behind their back after the callback returns. */
+        if(app->tsunami == NULL) GUI_EnableInput();
 		CallAppBodyEvent(app, "onopen");
 	}
 	else {
@@ -500,14 +504,7 @@ static int OpenAppFinish(App_t *app, const char *args) {
 	}
 	ScreenFadeInEx(1);
 
-	if(app->state & APP_STATE_READY) {
-		if(app->tsunami == NULL) {
-			GUI_EnableInput();
-		}
-	}
-	else {
-		GUI_EnableInput();
-	}
+    if(!(app->state & APP_STATE_READY)) GUI_EnableInput();
 
 	ds_printf("DS_OK: App %s opened\n", app->name);
 	return 1;

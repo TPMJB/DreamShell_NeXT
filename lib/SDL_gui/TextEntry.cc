@@ -227,7 +227,7 @@ void GUI_TextEntry::SetText(const char *text)
 		return;
 	}
 
-	if (strlen(text) < buffer_size)
+	if (strlen(text) <= buffer_size)
 	{
 		strcpy(buffer, text);
 		buffer_index = strlen(text);

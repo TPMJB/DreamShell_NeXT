@@ -929,6 +929,7 @@ class GUI_Screen : public GUI_Drawable
 		void SetFocusWidget(GUI_Widget *item);
 		void SetModalWidget(GUI_Widget *widget);
 		void SetJoySelectState(int value);
+        int GetJoySelectState(void) const { return joysel_enabled; }
 		void SetBackgroundColor(SDL_Color c);
 		GUI_Widget *GetFocusWidget(void);
 		GUI_Widget *GetModalWidget(void);
@@ -1128,6 +1129,7 @@ void GUI_ScreenSetBackgroundColor(GUI_Screen *screen, SDL_Color c);
 GUI_Widget *GUI_ScreenGetFocusWidget(GUI_Screen *screen);
 //void GUI_ScreenDrawMouse(GUI_Screen *screen); 
 void GUI_ScreenSetJoySelectState(GUI_Screen *screen, int value);
+int GUI_ScreenGetJoySelectState(GUI_Screen *screen);
 void GUI_ScreenEvent(GUI_Screen *screen, const SDL_Event *event, 
                      int xoffset, int yoffset);
 void GUI_ScreenDoUpdate(GUI_Screen *screen, int force); 

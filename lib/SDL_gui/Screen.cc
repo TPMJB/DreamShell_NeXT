@@ -589,3 +589,7 @@ GUI_Surface *GUI_ScreenGetSurface(GUI_Screen *screen)
 }
 
 }
+
+extern "C" int GUI_ScreenGetJoySelectState(GUI_Screen *screen) {
+    return screen->GetJoySelectState();
+}

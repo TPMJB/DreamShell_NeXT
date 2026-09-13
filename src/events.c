@@ -29,7 +29,8 @@ int InitEvents() {
 }
 
 void ShutdownEvents() {
-	listDestroy(events, (listFreeItemFunc *) FreeEvent);
+	if (events) listDestroy(events, (listFreeItemFunc *) FreeEvent);
+    events = NULL;
 }
 
 
@@ -71,7 +72,7 @@ Event_t *AddEvent(const char *name, int type, int prio, Event_func *event, void 
 		return NULL;
 	}
 
-	e = (Event_t *)calloc(1, sizeof(Event_t)); 
+	e = (Event_t *)calloc(1, sizeof(Event_t));
 	if(e == NULL) return NULL;
 
 	e->name = name;
@@ -100,20 +101,22 @@ Event_t *AddEvent(const char *name, int type, int prio, Event_func *event, void 
 
 
 int RemoveEvent(Event_t *e) {
+    if (!events || !e) return -1;
 
 	int rv = 0;
+    int video = e->type == EVENT_TYPE_VIDEO;
 
-	if(e->type == EVENT_TYPE_VIDEO) {
+	if(video) {
 		LockVideo();
 	}
 	Item_t *i = listGetItemById(events, e->id);
-	
-	if(!i) 
+
+	if(!i)
 		rv = -1;
 	else
 		listRemoveItem(events, i, (listFreeItemFunc *) FreeEvent);
 
-	if(e->type == EVENT_TYPE_VIDEO) {
+	if(video) {
 		UnlockVideo();
 	}
 	return rv;
@@ -121,6 +124,7 @@ int RemoveEvent(Event_t *e) {
 
 
 int SetEventActive(Event_t *e, int is_active) {
+    if (!events || !e) return -1;
 	if(e->type == EVENT_TYPE_VIDEO) {
 		LockVideo();
 	}
@@ -134,27 +138,24 @@ int SetEventActive(Event_t *e, int is_active) {
 }
 
 
+/* Modal overlays receive input before app handlers, regardless of load order.
+ * A handler consumes an event by clearing its type (SDL_NOEVENT). */
 void ProcessInputEvents(SDL_Event *event) {
-
-	Event_t *e;
-	Item_t *c, *n;
-
-	c = listGetItemFirst(events);
-
-	while(c != NULL) {
-		n = listGetItemNext(c);
-		e = (Event_t *)c->data;
-
-		if(e->type == EVENT_TYPE_INPUT && e->active) {
-			e->event(e, event, EVENT_ACTION_UPDATE);
-		}
-
-		c = n;
-	}
+    if (!events || !event) return;
+    for (int prio = EVENT_PRIO_OVERLAY; prio >= EVENT_PRIO_DEFAULT; --prio) {
+        Item_t *c = listGetItemFirst(events);
+        while (c != NULL && event->type != SDL_NOEVENT) {
+            Item_t *next = listGetItemNext(c);
+            Event_t *e = (Event_t *)c->data;
+            if (e->type == EVENT_TYPE_INPUT && e->active && e->prio == prio)
+                e->event(e, event, EVENT_ACTION_UPDATE);
+            c = next;
+        }
+    }
 }
 
-
 static void process_video_events(int action, int prio) {
+    if (!events) return;
 	Event_t *e;
 	Item_t *c, *n;
 

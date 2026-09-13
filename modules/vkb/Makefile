@@ -9,9 +9,9 @@ OBJS = module.o $(TARGET_NAME).o
 DBG_LIBS = -lds
 EXPORTS_FILE = exports.txt
 
-VER_MAJOR = 1
-VER_MINOR = 3
-VER_MICRO = 1
+VER_MAJOR = 2
+VER_MINOR = 0
+VER_MICRO = 0
 
 all: rm-elf
 
