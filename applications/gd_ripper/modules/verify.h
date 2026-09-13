@@ -23,6 +23,7 @@ typedef struct {
 	gd_verify_result_t catalog_result;
 	bool clean;
 	bool streaming;
+	bool sector_scan;
 	uint32_t suspect_sectors;
 	uint32_t unsupported_sectors;
 	char catalog[32];

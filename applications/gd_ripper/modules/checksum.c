@@ -46,7 +46,7 @@ static bool parity_ok(const uint8_t *src, unsigned major_count,
 
 static uint8_t bcd(unsigned v) { return (uint8_t)(((v / 10) << 4) | (v % 10)); }
 
-unsigned gd_check_sector(const uint8_t *s, uint32_t fad) {
+unsigned gd_check_sector_edc(const uint8_t *s, uint32_t fad) {
     static const uint8_t sync[12] = {0,255,255,255,255,255,255,255,255,255,255,0};
     uint32_t edc = 0, stored;
     unsigned result = 0;
@@ -61,6 +61,12 @@ unsigned gd_check_sector(const uint8_t *s, uint32_t fad) {
     stored = (uint32_t)s[2064] | ((uint32_t)s[2065] << 8) |
         ((uint32_t)s[2066] << 16) | ((uint32_t)s[2067] << 24);
     if (edc != stored) result |= GD_SECTOR_EDC;
+    return result;
+}
+
+unsigned gd_check_sector(const uint8_t *s, uint32_t fad) {
+    unsigned result = gd_check_sector_edc(s, fad);
+    if (result & (GD_SECTOR_SYNC | GD_SECTOR_UNSUPPORTED)) return result;
     if (!parity_ok(s + 12, 86, 24, 2, 86, s + 2076) ||
         !parity_ok(s + 12, 52, 43, 86, 88, s + 2248)) result |= GD_SECTOR_ECC;
     return result;

@@ -518,6 +518,9 @@ static int write_report(const char *folder, const char *database_path,
     status |= report_printf(hnd, "hash_origin %s\n", summary->streaming ?
         "disc stream / saved checkpoint (no storage read-back)" : "storage read-back");
     status |= report_printf(hnd, "catalog %s\n", summary->catalog);
+    status |= report_printf(hnd, "sector_scan %s\n", summary->sector_scan ? "enabled" : "NOT_RUN");
+    if (!summary->sector_scan)
+        status |= report_printf(hnd, "note Sector counters below are not a passed storage scan.\n");
     status |= report_printf(hnd, "suspect_sectors %lu\nunsupported_sectors %lu\n",
         (unsigned long)summary->suspect_sectors, (unsigned long)summary->unsupported_sectors);
     if (summary->catalog_result == GD_VERIFY_NO_MATCH) {
@@ -564,6 +567,7 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
 
 	memset(summary, 0, sizeof(*summary));
 	summary->streaming = streaming;
+	summary->sector_scan = scan && !streaming;
 	summary->result = GD_VERIFY_ERROR;
 	summary->catalog_result = GD_VERIFY_ERROR;
 	tracks = calloc(VERIFY_MAX_TRACKS, sizeof(*tracks));

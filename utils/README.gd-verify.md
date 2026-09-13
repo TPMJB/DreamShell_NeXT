@@ -1,4 +1,58 @@
-# DreamShell GD Ripper 2.0.2
+# DreamShell GD Ripper 2.0.3
+
+## Upgrade for mandatory sector checks
+
+Merge the release's `DS/apps/gd_ripper` folder onto the card and confirm GD
+Ripper **2.0.3**. A working 2.0.2 installation already has the required core;
+no bootloader update is required. For older installations, merge the entire
+release `DS` folder so the core and app are updated together.
+
+The supplied Time Stalkers dump had 623 invalid data sectors, all at index 12
+within 16-sector read blocks. Each had bytes 368..375 overwritten with one of
+two repeating values. Recovering only those bytes from the unchanged P parity
+made every affected sector pass its original EDC, P and Q checks. Combining
+those corrections with the measured input CRC predicts `f92c1222`, the known
+TOSEC/Redump Track 3 CRC. This identifies recoverable corruption within the
+track files, not omitted lead-in or subchannel data.
+
+The two repeating values resemble a DreamShell video-global pointer followed
+by an SH-4 cache tag. That points toward corruption in the console's memory
+path, but does not establish the exact offending instruction or its timing.
+An initially suspected cache-tag race was not established: associative cache
+writes compare tags instead of blindly replacing them. No speculative kernel
+patch is included. Mandatory EDC checks close the confirmed unchecked-read
+gap; a fresh hardware rip and an independent PC CRC are still required to
+assess whether further corruption occurs, including after validation.
+
+Normal raw Mode 1 ripping now always checks sync, address and EDC and retries
+invalid reads. Advanced CRC adds ECC parity validation and repair of existing
+suspects. The log records the selected checks; `verify.log` explicitly labels
+an unperformed storage scan `NOT_RUN`. Stream CRC is sampled before writing,
+then committed after a successful write. It still does not replace storage
+read-back or revalidate an old completed track on resume.
+
+### Recover the diagnosed Time Stalkers dump on a PC
+
+```sh
+python3 repair_timestalkers.py /path/to/TIME_STALKERS/track03.bin \
+  "$HOME/track03.repaired.bin"
+```
+
+This restricted tool requires the original 1,185,760,800-byte file with CRC
+`3303fcd5` and the diagnosed 623 overwrites. It opens the source read-only,
+recovers the eight missing payload bytes using existing ECC, and writes a new
+copy. The original EDC and ECC bytes are retained and must validate. Both the
+computed output CRC and a read-back of the saved output must equal `f92c1222`.
+An existing output is never overwritten; an unsuccessful partial copy is
+removed. Allow about 1.2 GB of free space for the new file. The program refuses
+other input CRCs, additional damage or a different number of repairs.
+
+After it prints `VERIFIED`, use the repaired file as `track03.bin` in a **PC
+copy** of the dump folder, alongside the matching Tracks 1 and 2 and its GDI.
+Keep the original folder intact. Do not copy the old `track03.bin.crc` into
+the repaired folder: that journal describes the original corrupted bytes.
+If putting a repaired copy back on the Dreamcast, its missing CRC journal will
+require one storage hash before fast resumed verification can be used.
 
 ## Install and diagnose an early stop
 
@@ -11,9 +65,10 @@ or explicitly creates a missing file with `O_CREAT | O_EXCL`, then seeks to
 its end. Existing records are preserved. The fix is tested using the production
 logger/checkpoint code and the pinned FatFs on in-memory FAT16/FAT32 volumes.
 
-If you already installed 2.0.1, replace the entire `DS/apps/gd_ripper/` folder
-and confirm **2.0.2** on screen. This fix needs no further bootloader change.
-Keep the existing dump files and choose **Start / Resume** in the same folder.
+For current installations, follow the 2.0.3 upgrade above. Keep the
+existing dump files; **Start / Resume** can continue a partial rip in the same
+folder. Previously written invalid sectors require a scan/repair or the
+restricted Time Stalkers recovery described above.
 
 For a first installation or an upgrade from an older recovery build:
 Merge the release's entire `DS` folder onto the SD card, including `DS_CORE.BIN`.
@@ -62,10 +117,11 @@ IDE and PC buttons plus an editable path. Settings show ON/OFF in words.
 
 ## Advanced features
 
-- **Advanced CRC during rip**: validates raw Mode 1 sector sync, physical
-  address, EDC and ECC parity. Invalid reads fall back to individual-sector
-  retries before writing. It detects errors; it does not manufacture ECC or
-  substitute guessed bytes. Mode 2 and audio are not covered by these checks.
+- **Advanced CRC (ECC + repair)**: adds ECC parity checks to the mandatory raw
+  Mode 1 sync/address/EDC checks and enables repair of saved suspects. Invalid
+  reads fall back to individual-sector retries before writing. The console
+  accepts validated rereads and does not synthesize ECC. Mode 2 and audio are
+  not covered by these checks.
 - **Scan saved dump**: rereads storage, calculates whole-track CRC32, and scans
   raw Mode 1 data sectors. It writes `trackNN.bin.suspect` containing zero-based
   track-sector, FAD, and error flags (sync=1, address=2, EDC=4, ECC=8).

@@ -54,6 +54,8 @@ class ConsoleTests(unittest.TestCase):
                         'applications/gd_ripper/modules/checksum.c','-lz','-o',str(cls.exe)],
                        cwd=ROOT, check=True)
         cls.disc_data = b''.join(make_sector(45150+i,i) for i in range(32))
+        cls.transition_data = b''.join(make_sector(150+i,i) for i in range(300))
+        cls.transition_data += (bytes(range(256))*((676*2352+255)//256))[:676*2352]
 
     @classmethod
     def tearDownClass(cls):
@@ -74,8 +76,7 @@ class ConsoleTests(unittest.TestCase):
         return subprocess.check_output([str(self.exe), *map(str,args)], text=True).strip().split()
 
     def transition(self, scenario='append', resume=False):
-        data=bytes(range(256))*((976*2352+255)//256)
-        data=data[:976*2352]
+        data=self.transition_data
         self.disc.write_bytes(data)
         if resume:
             (self.path/'track01.bin').write_bytes(data[:300*2352])
@@ -155,12 +156,19 @@ class ConsoleTests(unittest.TestCase):
         result = self.run_c('verify',self.path,self.db,1)
         self.assertEqual(result,['7','0','0'])  # FULL_MATCH; zero storage reads
         self.assertIn('no storage read-back',(self.path/'verify.log').read_text())
+        self.assertIn('sector_scan NOT_RUN',(self.path/'verify.log').read_text())
 
     def test_advanced_read_retries_silent_corruption(self):
         result = self.rip(advanced=1,fault=1)
         self.assertEqual(result[0],'0')
         self.assertGreater(int(result[1]),2)
         self.assertEqual(self.track.read_bytes(),self.disc_data)
+
+    def test_normal_read_retries_silent_payload_corruption(self):
+        result = self.rip(advanced=0, fault=1)
+        self.assertEqual(result[0], '0')
+        self.assertGreater(int(result[1]), 2)
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
 
     def test_pause_resume_preserves_exact_prefix_and_crc(self):
         failed=self.rip(advanced=1,fault=2)

@@ -239,6 +239,7 @@ release: build cdi
 	@mkdir -p $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/verify_gd_dump.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/scan_gd_sectors.c $(DS_BASE)/release/host-tools
+	@cp $(DS_BASE)/utils/repair_timestalkers.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/make_gd_redump_db.py $(DS_BASE)/release/host-tools
 	@cp $(DS_BASE)/utils/README.gd-verify.md $(DS_BASE)/release/host-tools/README.md
 	@echo Compressing...

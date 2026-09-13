@@ -642,7 +642,7 @@ static void queue_operation(int operation) {
     select_page(0);
     refresh_controls();
     GUI_LabelSetText(self.track_label, operation == 1 ? "Starting rip..." : "Reading saved dump...");
-    set_message(operation == 1 ? "CRC is calculated while ripping." :
+    set_message(operation == 1 ? "Sector EDC and track CRC are checked while ripping." :
         "Advanced CRC: storage read-back + data-sector scan. This can take 30 minutes on SD.");
 }
 
@@ -1171,7 +1171,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.0.2: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.0.3: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -1181,9 +1181,9 @@ static void* gd_ripper_thread(void *arg) {
         goto out;
     }
     destination_ready = true;
-	if (rip_log("Started %s rip with %lu track(s), %llu total sectors, retries=%d, zero-fill=%d",
+	if (rip_log("Started %s rip with %lu track(s), %llu total sectors, retries=%d, zero-fill=%d, sector-EDC=ON, advanced-ECC=%d",
 		resume ? "resumed" : "new", (unsigned long)self.track_count,
-		(unsigned long long)self.total_sectors, self.max_attempts, self.zero_fill) != CMD_OK) {
+		(unsigned long long)self.total_sectors, self.max_attempts, self.zero_fill, self.advanced) != CMD_OK) {
         storage_error("Rip log reopen failed", self.log_path, errno);
         goto out;
     }
@@ -1663,17 +1663,19 @@ static int restore_stream_crc(const char *path, uint64_t existing, uint32_t tn,
         self.sync_mount[0] != '\0');
 }
 
-static void stream_written(const void *data, size_t bytes) {
-    self.current_crc = crc32(self.current_crc, data, bytes);
+static void stream_written(uint32_t crc_before_write, size_t bytes) {
+    self.current_crc = crc_before_write;
     self.crc_bytes += bytes;
 }
 
 static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
         uint32_t type, uint32_t secbyte) {
     int rv = timed_cdrom_read(buffer, fad, count);
-    if (rv != ERR_OK || !self.advanced || type != 4 || secbyte != 2352) return rv;
+    if (rv != ERR_OK || type != 4 || secbyte != 2352) return rv;
     for (size_t i = 0; i < count; ++i) {
-        unsigned flags = gd_check_sector((const uint8_t *)buffer + i * 2352, fad + i);
+        const uint8_t *sector = (const uint8_t *)buffer + i * 2352;
+        unsigned flags = self.advanced ? gd_check_sector(sector, fad + i) :
+            gd_check_sector_edc(sector, fad + i);
         if (flags && flags != GD_SECTOR_UNSUPPORTED) {
             rip_log("Sector validation failed at FAD %lu (flags=%u: sync=1 address=2 EDC=4 ECC=8)",
                 (unsigned long)(fad + i), flags);
@@ -1802,6 +1804,8 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 
 		if (cdstat == ERR_OK) {
 			size_t bytes_to_write = nsects * secbyte;
+			/* Snapshot the drive data before the storage call can yield. */
+			uint32_t crc_before_write = crc32(self.current_crc, buffer, bytes_to_write);
 
 			set_io_status("Write", first);
 			errno = 0;
@@ -1812,7 +1816,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 				free(buffer);
 				return CMD_ERROR;
 			}
-			stream_written(buffer, bytes_to_write);
+			stream_written(crc_before_write, bytes_to_write);
 			self.processed_sectors += nsects; self.session_sectors += nsects;
 		}
 		else {
@@ -1928,6 +1932,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 						(unsigned long)fad, max_attempts);
 				}
 
+				uint32_t crc_before_write = crc32(self.current_crc, buffer, secbyte);
 				set_io_status("Write", fad);
 				errno = 0;
 				if (fs_write(hnd, buffer, secbyte) != (ssize_t)secbyte) {
@@ -1938,7 +1943,7 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 					return CMD_ERROR;
 				}
 
-				stream_written(buffer, secbyte);
+				stream_written(crc_before_write, secbyte);
 				self.processed_sectors++; self.session_sectors++;
 
 				if (cdstat != ERR_OK &&
@@ -2198,7 +2203,7 @@ void gd_ripper_Toggle(GUI_Widget *widget) {
     const char *label = widget == self.bad ?
         (enabled ? "Zero-fill unreadable sectors: ON" : "Zero-fill unreadable sectors: OFF") :
         widget == self.edc_btn ?
-        (enabled ? "Advanced CRC during rip: ON" : "Advanced CRC during rip: OFF") :
+        (enabled ? "Advanced CRC (ECC + repair): ON" : "Advanced CRC (ECC + repair): OFF") :
         (enabled ? "Track format: BIN (raw, recommended)" : "Track format: ISO (no catalog CRC match)");
     GUI_LabelSetText(GUI_ButtonGetCaption(widget), label);
 }

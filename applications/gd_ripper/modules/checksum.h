@@ -11,6 +11,7 @@
 #define GD_SECTOR_EDC 4
 #define GD_SECTOR_ECC 8
 #define GD_SECTOR_UNSUPPORTED 16
+unsigned gd_check_sector_edc(const uint8_t *sector, uint32_t fad);
 unsigned gd_check_sector(const uint8_t *sector, uint32_t fad);
 
 /* Serialized metadata writes: explicitly create missing files, then seek to
