@@ -7,7 +7,7 @@ reviewed. This release is selective, not a merge of all upstream changes.
 
 | Upstream change | Decision | Reason |
 | --- | --- | --- |
-| [SPI interface queries in video and Speedtest](https://github.com/DC-SWAT/DreamShell/commit/f64058aad09d1eb95ede7e29ae5bf8c2064237bc) | Backported | Avoids actively probing SCI merely to identify an interface and includes W5500 in the existing PVR-DMA exclusion. |
+| [SPI interface queries in video and Speedtest](https://github.com/DC-SWAT/DreamShell/commit/f64058aad09d1eb95ede7e29ae5bf8c2064237bc) | Backported | Replaces an indirect SPI error-code check with explicit SD/W5500 queries and includes W5500 in the existing PVR-DMA exclusion. |
 | [GUI_RTF font cache](https://github.com/DC-SWAT/DreamShell/commit/3c88eb47828897c295ad19d337a1b5ec22af451c) | Deferred | Potentially useful for RTF documents; changes font ownership/lifetime and does not affect the current launcher or keyboard. Evaluate with an RTF app. |
 | [Memtest activity LED](https://github.com/DC-SWAT/DreamShell/commit/05b9ccbd6db97c253231f9cdb99be749db31f3b9) | Deferred | Optional visual feedback using SPI chip-select pins, unrelated to normal boot/ripping. Needs the appropriate hardware test. |
 
@@ -21,6 +21,10 @@ applied by `.github/scripts/dev-build.sh prepare`:
 
 - [sd_get_interface](https://github.com/DC-SWAT/KallistiOS/commit/830ce26c4fb854f22e9039aea16e38743f6971a0)
 - [w5500_adapter_interface](https://github.com/DC-SWAT/KallistiOS/commit/2bda829e96bb9627eeccbd48868897f5fcfb6408)
+
+The previous `sci_spi_rw_byte(0, NULL)` check returns `SCI_ERR_PARAM` before any
+byte transfer on an initialized SCI interface; it was not transmitting to the
+card. The new queries identify the initialized device/interface directly.
 
 The patches add the headers, exports and getters required by video/Speedtest.
 They apply cleanly to the pin alongside `cdrom-timeout-deadlock.patch` and are

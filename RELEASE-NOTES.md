@@ -47,7 +47,7 @@ for the normal `DS_CORE.BIN` on a console.
 - **All standard apps, modules and firmware** from the complete release build,
   plus desktop verification/recovery tools and the installation/test guides.
 - **Selected upstream fix:** query the initialized SD/W5500 SPI interface
-  instead of sending an SPI byte to detect it. The existing kernel pin and
+  instead of interpreting an SPI function's error code. The existing kernel pin and
   GD-ROM timeout fix are preserved. See `upstream-review.md` for the review.
 
 ## Controls and verification
