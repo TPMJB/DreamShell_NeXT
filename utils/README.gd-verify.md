@@ -199,7 +199,40 @@ The verifier prints CRC32, MD5, and SHA-1 for every track, then exits with:
 - `1`: incomplete/zero-filled dump, hash mismatch, or partial-only result;
 - `2`: invalid input or an unreadable file.
 
-## Compare two DreamShell rips
+## Find mismatched sectors on a PC
+
+### Locate suspect data sectors on a PC
+
+`scan_gd_sectors.c` scans a saved 2352-byte Mode 1 data track for sync,
+address, EDC and ECC errors and calculates its CRC32 from storage. It opens
+the track read-only, requires no Dreamcast or third-party libraries, and can
+be compiled with the C compiler on Linux or macOS:
+
+```sh
+cc -O3 -std=c99 scan_gd_sectors.c -o scan_gd_sectors
+./scan_gd_sectors /path/to/TIME_STALKERS/track03.bin 45150 f92c1222 \
+  > timestalkers-sector-scan.txt
+```
+
+The second argument is the track's starting **FAD**, taken from `rip.state`.
+If using a GDI's starting LBA instead, add 150. The optional third argument is
+the expected eight-digit track CRC32. Time Stalkers US v1.002 has an expected
+Track 3 CRC of `f92c1222` in both bundled catalogs. Use the correct catalog
+entry and FAD for other tracks and revisions; audio and Mode 2 are not covered.
+
+Progress appears in the terminal; the redirected report lists every suspect
+range with inclusive, zero-based track-sector indices and absolute FADs.
+Flags match the console scan: sync=1, address=2, EDC=4, ECC=8, unsupported=16.
+Exit codes are 0 for successful requested checks, 1 for sector errors,
+unsupported sectors or a catalog CRC mismatch, and 2 for an incomplete scan
+or invalid input. A report explicitly says when no catalog CRC was supplied.
+
+Passing sector checks with a different catalog CRC remains a mismatch:
+internally consistent bytes can still differ from a known dump. The report
+does not modify the dump, create a console repair map or identify a hardware
+cause. Review it before deciding what to reread.
+
+### Compare independent reads
 
 Two independent rips that match each other are useful evidence even when an
 audio track cannot directly match Redump because of offset handling:
