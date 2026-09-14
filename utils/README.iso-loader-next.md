@@ -1,4 +1,4 @@
-# DreamShell NeXT ISO Loader 2.0.4 + Games 1.0.0
+# DreamShell NeXT ISO Loader 2.0.5 + Games 1.0.1
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
 This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
@@ -6,10 +6,20 @@ This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, 
 ## Install
 1. Back up the existing DS/apps/iso_loader, DS/apps/games_menu/app.xml, DS/apps/games_menu/modules/app_games_menu.klf, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
-3. Restart DreamShell. ISO Loader should show v2.0.4; Games has the new TPMJB header; the standalone loader should show v0.9.1.
+3. Restart DreamShell. ISO Loader should show v2.0.5; Games is v1.0.1; the standalone loader should show v0.9.1.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
 
-## 2.0.4 / Games 1.0.0: controller and library update
+## 2.0.5 / Games 1.0.1: WinCE baseline and launch reports
+
+Bust-A-Move 4 is identified as WinCE in the bundled presets. ISO Loader's Baseline button previously forced every disc to loader address `8ce00000`, overriding the WinCE address `8c000100` used by automatic defaults and Games. Baseline now inspects the executable again, bypassing any saved OS override, and selects `8c000100` for WinCE. Other executable types retain `8ce00000`. The selected address is shown in the status line. This fixes the diagnostic profile; it does not establish that Bust-A-Move 4 boots on serial SD.
+
+Games now updates `DS/apps/games_menu/last-launch.txt` with the actual error if inspection fails or the loader returns before handoff. Previously the file could still say the executable check passed after a firmware loading failure. It now includes the executable filename and size, heap and low-level setting. Games' launch settings are unchanged.
+
+For the next console check, select Bust-A-Move 4 in ISO Loader, choose **Baseline**, then **Check**, then **Play**. Confirm the baseline status shows **WinCE** and **8c000100**. If it still fails, record the last visible loader message and copy `DS/apps/iso_loader/last-launch.txt`. Also attempt it from Games and copy `DS/apps/games_menu/last-launch.txt`. Copy these before launching another title, which replaces the report. These files describe preparation and returned failures; they cannot record a crash after DreamShell has handed control to the game.
+
+Versions: ISO Loader app **2.0.5**, Games **1.0.1**. Shared ISO Loader **0.9.3**, ISOFS **1.8.1**, and standalone firmware **0.9.1** are unchanged. No game-specific compatibility patch is claimed; a real-console test is still required.
+
+## Earlier 2.0.4 / Games 1.0.0: controller and library update
 
 Games opens with a new TPMJB layout immediately. It has an eight-row list with a large artwork preview, a compact two-column view, and a six-game gallery with titles. The action bar stays visible in every view. Existing Games launch defaults, paths and saved presets are retained.
 

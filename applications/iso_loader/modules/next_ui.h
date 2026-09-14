@@ -69,7 +69,7 @@ static void next_message(const char *text) {
 static void next_report(const char *path, const isoldr_info_t *info, uint32 addr, const char *stage) {
     char target[NAME_MAX], temp[NAME_MAX], previous[NAME_MAX];
     int n = snprintf(self.launch_report, sizeof(self.launch_report),
-        "DreamShell NeXT ISO Loader 2.0.2 / TPMJB\n"
+        "DreamShell NeXT ISO Loader 2.0.5 / TPMJB\n"
         "Stage: %s\nImage: %s\nProfile: %s\nPreset: %s\n"
         "Loader address: %08lx\n",
         stage, path, self.profile_mode ? "Baseline (unsaved)" : "Game settings",
@@ -143,14 +143,23 @@ void isoLoader_Details(GUI_Widget *widget) {
 
 void isoLoader_Baseline(GUI_Widget *widget) {
     (void)widget;
-    if(!self.loading && !self.isoldr && self.filename[0]) {
-        char path[NAME_MAX];
-        snprintf(path, sizeof(path), "%s/%s", GUI_FileManagerGetPath(self.filebrowser), self.filename);
-        self.isoldr = isoldr_get_info(path, 0);
-    }
-    if(self.loading || !self.isoldr || !self.isoldr->exec.size || self.isoldr->image_type == IMAGE_TYPE_ROM_NAOMI) {
+    if(self.loading || !self.filename[0] || self.image_type == IMAGE_TYPE_ROM_NAOMI) {
         next_status("Select a Dreamcast disc image and wait for its information."); return;
     }
+    /* Inspect again: the selected preset may have overridden the detected OS. */
+    char path[NAME_MAX];
+    snprintf(path, sizeof(path), "%s/%s", GUI_FileManagerGetPath(self.filebrowser), self.filename);
+    isoldr_info_t *info = isoldr_get_info(path, 0);
+    if(!info || !info->exec.size || info->image_type == IMAGE_TYPE_ROM_NAOMI) {
+        free(info);
+        next_message(isoldr_get_last_error());
+        return;
+    }
+    free(self.isoldr);
+    self.isoldr = info;
+    uint32 addr = info->exec.type == BIN_TYPE_WINCE ? ISOLDR_DEFAULT_ADDR_MIN : ISOLDR_DEFAULT_ADDR;
+    char memory[12], status[112];
+    snprintf(memory, sizeof(memory), "0x%08lx", (unsigned long)addr);
     self.profile_mode = 1;
     GUI_WidgetSetEnabled(self.btn_run, 1);
     GUI_WidgetSetEnabled(self.btn_check, 1);
@@ -176,10 +185,10 @@ void isoLoader_Baseline(GUI_Widget *widget) {
     GUI_WidgetSetState(self.verify_boot, 1);
     for(int i = 0; self.memory_chk[i]; ++i) {
         const char *name = GUI_ObjectGetName(self.memory_chk[i]);
-        if(!strcmp(name, "0x8ce00000") || strlen(name) < 8) {
+        if(!strcmp(name, memory) || strlen(name) < 8) {
             GUI_WidgetSetState(self.memory_chk[i], 1);
             isoLoader_toggleMemory(self.memory_chk[i]);
-            if(strlen(name) < 8) GUI_TextEntrySetText(self.memory_text, "ce00000");
+            if(strlen(name) < 8) GUI_TextEntrySetText(self.memory_text, memory + strlen(name));
             break;
         }
     }
@@ -189,7 +198,9 @@ void isoLoader_Baseline(GUI_Widget *widget) {
         GUI_TextEntrySetText(self.wpv[i], "");
     }
     next_refresh();
-    next_status("Baseline selected: Direct, 8ce00000, no CDDA/VMU emulation. Preset kept.");
+    snprintf(status, sizeof(status), "Baseline: %s, Direct, %08lx, CDDA/VMU off. Preset kept.",
+             info->exec.type == BIN_TYPE_WINCE ? "WinCE" : "Auto", (unsigned long)addr);
+    next_status(status);
 }
 
 void isoLoader_RestoreProfile(GUI_Widget *widget) {

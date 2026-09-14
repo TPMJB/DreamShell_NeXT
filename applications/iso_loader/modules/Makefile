@@ -14,7 +14,7 @@ KOS_CFLAGS += -I./
 
 VER_MAJOR = 2
 VER_MINOR = 0
-VER_MICRO = 4
+VER_MICRO = 5
 
 all: rm-elf
 

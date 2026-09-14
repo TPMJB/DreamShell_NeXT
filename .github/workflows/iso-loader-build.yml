@@ -160,8 +160,8 @@ jobs:
           prefix='DS/apps/iso_loader/'
           with ZipFile('DreamShell-dev.zip') as full:
               assert full.testzip() is None
-              assert b'version="2.0.4"' in full.read(prefix+'app.xml')
-              assert b'version="1.0.0"' in full.read('DS/apps/games_menu/app.xml')
+              assert b'version="2.0.5"' in full.read(prefix+'app.xml')
+              assert b'version="1.0.1"' in full.read('DS/apps/games_menu/app.xml')
               for name in (prefix+'modules/app_iso_loader.klf','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/firmware/isoldr/sd.elf'):
                   assert len(full.read(name)) > 1000, name
               import struct
@@ -181,7 +181,7 @@ jobs:
                   assert entry==vmin and vmax-vmin+1024<=2*1024*1024, (name,hex(entry),hex(vmin))
                   assert shsize==40 and shoff+shsize*shnum<=len(elf), name
                   print('Firmware layout:',name,'entry',hex(entry),'runtime bytes',vmax-vmin+1024)
-              with ZipFile('DreamShell-ISO-Loader-2.0.4.zip','w',ZIP_DEFLATED) as update:
+              with ZipFile('DreamShell-ISO-Loader-2.0.5.zip','w',ZIP_DEFLATED) as update:
                   sums=[]
                   for name in full.namelist():
                       include=(name.startswith(prefix) and not name.startswith(prefix+'presets/')) or name.startswith('DS/firmware/isoldr/') or name.startswith('DS/apps/games_menu/images/') or name=='DS/apps/games_menu/fonts/default.txf' or name in ('DS/apps/games_menu/app.xml','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/fonts/ttf/arial_lite.ttf','DS/fonts/ttf/m23.ttf')
@@ -201,6 +201,6 @@ jobs:
       - name: Upload update
         uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-ISO-Loader-2.0.4
-          path: DreamShell-ISO-Loader-2.0.4.zip
+          name: DreamShell-ISO-Loader-2.0.5
+          path: DreamShell-ISO-Loader-2.0.5.zip
           if-no-files-found: error

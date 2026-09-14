@@ -247,6 +247,7 @@ int main(void) {
 
     def test_games_menu_launch_failure_cleanup(self):
         module=(ROOT/"applications/games_menu/modules/module.c").read_text()
+        report=module[module.index("static void WriteLaunchReport("):module.index("static int LoadPreset(")]
         play=module[module.index("static bool PlayGame("):module.index("static void PostOptimizer(")]
         start=module.index("static void* MenuExitHelper(void *params)\n{")
         exit_helper=module[start:module.index("static void CreateMainView(",start)]
@@ -258,12 +259,30 @@ int main(void) {
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#define NAME_MAX 256
+typedef int file_t;
+#define FILEHND_INVALID -1
+#define fs_open(p,f) open(p,f,0600)
+#define fs_write write
+#define fs_close close
+static const char *report_root(const char *key) {assert(!strcmp(key,"PATH"));return ".";}
+#define getenv report_root
+typedef struct {
+    char fs_dev[8];
+    struct {char file[16];unsigned long size,type;} exec;
+    unsigned long fs_part,boot_mode,use_dma,emu_async,alt_read,emu_cdda,emu_vmu,use_irq,heap,syscalls,boot_crc32;
+} isoldr_info_t;
+static isoldr_info_t info;
 static struct { void *tsunami; } app={(void*)1};
 static struct {
     __typeof__(app) *app;
     char item_value_selected[64];
     int device_selected, game_index_selected, exit_app;
-    void *isoldr;
+    isoldr_info_t *isoldr;
     uintptr_t addr;
 } self;
 static struct {
@@ -274,7 +293,7 @@ static struct {
 static int load_ok, freed, saved, executed, opened, console, screen, gui, handoff;
 static char output[1024];
 static jmp_buf jump;
-static int LoadPreset(void) { return load_ok; }
+static int LoadPreset(void) {self.isoldr=load_ok?&info:NULL;return load_ok;}
 static void SaveMenuConfig(void) { ++saved; }
 static void FreeAppData(void) { ++freed; assert(freed==1); }
 static void EnableScreen(void) { ++screen; }
@@ -299,30 +318,41 @@ static void reset(void) {
     strcpy(menu_data.games_array[0].game,"EVOLUTION2.gdi");
     freed=saved=executed=opened=console=screen=gui=handoff=0;
     output[0]=0;
+    unlink("apps/games_menu/last-launch.txt");
+    memset(&info,0,sizeof(info));strcpy(info.fs_dev,"sd");strcpy(info.exec.file,"0WINCEOS.BIN");
+    info.exec.type=3;info.exec.size=4096;self.addr=0x8c000100;
 }
 '''
         cases=r'''
 int main(void) {
+    assert(!mkdir("apps",0700));assert(!mkdir("apps/games_menu",0700));
     for(int stage=0;stage<2;++stage) {
         reset(); load_ok=stage;
         MenuExitHelper(NULL);
         assert(freed==1 && opened==1 && console==1 && screen==1 && gui==1);
         assert(executed==stage && saved==stage);
         assert(strstr(output,"Synthetic launch error"));
+        FILE *f=fopen("apps/games_menu/last-launch.txt","r");assert(f);
+        char report[1536]={0};assert(fread(report,1,sizeof(report)-1,f)>0);fclose(f);
+        assert(strstr(report,"Game: EVOLUTION2.gdi") && strstr(report,"Stage: Synthetic launch error"));
+        if(stage) assert(strstr(report,"Executable: 0WINCEOS.BIN") && strstr(report,"Loader: 8c000100"));
+        else assert(!strstr(report,"Executable:"));
     }
     reset(); self.exit_app=1;
     MenuExitHelper(NULL);
     assert(freed==1 && opened==1 && !console && !executed);
+    assert(access("apps/games_menu/last-launch.txt",F_OK));
     reset(); load_ok=1; handoff=1;
     if(!setjmp(jump)) {
         MenuExitHelper(NULL);
         assert(!"Successful handoff must not reach the failure cleanup");
     }
     assert(freed==1 && executed==1 && !opened && !console);
+    assert(access("apps/games_menu/last-launch.txt",F_OK));
     return 0;
 }
 '''
-        compile_run(support+play+exit_helper+cases)
+        compile_run(support+report+play+exit_helper+cases)
 
     def test_native_ui_contract(self):
         root=ET.parse(ROOT/"applications/iso_loader/app.xml").getroot()
@@ -332,7 +362,7 @@ int main(void) {
                   "message-panel","check-game","baseline","restore-profile","details",
                   "file_browser","run_iso","pages","run-panel",*(f"message-{i}" for i in range(6))}
         self.assertFalse(required-names)
-        self.assertEqual(root.get("version"),"2.0.4")
+        self.assertEqual(root.get("version"),"2.0.5")
         exports=(ROOT/"applications/iso_loader/modules/exports.txt").read_text()
         for e in body.iter():
             for attr in ("onclick","onselect","oncontextclick","onload","onopen","onclose","onunload"):

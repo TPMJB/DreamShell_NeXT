@@ -3,6 +3,90 @@ from test_iso_loader_next import ROOT, compile_run
 import unittest
 
 class ConsoleFeedbackChecks(unittest.TestCase):
+    def test_baseline_redetects_wince_and_selects_its_loader_address(self):
+        ui=(ROOT/"applications/iso_loader/modules/next_ui.h").read_text()
+        baseline=ui[ui.index("void isoLoader_Baseline("):ui.index("void isoLoader_RestoreProfile(")]
+        support=r'''
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define NAME_MAX 256
+#define ISOLDR_DEFAULT_ADDR 0x8ce00000U
+#define ISOLDR_DEFAULT_ADDR_MIN 0x8c000100U
+enum {BIN_TYPE_KATANA=1,BIN_TYPE_KOS,BIN_TYPE_WINCE,IMAGE_TYPE_ROM_NAOMI=99,
+      BOOT_MODE_DIRECT=0,CDDA_MODE_DISABLED=0};
+typedef uint32_t uint32;
+typedef struct {int state;const char *name;char text[128];} GUI_Widget;
+typedef struct {int image_type;struct {unsigned size;int type;} exec;} isoldr_info_t;
+static struct {
+    int loading,image_type,profile_mode;
+    char filename[64];
+    isoldr_info_t *isoldr;
+    GUI_Widget *filebrowser,*btn_run,*btn_check,*preset,*dma,*alt_read,*irq,*low,*fastboot,
+               *screenshot,*use_gpio,*alt_boot,*vmu_disabled,*device,*verify_boot,*memory_text;
+    GUI_Widget *os_chk[4],*async[10],*heap[20],*boot_mode_chk[3],*memory_chk[4],*wpa[2],*wpv[2];
+    unsigned pa[2],pv[2];
+} self;
+static int detected_type,inspect_count,inspect_failed,messages;
+static char status[128];
+static const char *GUI_FileManagerGetPath(GUI_Widget *w) {(void)w;return "/sd/games/BAM4";}
+static isoldr_info_t *isoldr_get_info(const char *p,int test) {
+    assert(!strcmp(p,"/sd/games/BAM4/game.gdi") && !test);++inspect_count;
+    if(inspect_failed) return NULL;
+    isoldr_info_t *i=calloc(1,sizeof(*i));assert(i);i->exec.type=detected_type;i->exec.size=4096;return i;
+}
+static const char *isoldr_get_last_error(void) {return "Cannot read executable";}
+static void next_status(const char *s) {snprintf(status,sizeof(status),"%s",s);}
+static void next_message(const char *s) {assert(!strcmp(s,"Cannot read executable"));++messages;}
+static void next_refresh(void) {}
+static void GUI_WidgetSetState(GUI_Widget *w,int s) {if(w) w->state=s;}
+static void GUI_TextEntrySetText(GUI_Widget *w,const char *s) {if(w) snprintf(w->text,sizeof(w->text),"%s",s);}
+static const char *GUI_ObjectGetName(GUI_Widget *w) {return w->name;}
+#define GUI_WidgetSetEnabled(w,s) ((void)(w),(void)(s))
+#define isoLoader_toggleOS(w) ((void)(w))
+#define isoLoader_toggleAsync(w) ((void)(w))
+#define isoLoader_toggleVMU(w) ((void)(w))
+#define isoLoader_toggleHeap(w) ((void)(w))
+#define isoLoader_toggleBootMode(w) ((void)(w))
+#define setModeCDDA(s) ((void)(s))
+static void isoLoader_toggleMemory(GUI_Widget *w) {
+    for(int i=0;self.memory_chk[i];++i) self.memory_chk[i]->state=self.memory_chk[i]==w;
+}
+'''
+        cases=r'''
+int main(void) {
+    GUI_Widget low={.name="0x8c000100"},high={.name="0x8ce00000"},custom={.name="0x8"},text={0};
+    self.memory_chk[0]=&low;self.memory_chk[1]=&high;self.memory_chk[2]=&custom;
+    self.memory_text=&text;strcpy(self.filename,"game.gdi");
+    self.isoldr=calloc(1,sizeof(*self.isoldr));assert(self.isoldr);
+    /* A stale preset forcing KATANA must not make the WinCE baseline use high RAM. */
+    self.isoldr->exec.type=BIN_TYPE_KATANA;detected_type=BIN_TYPE_WINCE;
+    isoLoader_Baseline(NULL);
+    assert(inspect_count==1 && self.isoldr->exec.type==BIN_TYPE_WINCE);
+    assert(low.state && !high.state && !custom.state && self.profile_mode);
+    assert(strstr(status,"WinCE") && strstr(status,"8c000100"));
+    /* Other games keep their existing baseline address. */
+    for(detected_type=BIN_TYPE_KATANA;detected_type<=BIN_TYPE_KOS;++detected_type) {
+        isoLoader_Baseline(NULL);assert(!low.state && high.state && !custom.state);
+        assert(strstr(status,"8ce00000"));
+    }
+    /* Custom memory entry fallback produces the same complete address. */
+    self.memory_chk[0]=&custom;self.memory_chk[1]=NULL;detected_type=BIN_TYPE_WINCE;
+    isoLoader_Baseline(NULL);assert(custom.state && !strcmp(text.text,"c000100"));
+    char memory[144];snprintf(memory,sizeof(memory),"%s%s",custom.name,text.text);
+    assert(strtoul(memory,NULL,16)==ISOLDR_DEFAULT_ADDR_MIN);
+    isoldr_info_t *previous=self.isoldr;inspect_failed=1;self.profile_mode=0;
+    isoLoader_Baseline(NULL);assert(messages==1 && self.isoldr==previous && !self.profile_mode);
+    int inspections=inspect_count;self.loading=1;isoLoader_Baseline(NULL);
+    assert(inspect_count==inspections);
+    free(self.isoldr);
+    return 0;
+}
+'''
+        compile_run(support+baseline+cases,["-fsanitize=address"])
+
     def test_dpad_geometry_and_long_lists(self):
         nav=(ROOT/"applications/iso_loader/modules/next_nav.h").read_text()
         support=r'''

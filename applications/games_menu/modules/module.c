@@ -1673,6 +1673,39 @@ static void GamesApp_InputEvent(int type, int key)
 	mutex_unlock(&change_page_mutex);
 }
 
+static void WriteLaunchReport(const char *stage)
+{
+    char report[1536], path[NAME_MAX];
+    const isoldr_info_t *info = self.isoldr;
+    int length = snprintf(report, sizeof(report),
+        "Games Menu 1.0.1 / TPMJB\nGame: %s\nStage: %s\n",
+        self.item_value_selected, stage);
+    if(info && length > 0 && length < (int)sizeof(report)) {
+        int extra = snprintf(report + length, sizeof(report) - length,
+            "Loader: %08lx\nDevice: %s partition %lu\n"
+            "Executable: %s bytes: %lu\nType: %lu mode: %lu\n"
+            "DMA: %lu async: %lu altread: %lu\n"
+            "CDDA: %08lx VMU: %lu IRQ: %lu\nHeap: %08lx low-level: %s\n"
+            "Executable CRC: %08lx\n",
+            (unsigned long)self.addr, info->fs_dev, info->fs_part,
+            info->exec.file, info->exec.size, info->exec.type, info->boot_mode,
+            info->use_dma, info->emu_async, info->alt_read, info->emu_cdda,
+            info->emu_vmu, info->use_irq, info->heap,
+            info->syscalls ? "on" : "off", info->boot_crc32);
+        if(extra < 0) return;
+        length += extra;
+    }
+    if(length <= 0 || length >= (int)sizeof(report) ||
+       snprintf(path, sizeof(path), "%s/apps/games_menu/last-launch.txt", getenv("PATH")) >= (int)sizeof(path))
+        return;
+    file_t fd = fs_open(path, O_CREAT | O_TRUNC | O_WRONLY);
+    if(fd != FILEHND_INVALID) {
+        int ok = fs_write(fd, report, length) == length;
+        if(fs_close(fd) < 0) ok = 0;
+        if(!ok) ds_printf("DS_WARNING: Could not finish saving the launch report.\n");
+    }
+}
+
 static int LoadPreset()
 {
 	if (menu_data.preset == NULL || menu_data.preset->game_index != self.game_index_selected)
@@ -1715,25 +1748,8 @@ static int LoadPreset()
     const char *game_path = GetFullGamePathByIndex(self.game_index_selected);
     int checked = self.isoldr->image_type == IMAGE_TYPE_ROM_NAOMI || self.isoldr->bleem ?
         0 : isoldr_check_boot(self.isoldr, game_path);
-    char report[768], report_path[NAME_MAX];
-    int length = snprintf(report, sizeof(report),
-        "Games Menu launch\nGame: %s\nLoader: %08lx\nDevice: %s partition %lu\n"
-        "Type: %lu mode: %lu\nDMA: %lu async: %lu altread: %lu\n"
-        "CDDA: %08lx VMU: %lu IRQ: %lu\nExecutable CRC: %08lx\nCheck: %s\n",
-        game_path, (unsigned long)self.addr, self.isoldr->fs_dev, self.isoldr->fs_part,
-        self.isoldr->exec.type, self.isoldr->boot_mode, self.isoldr->use_dma,
-        self.isoldr->emu_async, self.isoldr->alt_read, self.isoldr->emu_cdda,
-        self.isoldr->emu_vmu, self.isoldr->use_irq, self.isoldr->boot_crc32,
-        checked < 0 ? isoldr_get_last_error() : "passed; handoff not yet attempted");
-    if(length > 0 && length < sizeof(report) &&
-       snprintf(report_path,sizeof(report_path),"%s/apps/games_menu/last-launch.txt",
-                getenv("PATH")) < sizeof(report_path)) {
-        file_t fd=fs_open(report_path,O_CREAT | O_TRUNC | O_WRONLY);
-        if(fd != FILEHND_INVALID) {
-            fs_write(fd,report,length);
-            fs_close(fd);
-        }
-    }
+    WriteLaunchReport(checked < 0 ? isoldr_get_last_error() :
+                      "Executable check passed; handoff not yet attempted");
     if(checked < 0) return 0;
 
 	return 1;
@@ -1957,8 +1973,10 @@ static bool PlayGame(void)
 		}
 	}
 
-    ds_printf("DS_ERROR: Game launch failed before handoff.\n%s\n",
-              isoldr_get_last_error());
+    const char *error = isoldr_get_last_error();
+    if(!error || !error[0]) error = "Game launch returned without an error message.";
+    WriteLaunchReport(error);
+    ds_printf("DS_ERROR: Game launch failed before handoff.\n%s\n", error);
 	return menu_released;
 }
 
