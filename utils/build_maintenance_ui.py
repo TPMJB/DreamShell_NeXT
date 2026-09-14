@@ -20,6 +20,7 @@ def layouts():
         a, r, b = app(folder, title, 'DreamShell NeXT  /  ' + subtitle, native)
         if folder == 'bios_flasher':
             a.set('version', '3.0.0')
+            a.set('icon', 'images/icon_small.png')
             dep = node(r, 'module', src='../../modules/bflash.klf')
             r.remove(dep); r.insert(0, dep)
         button(b, r, 'menu', 'Menu', 500, 20, 116, 32, f'export:{native}_Back()')

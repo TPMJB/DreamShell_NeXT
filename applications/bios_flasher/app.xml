@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<app name="BIOS Flasher" version="3.0.0" icon="images/icon.png">
+<app name="BIOS Flasher" version="3.0.0" icon="images/icon_small.png">
   <resources>
     <module src="../../modules/bflash.klf" />
     <module src="modules/app_bios_flasher.klf" />

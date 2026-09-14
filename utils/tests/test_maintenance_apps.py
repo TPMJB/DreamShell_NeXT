@@ -189,6 +189,9 @@ int main(void) {
             xml=E.parse(path/'app.xml').getroot()
             exports=(path/'modules/exports.txt').read_text().splitlines()
             self.assertEqual(xml.get('version'), '3.0.0' if app=='bios_flasher' else '2.0.0')
+            from PIL import Image
+            with Image.open(path/xml.get('icon')) as icon:
+                self.assertEqual(icon.size, (64,64), app)
             names=[e.get('name') for e in xml.find('body').iter() if e.get('name')]
             self.assertEqual(len(names),len(set(names)))
             for name in ('main-panel','browser-panel','dialog','menu','file-picker','progress'):
