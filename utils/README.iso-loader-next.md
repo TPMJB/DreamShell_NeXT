@@ -19,14 +19,14 @@ Watch the final line:
 - “Executable read failed” or “Executable CRC mismatch”: the standalone read did not produce the expected data; the loader stops.
 - “Executable CRC matched” followed by a black screen: the two reads agreed. Game compatibility, patches, memory use and the later handoff still need investigation.
 
-Errors at the executable-loading stage remain visible for three seconds before the loader attempts to return to DreamShell. Photograph the final screen if the console still goes black. **Details** opens the last preparation report in the console. Its text is also saved as DS/apps/iso_loader/last-launch.txt when the app directory is writable. It records preparation, not proof that the game ran.
+Errors at the executable-loading stage remain visible for three seconds before the loader attempts to return to DreamShell. Photograph the final screen if the console still goes black. **Details** opens the last preparation report in the console. Its text is also saved as DS/apps/iso_loader/last-launch.txt when the app directory is writable. The previous completed report is retained as last-launch.previous.txt. It records preparation, not proof that the game ran.
 
 Use **Game preset** to restore the saved or bundled game settings. You can enable CDDA after obtaining a baseline boot; this profile is intentionally quiet. Settings and More retain the existing advanced controls. **Save as preset** remains opt-in.
 
 ## Controls and browsing
 - D-pad up/down: select a row. A/Enter: inspect or open. Start/Space: play.
-- B/Escape: parent folder; on a settings page, return to Games.
-- X: check. Y: settings. D-pad left/right: switch available devices.
+- B/Escape: return from the action bar to the list, go up a folder, or return from Settings to Games.
+- X: check. Y: settings. D-pad left/right (Tab): focus the action bar; A selects its highlighted button. Up/down returns to the game list. Device buttons or the root folder switch storage.
 - Mouse and keyboard remain available. Advanced pages retain the existing controller cursor.
 - Media previews are off by default. Enable them in More and reselect a game.
 - Play, Check, Baseline, Game preset, Details and Up also have explicit buttons.

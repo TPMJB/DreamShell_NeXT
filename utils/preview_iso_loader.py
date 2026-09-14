@@ -22,7 +22,7 @@ class Preview:
         self.modal=modal
         self.text={"game_title":"Evolution 2","game_title2":" ",
                    "launch-summary":"sd | Baseline (unsaved)",
-                   "launch-status":"Ready. Start: play   X: check   Y: settings   B: up",
+                   "launch-status":"Ready. Left/right: actions   Start: play   X: check   Y: settings",
                    "version":"v2.0.0",
                    "message-0":"Executable read check passed.",
                    "message-1":"Play compares the standalone loader's read before launch.",

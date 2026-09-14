@@ -337,11 +337,11 @@ uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 	int bin_type = BIN_TYPE_AUTO;
 	int naomi_set = 0;
 	uint32_t heap = HEAP_MODE_AUTO, emu_cdda = 0;
-	char title[128] = "";
+	char title[129] = "";
 	char device[8] = "";
 	char memory[12] = "";
 	char heap_memory[12] = "";
-	char bin_file[12] = "";
+	char bin_file[16] = "";
 	char patch_a[2][10];
 	char patch_v[2][10];
 

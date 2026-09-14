@@ -64,6 +64,7 @@ static struct {
 	volatile int loading;
 	int profile_mode;
 	int nav_preview;
+    int toolbar_index;
 	GUI_Widget *status, *summary, *verify_boot, *preview_media, *message;
 	GUI_Widget *btn_check;
 	Event_t *input_event;
@@ -1143,8 +1144,9 @@ void isoLoader_toggleAsync(GUI_Widget *widget) {
 }
 
 void isoLoader_toggleDMA(GUI_Widget *widget) {
-    if(self.isoldr && !strcmp(self.isoldr->fs_dev, ISOLDR_DEV_SDCARD))
+    if(self.isoldr && !strcmp(self.isoldr->fs_dev, ISOLDR_DEV_SDCARD)) {
         GUI_WidgetSetState(widget, 0);
+    }
 	
 	if (GUI_WidgetGetState(widget) && self.isoldr != NULL && isoldr_can_use_dma(self.isoldr) > 1) {
 		if (!strncmp(GUI_LabelGetText(self.async_label), "none", 4)) {
@@ -1535,7 +1537,7 @@ void isoLoader_Run(GUI_Widget *widget) {
     }
     detected_type = self.isoldr->exec.type;
 
-	char *preset = self.profile_mode ? NULL : isoldr_find_preset(filepath, self.md5, 0);
+	const char *preset = !self.profile_mode && self.preset_source[0] == '/' ? self.preset_source : NULL;
 	if(isoldr_apply_preset(self.isoldr, preset) == (uintptr_t)-1) {
 		ScreenFadeIn();
 		next_message(isoldr_get_last_error());
@@ -2268,13 +2270,16 @@ int isoLoader_SavePreset(GUI_Widget *widget) {
 	}
 	ResumeCDDATrack();
 
-	if(widget && result == 0) {
-		GUI_LabelSetText(self.preset_status, "Saved");
-	}
+    if(result == 0) {
+        snprintf(self.preset_source, sizeof(self.preset_source), "%s", filename);
+        self.profile_mode = 0;
+        if(widget) GUI_LabelSetText(self.preset_status, "Saved");
+    }
 	return result;
 }
 
 int isoLoader_LoadPreset(GUI_Widget *widget) {
+    if(widget) self.profile_mode = 0;
 
 	if (!self.filename[0]) {
 		isoLoader_DefaultPreset();
@@ -2535,6 +2540,7 @@ void isoLoader_Init(App_t *app) {
 
 		self.app = app;
 		self.current_dev = -1;
+        self.toolbar_index = -1;
 		self.current_item = -1;
 		self.current_item_dir = -1;
 		self.sector_size = 2048;

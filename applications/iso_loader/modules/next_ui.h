@@ -23,7 +23,7 @@ static void next_refresh(void) {
         !strncmp(self.preset_source, "Automatic", 9) ? "Automatic defaults" : "Saved game preset";
     snprintf(text, sizeof(text), "%s | %s", self.isoldr->fs_dev, profile);
     GUI_LabelSetText(self.summary, text);
-    next_status("Ready. Start: play   X: check   Y: settings   B: up");
+    next_status("Ready. Left/right: actions   Start: play   X: check   Y: settings");
 }
 
 void isoLoader_Dismiss(GUI_Widget *widget) {
@@ -57,7 +57,7 @@ static void next_message(const char *text) {
 }
 
 static void next_report(const char *path, const isoldr_info_t *info, uint32 addr, const char *stage) {
-    char target[NAME_MAX], temp[NAME_MAX];
+    char target[NAME_MAX], temp[NAME_MAX], previous[NAME_MAX];
     int n = snprintf(self.launch_report, sizeof(self.launch_report),
         "DreamShell NeXT ISO Loader 2.0.0 / TPMJB\n"
         "Stage: %s\nImage: %s\nProfile: %s\nPreset: %s\n"
@@ -82,7 +82,8 @@ static void next_report(const char *path, const isoldr_info_t *info, uint32 addr
             info->magic[10] == ISOLDR_VERIFY_MARKER ? "yes" : "no", info->boot_crc32);
     }
     if(snprintf(target, sizeof(target), "%s/apps/iso_loader/last-launch.txt", getenv("PATH")) >= sizeof(target) ||
-       snprintf(temp, sizeof(temp), "%s/apps/iso_loader/last-launch.tmp", getenv("PATH")) >= sizeof(temp))
+       snprintf(temp, sizeof(temp), "%s/apps/iso_loader/last-launch.tmp", getenv("PATH")) >= sizeof(temp) ||
+       snprintf(previous, sizeof(previous), "%s/apps/iso_loader/last-launch.previous.txt", getenv("PATH")) >= sizeof(previous))
         return;
     file_t fd = fs_open(temp, O_WRONLY | O_CREAT | O_TRUNC);
     if(fd == FILEHND_INVALID) {
@@ -92,7 +93,17 @@ static void next_report(const char *path, const isoldr_info_t *info, uint32 addr
     size_t len = strlen(self.launch_report);
     int ok = fs_write(fd, self.launch_report, len) == (ssize_t)len;
     if(fs_close(fd) < 0) ok = 0;
-    if(ok && fs_rename(temp, target) == 0) return;
+    if(ok) {
+        /* FatFs does not replace an existing rename destination. Rotate only
+         * after the new report was completely written and closed. */
+        int moved = 0;
+        if(FileExists(target)) {
+            if(!FileExists(previous) || fs_unlink(previous) == 0)
+                moved = fs_rename(target, previous) == 0;
+        }
+        if(fs_rename(temp, target) == 0) return;
+        if(moved) fs_rename(previous, target);
+    }
     fs_unlink(temp);
     ds_printf("DS_WARNING: Launch report could not be saved; previous report retained.\n");
 }
@@ -196,6 +207,15 @@ void isoLoader_Up(GUI_Widget *widget) {
     next_refresh();
 }
 
+static void next_toolbar(int index) {
+    self.toolbar_index = index;
+    for(int i = 0; i < GUI_ContainerGetCount(self.run_pane); ++i) {
+        GUI_Widget *w = GUI_ContainerGetChild(self.run_pane, i);
+        if(i == index) GUI_WidgetSetFlags(w, WIDGET_INSIDE);
+        else GUI_WidgetClearFlags(w, WIDGET_INSIDE);
+    }
+}
+
 static void next_select_row(int delta, int activate) {
     if(self.loading) return;
     GUI_Widget *panel = GUI_FileManagerGetItemPanel(self.filebrowser);
@@ -219,6 +239,7 @@ static void next_input(void *event, void *param, int action) {
     SDL_Event *e = param;
     if(action != EVENT_ACTION_UPDATE || !e || !(self.app->state & APP_STATE_OPENED) ||
        ConsoleIsVisible()) return;
+    if(e->type == SDL_KEYDOWN && (e->key.keysym.sym == SDLK_F1 || e->key.keysym.sym == SDLK_PRINT)) return;
     if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
         e->type = SDL_NOEVENT; return;
@@ -231,7 +252,7 @@ static void next_input(void *event, void *param, int action) {
             case SDLK_UP: vertical = -1; break;
             case SDLK_DOWN: vertical = 1; break;
             case SDLK_LEFT: horizontal = -1; break;
-            case SDLK_RIGHT: horizontal = 1; break;
+            case SDLK_RIGHT: case SDLK_TAB: horizontal = 1; break;
             case SDLK_RETURN: button = SDL_DC_A; break;
             case SDLK_ESCAPE: case SDLK_BACKSPACE: button = SDL_DC_B; break;
             case SDLK_x: button = SDL_DC_X; break;
@@ -257,18 +278,25 @@ static void next_input(void *event, void *param, int action) {
         vertical = e->jhat.value & SDL_HAT_UP ? -1 : e->jhat.value & SDL_HAT_DOWN ? 1 : 0;
         horizontal = e->jhat.value & SDL_HAT_LEFT ? -1 : e->jhat.value & SDL_HAT_RIGHT ? 1 : 0;
     }
-    if(vertical) next_select_row(vertical, 0);
+    if(vertical) { next_toolbar(-1); next_select_row(vertical, 0); }
     else if(horizontal && !self.loading) {
-        int dev = self.current_dev < 0 ? 0 : self.current_dev;
-        for(int i = 0; i < APP_DEVICE_COUNT; ++i) {
-            dev = (dev + APP_DEVICE_COUNT + horizontal) % APP_DEVICE_COUNT;
-            if(!(GUI_WidgetGetFlags(self.btn_dev[dev]) & WIDGET_DISABLED)) {
-                GUI_WidgetClicked(self.btn_dev[dev], 0, 0); break;
-            }
+        int count = GUI_ContainerGetCount(self.run_pane), index = self.toolbar_index;
+        if(index < 0) index = horizontal > 0 ? -1 : 0;
+        for(int i = 0; i < count; ++i) {
+            index = (index + count + horizontal) % count;
+            GUI_Widget *w = GUI_ContainerGetChild(self.run_pane, index);
+            if(!(GUI_WidgetGetFlags(w) & WIDGET_DISABLED)) { next_toolbar(index); break; }
         }
     }
-    else if(button == SDL_DC_A) next_select_row(0, 1);
-    else if(button == SDL_DC_B) isoLoader_Up(NULL);
+    else if(button == SDL_DC_A) {
+        if(self.toolbar_index >= 0)
+            GUI_WidgetClicked(GUI_ContainerGetChild(self.run_pane, self.toolbar_index), 0, 0);
+        else next_select_row(0, 1);
+    }
+    else if(button == SDL_DC_B) {
+        if(self.toolbar_index >= 0) next_toolbar(-1);
+        else isoLoader_Up(NULL);
+    }
     else if(button == SDL_DC_X) isoLoader_Check(NULL);
     else if(button == SDL_DC_Y && !self.loading) isoLoader_ShowSettings(self.settings);
     else if(button == SDL_DC_START) isoLoader_Run(NULL);
@@ -279,6 +307,7 @@ static void next_input(void *event, void *param, int action) {
 void isoLoader_Open(App_t *app) {
     (void)app;
     if(!self.input_event) { next_status("Controller input unavailable. Reopen the app."); return; }
+    next_toolbar(-1);
     GUI_DisableInput();
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), GUI_CardStackGetIndex(self.pages) == 0 ? 0 : 1);
     SetEventActive(self.input_event, 1);

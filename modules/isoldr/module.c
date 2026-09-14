@@ -255,7 +255,7 @@ static int isoldr_check_gdi(const char *filename) {
         char expected[32], path[NAME_MAX];
         const char *suffix = strrchr(track.name, '.');
         snprintf(expected, sizeof(expected), "track%02d%s", i, suffix ? suffix : "");
-        if(strcmp(expected, track.name) || !suffix || track.offset ||
+        if(strcasecmp(expected, track.name) || !suffix || track.offset ||
            (track.flags == 4 && strcasecmp(suffix, track.sector_size == 2048 ? ".iso" : ".bin")) ||
            (track.flags == 0 && strcasecmp(suffix, ".raw") && strcasecmp(suffix, ".wav"))) {
             isoldr_error("Track %d needs standard trackNN.iso/bin/raw names and offset 0 for this loader.\n", i); goto done;
@@ -709,7 +709,6 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
     if(elf_dot) strcpy(elf_dot, ".elf");
     if(FileExists(elf_path)) {
         if(isoldr_elf_load(elf_path, addr, &loader, &len) < 0) {
-            isoldr_error("Cannot load ELF firmware: %s\n", elf_path);
             return;
         }
         ds_printf("DS_PROCESS: Loader: %s\n", elf_path);
