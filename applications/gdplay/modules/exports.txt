@@ -3,5 +3,8 @@ include app_module.h
 
 gdplay_Init
 gdplay_Open
+gdplay_Close
 gdplay_Shutdown
 gdplay_play
+gdplay_Back
+gdplay_Refresh

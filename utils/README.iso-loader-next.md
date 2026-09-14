@@ -1,13 +1,19 @@
-# DreamShell NeXT ISO Loader 2.0.5 + Games 1.0.1
+# DreamShell NeXT combined apps preview
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
-This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, ISOFS and ISO Loader modules, and standalone 0.9.2 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
+This update combines ISO Loader 2.0.5, Games Menu 1.0.1, File Manager/GD Play/Settings 2.0.0, the new launcher icons, ISOFS and ISO Loader modules, and standalone 0.9.2 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together. This is a test update, not a full release.
 
 ## Install
-1. Back up the existing DS/apps/iso_loader, DS/apps/games_menu/app.xml, DS/apps/games_menu/modules/app_games_menu.klf, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
+1. Back up the existing DS/apps, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
 3. Restart DreamShell. ISO Loader should show v2.0.5; Games is v1.0.1; the standalone loader should show v0.9.2.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
+
+## Utility apps merge and console status
+
+The approved `codex/utility-apps` commit `f7fab643c3727a90a739a4d8249a6c184aee1c74` is merged into the ISO Loader branch. It adds the coordinated launcher icons, two-pane File Manager, GD Play disc details with a visible Menu action, and Settings tabs for Display, Sound, Startup, Clock and System. See `Utility-Apps-README.md` for controls and hardware checks. `Utility-Apps-Preview.png` illustrates the merged layouts.
+
+The latest console test with firmware **0.9.2** still black-screens on **Bust-A-Move 4**; **Resident Evil: Code Veronica boots**. The WinCE DMA address fix did not resolve Bust-A-Move 4, whose runtime compatibility remains an open issue. This merge adds the approved utility apps and icons and does not claim another game compatibility fix.
 
 ## Firmware 0.9.2: WinCE SD physical DMA destinations
 

@@ -1,4 +1,4 @@
-name: ISO Loader NeXT build
+name: NeXT combined apps build
 
 on:
   push:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Build ISO Loader update
+    name: Build combined apps update
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     permissions:
@@ -63,6 +63,7 @@ jobs:
         run: |
           python3 utils/preview_iso_loader.py --output /tmp/iso-loader-preview --emit
           python3 utils/preview_games_menu.py --output /tmp/games-preview
+          python3 utils/preview_utility_apps.py /tmp/utility-preview
 
       - name: Prepare directories
         run: |
@@ -110,6 +111,9 @@ jobs:
           make -C modules/isoldr module.o preset.o elf.o exports.o
           make -C modules/isofs gdi.o
           make -C applications/games_menu/modules module.o utils.o menu.o system_menu.o preset.o exports.o
+          make -C applications/settings/modules module.o exports.o
+          make -C applications/gdplay/modules module.o exec.o exports.o
+          make -C applications/filemanager/modules module.o exports.o
 
       - name: Check GDI parser has no SH-4 runtime imports
         run: |
@@ -151,13 +155,18 @@ jobs:
       - name: Build DreamShell release
         run: bash .github/scripts/dev-build.sh release
 
-      - name: Package ISO Loader update
+      - name: Package combined apps update
         run: |
+          python3 utils/package_utility_apps.py DreamShell-dev.zip utility-apps.zip
           python3 - <<'PY_PACKAGE'
           from zipfile import ZipFile, ZIP_DEFLATED
           from hashlib import sha256
           import os
           prefix='DS/apps/iso_loader/'
+          with ZipFile('utility-apps.zip') as utilities:
+              assert utilities.testzip() is None
+              utility_files={name for name in utilities.namelist() if name.startswith('DS/')}
+              utility_guide=utilities.read('Utility-Apps-README.md')
           with ZipFile('DreamShell-dev.zip') as full:
               assert full.testzip() is None
               assert b'version="2.0.5"' in full.read(prefix+'app.xml')
@@ -185,18 +194,23 @@ jobs:
               with ZipFile('DreamShell-ISO-Loader-2.0.5.zip','w',ZIP_DEFLATED) as update:
                   sums=[]
                   for name in full.namelist():
-                      include=(name.startswith(prefix) and not name.startswith(prefix+'presets/')) or name.startswith('DS/firmware/isoldr/') or name.startswith('DS/apps/games_menu/images/') or name=='DS/apps/games_menu/fonts/default.txf' or name in ('DS/apps/games_menu/app.xml','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/fonts/ttf/arial_lite.ttf','DS/fonts/ttf/m23.ttf')
+                      include=name in utility_files or (name.startswith(prefix) and not name.startswith(prefix+'presets/')) or name.startswith('DS/firmware/isoldr/') or name.startswith('DS/apps/games_menu/images/') or name=='DS/apps/games_menu/fonts/default.txf' or name in ('DS/apps/games_menu/app.xml','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/fonts/ttf/arial_lite.ttf','DS/fonts/ttf/m23.ttf')
                       if include:
                           data=full.read(name)
                           update.writestr(name,data)
                           if not name.endswith('/'):
                               sums.append(sha256(data).hexdigest()+'  '+name)
                   update.write('utils/README.iso-loader-next.md','ISO-Loader-Guide.md')
+                  update.writestr('Utility-Apps-README.md',utility_guide)
+                  update.write('/tmp/utility-preview/utility-apps-preview.png','Utility-Apps-Preview.png')
                   update.write('/tmp/iso-loader-preview/ISO-Loader-Preview.png','ISO-Loader-Preview.png')
                   update.write('/tmp/iso-loader-preview/ISO-Loader-Check-Preview.png','ISO-Loader-Check-Preview.png')
                   update.write('/tmp/games-preview/Games-Preview.png','Games-Preview.png')
                   update.writestr('SOURCE-REVISION.txt',os.environ['GITHUB_SHA']+'\n')
                   update.writestr('SHA256SUMS.txt','\n'.join(sums)+'\n')
+                  assert utility_files.issubset(update.namelist())
+                  assert len(update.namelist())==len(set(update.namelist()))
+                  assert 'DS/DS_CORE.BIN' not in update.namelist()
           # GitHub supplies the download ZIP. Upload the contents, not our ZIP.
           with ZipFile('DreamShell-ISO-Loader-2.0.5.zip') as update:
               assert update.testzip() is None
@@ -206,6 +220,6 @@ jobs:
       - name: Upload update
         uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-ISO-Loader-2.0.5-Firmware-0.9.2
+          name: DreamShell-NeXT-Combined-Apps-Preview
           path: iso-loader-update/
           if-no-files-found: error

@@ -1,358 +1,122 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<app name="Settings" version="0.3.0" icon="images/icon.png">
-	<resources>
-		<module src="modules/app_settings.klf" />
-		<font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="14" name="arial" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="22" name="comic-22" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="18" name="comic-18" />
-		<surface height="45" name="header-bg">
-			<fill color="#C9DADE" />
-			<fill color="#BBBBBB" height="1" y="43" />
-			<fill color="#CCCCCC" height="1" y="44" />
-		</surface>
-		<surface width="200" height="20" name="slider-bg">
-			<fill x="0" y="0" width="200" height="20" color="#CCCCCC" />
-			<fill x="2" y="2" width="196" height="16" color="#EEEEEE" />
-		</surface>
-		<surface width="20" height="20" name="slider-knob">
-			<fill x="0" y="0" width="20" height="20" color="#31799F" />
-			<fill x="2" y="2" width="16" height="16" color="#61BDEC" />
-		</surface>
-	</resources>
-	<body width="100%" height="100%" onload="export:SettingsApp_Init()" background="#DDDDDD">
-		<panel height="45" background="header-bg">
-			<label font="comic-22" color="#666666" text="DreamShell Settings" />
-		</panel>
-		<cardstack name="pages">
-			<panel name="main-page" y="80">
-
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="boot-but" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Boot settings" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="display-but" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Display settings" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="sound-but" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Sound settings" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="date-but" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Date and Time" />
-					</input>
-				</panel>
-				<panel height="35" />
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ResetSettings()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Reset to default" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_SaveSettings()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Save to VMU or Root" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_Reboot()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Reboot" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="console:app -o" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Exit" />
-					</input>
-				</panel>
-
-			</panel>
-			<panel name="boot-page" y="10">
-			
-				<panel x="5%" width="95%" height="350">
-					<panel height="40" name="boot-root">
-						<label width="150" height="40" font="comic-22" color="#31799F" text="Root directory" align="left" />
-						<input type="checkbox" x="155" y="15" width="75" height="25" onclick="export:SettingsApp_ToggleRoot()">
-							<label x="22" height="20" font="arial" color="#333333" text="Auto" align="left" />
-						</input>
-						<input type="checkbox" width="90" height="25" onclick="export:SettingsApp_ToggleRoot()">
-							<label x="22" height="20" font="arial" color="#333333" text="/ide/DS" align="left" />
-						</input>
-						<input type="checkbox" width="85" height="25" onclick="export:SettingsApp_ToggleRoot()">
-							<label x="22" height="20" font="arial" color="#333333" text="/sd/DS" align="left" />
-						</input>
-						<input type="checkbox" width="70" height="25" onclick="export:SettingsApp_ToggleRoot()">
-							<label x="22" height="20" font="arial" color="#333333" text="/pc" align="left" />
-						</input>
-						<input type="checkbox" width="70" height="25" onclick="export:SettingsApp_ToggleRoot()">
-							<label x="22" height="20" font="arial" color="#333333" text="/cd" align="left" />
-						</input>
-					</panel>
-					<panel height="40" name="boot-startup">
-						<label width="150" height="40" font="comic-22" color="#31799F" text="Startup script" align="left" />
-						<input type="checkbox" x="155" y="15" width="150" height="25" onclick="export:SettingsApp_ToggleStartup()">
-							<label x="25" height="20" font="arial" color="#333333" text="/lua/startup.lua" align="left" />
-						</input>
-						<input type="checkbox" width="150" height="25" onclick="export:SettingsApp_ToggleStartup()">
-							<label x="25" height="20" font="arial" color="#333333" text="/lua/custom.lua" align="left" />
-						</input>
-					</panel>
-					<panel height="210">
-						<panel width="50%" name="boot-startup-app">
-							<label height="40" font="comic-22" color="#31799F" text="Startup application" align="left" />
-						</panel>
-						<panel width="50%" name="boot-main-app">
-							<label height="40" font="comic-22" color="#31799F" text="Main application" align="left" />
-						</panel>
-					</panel>
-				</panel>
-				<panel height="60">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="main-but-boot" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Back to main page" />
-					</input>
-				</panel>
-
-			</panel>
-			<panel name="display-page" y="10">
-
-				<panel height="340">
-					<panel width="30%" x="5%" name="display-native-mode">
-						<label height="43" font="comic-22" color="#31799F" text="Native mode" align="left" />
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleNativeMode()">
-							<label x="25" font="arial" color="#333333" text="Auto" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleNativeMode()">
-							<label x="25" font="arial" color="#333333" text="480i PAL" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleNativeMode()">
-							<label x="25" font="arial" color="#333333" text="480i NTSC" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleNativeMode()">
-							<label x="25" font="arial" color="#333333" text="480p VGA" align="left" />
-						</input>
-					</panel>
-
-					<panel width="33%" name="display-screen-mode">
-						<label height="40" font="comic-22" color="#31799F" text="Screen mode" align="left" />
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenMode()">
-							<label x="25" font="arial" color="#333333" text="640x480 4:3" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenMode()">
-							<label x="25" font="arial" color="#333333" text="720x480 3:2" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenMode()">
-							<label x="25" font="arial" color="#333333" text="768x480 16:10" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenMode()">
-							<label x="25" font="arial" color="#333333" text="854x480 16:9" align="left" />
-						</input>
-					</panel>
-
-					<panel width="30%" name="display-screen-filter">
-						<label height="40" font="comic-22" color="#31799F" text="Screen filter" align="left" />
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenFilter()">
-							<label x="25" font="arial" color="#333333" text="Auto" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenFilter()">
-							<label x="25" font="arial" color="#333333" text="Nearest" align="left" />
-						</input>
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenFilter()">
-							<label x="25" font="arial" color="#333333" text="Bilinear" align="left" />
-						</input>
-						<!--
-						<input type="checkbox" height="25" onclick="export:SettingsApp_ToggleScreenFilter()">
-							<label x="25" font="arial" color="#333333" text="Trilinear" align="left" />
-						</input>
-						-->
-					</panel>
-
-					<panel y="270" height="25">
-						<label font="arial" color="#333333" text="After changing the native mode, you must reboot the console" />
-					</panel>
-					<panel height="25">
-						<label font="arial" color="#333333" text="After changing the screen mode, you must restart the application" />
-					</panel>
-				</panel>
-
-				<panel height="60">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="main-but-display" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Back to main page" />
-					</input>
-				</panel>
-			</panel>
-			<panel name="date-page" y="10">
-				<panel x="0" y="20" width="100%" height="50">
-					<label font="comic-22" color="#31799F" text="System date and time" align="center" valign="center" />
-				</panel>
-
-				<panel x="32%" y="80" width="230" height="25">
-					<input type="text" 
-						onblur="export:SettingsApp_Time()"
-						onfocus="export:SettingsApp_Time_Clr()"
-						font="arial" 
-						fontcolor="#333333" 
-						value="1998" 
-						size="5" x="5" width="40" height="25"
-						name="year" />
-
-					<panel x="45" width="20">
-						<label font="arial" color="#333333" text="/" align="center" />
-					</panel>
-
-					<input type="text" 
-						onblur="export:SettingsApp_Time()"
-						onfocus="export:SettingsApp_Time_Clr()"
-						font="arial" 
-						fontcolor="#333333" 
-						value="03" 
-						size="3" x="65" width="25" height="25"
-						name="month" />
-
-					<panel x="90" width="20">
-						<label font="arial" color="#333333" text="/" align="center" />
-					</panel>
-
-					<input type="text"
-						onblur="export:SettingsApp_Time()"
-						onfocus="export:SettingsApp_Time_Clr()"
-						font="arial"
-						fontcolor="#333333"
-						value="18"
-						size="3" x="110" width="25" height="25"
-						name="day" />
-
-					<input type="text"
-						onblur="export:SettingsApp_Time()"
-						onfocus="export:SettingsApp_Time_Clr()"
-						font="arial"
-						fontcolor="#333333"
-						value="00"
-						size="3" x="155" width="25" height="25"
-						name="hours" />
-
-					<panel x="180" width="20">
-						<label font="arial" color="#333333" text=":" align="center" />
-					</panel>
-
-					<input type="text"
-						onblur="export:SettingsApp_Time()"
-						onfocus="export:SettingsApp_Time_Clr()"
-						font="arial"
-						fontcolor="#333333"
-						value="00"
-						size="3" x="200" width="25" height="25"
-						name="minute" />
-				</panel>
-
-				<panel x="32%" y="110" width="230" height="20">
-					<panel x="5" width="45">
-						<label font="arial" color="#333333" text="YYYY" align="center"/>
-					</panel>
-					<panel x="65" width="30">
-						<label font="arial" color="#333333" text="MM" align="center"/>
-					</panel>
-					<panel x="110" width="30">
-						<label font="arial" color="#333333" text="DD" align="center"/>
-					</panel>
-					<panel x="155" width="30">
-						<label font="arial" color="#333333" text="HH" align="center"/>
-					</panel>
-					<panel x="200" width="30">
-						<label font="arial" color="#333333" text="MM" align="center"/>
-					</panel>
-				</panel>
-
-				<panel x="30%" y="140" width="250" height="30">
-					<label x="0" width="120" font="arial" color="#333333" text="Timezone (GMT):" align="left" valign="center" />
-					<input type="button" name="tz-minus" x="125" width="25" height="25" onclick="export:SettingsApp_TimezoneChange()">
-						<label font="arial" color="#EEEEEE" text="-" />
-					</input>
-					<input type="text" name="timezone" x="155" width="60" height="25" font="arial" fontcolor="#333333" value="+0" size="10" onblur="export:SettingsApp_TimezoneChange()" onfocus="export:SettingsApp_TimezoneClr()" />
-					<input type="button" name="tz-plus" x="220" width="25" height="25" onclick="export:SettingsApp_TimezoneChange()">
-						<label font="arial" color="#EEEEEE" text="+" />
-					</input>
-				</panel>
-
-				<panel width="100%" height="50" />
-
-				<panel height="70" width="50%">
-					<input type="button" name="get-time" width="280" height="60" onclick="export:SettingsApp_TimeChange()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Get values from RTC" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" name="set-time" width="280" height="60" onclick="export:SettingsApp_TimeChange()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Set values to RTC" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" name="sync-time" width="280" height="60" onclick="export:SettingsApp_TimeChange()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Sync RTC by NTP" />
-					</input>
-				</panel>
-				<panel height="70" width="50%">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="main-but-clock" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Back to main page" />
-					</input>
-				</panel>
-
-			</panel>
-			<panel name="sound-page" y="10">
-
-				<panel x="5%" y="20" width="40%" height="25">
-					<label width="100%" height="100%" font="comic-22" color="#31799F" text="Master volume" align="left" />
-				</panel>
-
-				<panel x="5%" y="45" width="40%" height="25">
-					<scrollbar x="0" y="2" width="200" height="20" name="volume-slider" onmove="export:SettingsApp_VolumeChange" background="slider-bg" knob="slider-knob" />
-					<label x="210" width="50" height="25" font="arial" color="#333333" text="200" align="left" name="volume-label" />
-				</panel>
-
-				<panel x="5%" y="85" width="40%" height="25">
-					<label width="200" height="25" font="comic-22" color="#31799F" text="General" align="left" />
-				</panel>
-
-				<panel x="5%" y="110" width="40%" height="25">
-					<input type="checkbox" x="0" y="2" width="180" height="25" onclick="export:SettingsApp_ToggleStartupSound()" name="startup-chk">
-						<label x="25" height="20" font="arial" color="#333333" text="Startup sound" align="left" />
-					</input>
-				</panel>
-
-				<panel x="5%" y="135" width="40%" height="25">
-					<input type="checkbox" x="0" y="2" width="200" height="25" onclick="export:SettingsApp_ToggleSfx()" name="sfx-chk">
-						<label x="25" height="20" font="arial" color="#333333" text="Sound effects" align="left" />
-					</input>
-				</panel>
-
-				<panel x="5%" y="175" width="40%" height="25">
-					<label width="250" height="25" font="comic-22" color="#31799F" text="Mouse cursor" align="left" />
-				</panel>
-
-				<panel x="5%" y="200" width="40%" height="25">
-					<input type="checkbox" x="0" y="2" width="150" height="25" onclick="export:SettingsApp_ToggleClick()" name="click-chk">
-						<label x="25" height="20" font="arial" color="#333333" text="Click sounds" align="left" />
-					</input>
-				</panel>
-
-				<panel x="5%" y="225" width="40%" height="25">
-					<input type="checkbox" x="0" y="2" width="150" height="25" onclick="export:SettingsApp_ToggleHover()" name="hover-chk">
-						<label x="25" height="20" font="arial" color="#333333" text="Hover sounds" align="left" />
-					</input>
-				</panel>
-
-				<panel height="60" y="290">
-					<input type="button" width="280" height="60" onclick="export:SettingsApp_ShowPage()" name="main-but-sound" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Back to main page" />
-					</input>
-				</panel>
-
-			</panel>
-		</cardstack>
-		<dialog name="dialog" font="comic-18"
-				x="120" y="160" width="400" height="160"
-				onconfirm="export:SettingsApp_DialogConfirm"
-				oncancel="export:SettingsApp_DialogCancel" />
-	</body>
+<?xml version='1.0' encoding='UTF-8'?>
+<app name="Settings" version="2.0.0" icon="images/icon.png">
+  <resources>
+    <module src="modules/app_settings.klf" />
+    <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="small" size="14" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <surface name="bg" width="640" height="480">
+      <fill color="#101923" />
+    </surface>
+    <surface name="panel" width="592" height="320">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b116x32-normal" width="116" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b116x32-highlight" width="116" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-pressed" width="116" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-disabled" width="116" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b112x32-normal" width="112" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b112x32-highlight" width="112" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="108" height="28" color="#155B71" />
+    </surface>
+    <surface name="b112x32-pressed" width="112" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="108" height="28" color="#155B71" />
+    </surface>
+    <surface name="b112x32-disabled" width="112" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b592x36-normal" width="592" height="36">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b592x36-highlight" width="592" height="36">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="588" height="32" color="#155B71" />
+    </surface>
+    <surface name="b592x36-pressed" width="592" height="36">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="588" height="32" color="#155B71" />
+    </surface>
+    <surface name="b592x36-disabled" width="592" height="36">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b152x32-normal" width="152" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b152x32-highlight" width="152" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="148" height="28" color="#155B71" />
+    </surface>
+    <surface name="b152x32-pressed" width="152" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="148" height="28" color="#155B71" />
+    </surface>
+    <surface name="b152x32-disabled" width="152" height="32">
+      <fill color="#26313B" />
+    </surface>
+  </resources>
+  <body width="640" height="480" background="bg" onload="export:SettingsApp_Init()" onopen="export:SettingsApp_Open()" onclose="export:SettingsApp_Close()" onunload="export:SettingsApp_Shutdown()">
+    <label name="heading" text="Settings" x="24" y="18" width="430" height="30" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Make it yours" x="24" y="48" width="580" height="20" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="back-btn" type="button" x="500" y="20" width="116" height="32" onclick="export:SettingsApp_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+      <label name="back-btn-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="tab-0" type="button" x="24" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
+      <label name="tab-0-caption" text="Display" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="tab-1" type="button" x="144" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
+      <label name="tab-1-caption" text="Sound" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="tab-2" type="button" x="264" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
+      <label name="tab-2-caption" text="Startup" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="tab-3" type="button" x="384" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
+      <label name="tab-3-caption" text="Clock" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="tab-4" type="button" x="504" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
+      <label name="tab-4-caption" text="System" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-0" type="button" x="24" y="118" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-0-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-1" type="button" x="24" y="157" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-1-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-2" type="button" x="24" y="196" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-2-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-3" type="button" x="24" y="235" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-3-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-4" type="button" x="24" y="274" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-4-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-5" type="button" x="24" y="313" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-5-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="row-6" type="button" x="24" y="352" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
+      <label name="row-6-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <label name="help" text="A changes a value. X changes it back." x="24" y="393" width="592" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="save-status" text="No unsaved changes" x="24" y="415" width="592" height="18" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="controls" text="D-pad Select / Adjust   X Previous   Y Tab   B Menu" x="24" y="442" width="430" height="22" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <input name="save-btn" type="button" x="464" y="438" width="152" height="32" onclick="export:SettingsApp_Save()" normal="b152x32-normal" highlight="b152x32-highlight" pressed="b152x32-pressed" disabled="b152x32-disabled">
+      <label name="save-btn-caption" text="Save settings" x="12" y="0" width="128" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <dialog name="dialog" font="body" x="70" y="140" width="500" height="220" onconfirm="export:SettingsApp_Confirm()" oncancel="export:SettingsApp_Cancel()" />
+  </body>
 </app>
