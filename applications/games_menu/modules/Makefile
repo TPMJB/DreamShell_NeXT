@@ -10,6 +10,8 @@ OBJS = module.o utils.o menu.o system_menu.o preset.o
 DBG_LIBS = -lds -lisofs -lisoldr -lwave
 EXPORTS_FILE = exports.txt
 
+KOS_CFLAGS += -I./
+
 VER_MAJOR = 0
 VER_MINOR = 9
 VER_MICRO = 2
