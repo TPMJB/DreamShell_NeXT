@@ -1,18 +1,22 @@
-# DreamShell NeXT ISO Loader 2.0.1
+# DreamShell NeXT ISO Loader 2.0.2
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
-This update contains the ISO Loader app, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
+This update contains the ISO Loader app, a Games Menu launch-error fix, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
 
 ## Install
-1. Back up the existing DS/apps/iso_loader, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
+1. Back up the existing DS/apps/iso_loader, DS/apps/games_menu/app.xml, DS/apps/games_menu/modules/app_games_menu.klf, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
-3. Restart DreamShell. The app should show v2.0.1; the standalone loader should show v0.9.1.
+3. Restart DreamShell. The app should show v2.0.2; the standalone loader should show v0.9.1.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
 
-## 2.0.1 follow-up
-Restores the analog cursor and native D-pad focus on every page, including the top bars. Removes the incomplete list/action-only navigation. Error dialogs consume the full click so dismissal cannot activate a control behind them, and the game page stays hidden until the dialog closes to prevent asynchronous redraws covering its text.
+## 2.0.2 follow-up
+The supplied Evolution 2 descriptor is valid and is now a regression fixture. The GDI parser uses explicit ASCII character checks and bounded 32-bit number parsing instead of imported newlib character tables. Both ISO Loader preflight and ISOFS mounting use it. This removes a possible source of console-only parsing differences; the original on-console rejection has not been conclusively reproduced.
 
-The ISO Loader module is 0.9.2; standalone firmware remains 0.9.1. GDI validation now distinguishes malformed lines, wrong track numbers and non-increasing sector addresses, and includes the offending descriptor line for parsing/number errors. The reported track-1 failure has not been reproduced from the screenshot: the user's small .gdi descriptor is still needed. No game track data is needed for that diagnosis.
+Games Menu uses the same ISO Loader module. If image inspection or launch preparation fails, it now displays the loader's error after returning to the main menu. A returned isoldr_exec call is a failure, not a successful handoff: the app keeps DreamShell running and frees its menu resources exactly once.
+
+Versions: ISO Loader app 2.0.2; ISO Loader module 0.9.3; ISOFS 1.8.1; Games Menu 0.9.2; standalone firmware 0.9.1. This ZIP includes Games Menu's XML/module only, preserving its images, configuration and presets.
+
+The 2.0.1 cursor fix is retained: analog cursor and native D-pad focus work on every page, including the top bars. Error dialogs consume the full click and hide the page behind them to prevent asynchronous redraws covering their text. GDI errors show the rejected descriptor line and distinguish parsing, numbering and sector-order problems.
 
 ## Evolution 2: first console test
 Select the CRC-verified dump, choose **Baseline**, then **Check**. Baseline is an unsaved diagnostic profile: Direct boot, loader at 8ce00000, async 8, DMA off, CDDA and VMU emulation off, visible loader messages and executable verification on. It bypasses the saved game preset without deleting it.
@@ -48,6 +52,6 @@ Executable verification covers Dreamcast disc images. NAOMI/Bleem launches keep 
 Older low-memory presets may no longer fit the complete modern loader, including its BSS. They are rejected with an explanation instead of skipping an assumed 32 KiB of executable data. ELF firmware is preferred, with bounded header/segment/relocation reads. Legacy BIN firmware remains a fallback only if the ELF is absent.
 
 ## Validation
-The build runs the repository's storage/ripper tests, new host tests that compile the production raw-sector reader with short-read/seek/EOF fault injection and buffer canaries, CRC/layout/GDI/ELF-boundary tests, and the native XML/export contract check. It cross-compiles the app/modules and standalone firmware.
+The build runs the repository's storage/ripper tests, new host tests that compile the production raw-sector reader with short-read/seek/EOF fault injection and buffer canaries, CRC/layout/GDI/ELF-boundary tests, and the native XML/export contract check. It also tests Games Menu cleanup for inspection errors and returned launch failures, checks the SH-4 parser object has no runtime imports, and cross-compiles the app/modules and standalone firmware.
 
 These checks do not replace a Dreamcast hardware boot test. Evolution 2 success is not claimed by this update.

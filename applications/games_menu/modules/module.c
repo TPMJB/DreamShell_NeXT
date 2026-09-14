@@ -2256,9 +2256,10 @@ static void FreeAppData()
 	DestroyMenuData();
 }
 
-static bool PlayGame()
+/* Returns whether the menu was released. A successful handoff never returns. */
+static bool PlayGame(void)
 {
-	bool is_running = false;
+	bool menu_released = false;
 
 	if (self.item_value_selected[0] != '\0')
 	{
@@ -2272,20 +2273,21 @@ static bool PlayGame()
 			strcpy(menu_data.last_game, menu_data.games_array[self.game_index_selected].game);
 		}
 
-		ds_printf("DS_GAMES: Run: %s", self.item_value_selected);
+		ds_printf("DS_GAMES: Run: %s\n", self.item_value_selected);
 
 		if (LoadPreset() == 1)
 		{
-			ds_printf("LoadPresset: %s", "OK");
+			ds_printf("DS_GAMES: Preset loaded.\n");
 			SaveMenuConfig();
 			FreeAppData();
-
+            menu_released = true;
 			isoldr_exec(self.isoldr, self.addr);
-			is_running = true;
 		}
 	}
 
-	return is_running;
+    ds_printf("DS_ERROR: Game launch failed before handoff.\n%s\n",
+              isoldr_get_last_error());
+	return menu_released;
 }
 
 static void PostOptimizer()
@@ -2743,21 +2745,20 @@ static void DoMenuVideoHandler(void *ds_event, void *param, int action)
 
 static void* MenuExitHelper(void *params)
 {
+    (void)params;
 	if (self.app != NULL && self.app->tsunami != NULL)
 	{
 		if (!self.exit_app)
 		{
-			if (PlayGame())
-			{
-				EnableScreen();
-				GUI_Enable();
-				ShutdownDS(true);
-			}
-			else
-			{
-				FreeAppData();
-				OpenMainApp();
-			}
+            bool menu_released = PlayGame();
+            if (!menu_released)
+                FreeAppData();
+            /* isoldr_exec performs its own successful handoff. Reaching here
+             * is failure: keep DreamShell running and show the actual error. */
+            EnableScreen();
+            GUI_Enable();
+            OpenMainApp();
+            ShowConsole();
 		}
 		else
 		{

@@ -69,7 +69,7 @@ static void next_message(const char *text) {
 static void next_report(const char *path, const isoldr_info_t *info, uint32 addr, const char *stage) {
     char target[NAME_MAX], temp[NAME_MAX], previous[NAME_MAX];
     int n = snprintf(self.launch_report, sizeof(self.launch_report),
-        "DreamShell NeXT ISO Loader 2.0.1 / TPMJB\n"
+        "DreamShell NeXT ISO Loader 2.0.2 / TPMJB\n"
         "Stage: %s\nImage: %s\nProfile: %s\nPreset: %s\n"
         "Loader address: %08lx\n",
         stage, path, self.profile_mode ? "Baseline (unsaved)" : "Game settings",

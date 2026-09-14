@@ -2,6 +2,7 @@
 No Dreamcast hardware or commercial game data is needed.
 """
 import pathlib
+import json
 import subprocess
 import tempfile
 import unittest
@@ -56,6 +57,8 @@ int main(void) {
         compile_run(r'''
 #include <assert.h>
 #include <stdio.h>
+#include <ctype.h>
+#pragma GCC poison isspace isdigit
 #include <isofs/gdi_parse.h>
 int main(void) {
     ds_gdi_track t;
@@ -65,6 +68,8 @@ int main(void) {
     assert(ds_gdi_parse("3 45000 4 2352 track03.bin 0\r\n",&t));
     assert(t.number==3 && t.lba==45000 && t.sector_size==2352 && !strcmp(t.name,"track03.bin"));
     assert(ds_gdi_parse("1 0 4 2048 \"track one.iso\" 4096",&t) && t.offset==4096);
+    assert(ds_gdi_parse("1 0 4 2352 track01.bin 4294967295",&t) && t.offset==UINT32_MAX);
+    assert(!ds_gdi_parse("1 0 4 2352 track01.bin 4294967296",&t));
     assert(!ds_gdi_parse("1 0 4 2048 \"unterminated 0",&t));
     assert(!ds_gdi_parse("1 0 4 2048 track01.iso",&t));
     assert(!ds_gdi_parse("1 0 4 0 track01.iso 0",&t));
@@ -79,6 +84,7 @@ int main(void) {
 ''')
 
     def test_production_gdi_preflight(self):
+        fixture=json.dumps((ROOT/"utils/tests/fixtures/evolution2.gdi").read_text())
         module=(ROOT/"modules/isoldr/module.c").read_text()
         check=module[module.index("static int isoldr_check_gdi("):module.index("static int get_image_info(")]
         support=r'''
@@ -126,7 +132,7 @@ int main(void) {
         assert(fwrite(sector,1,sizeof(sector),f)==sizeof(sector));
         assert(!fclose(f));
     }
-    descriptor("3\n1 0 4 2352 track01.bin 0\n2 450 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n");
+    descriptor(EVOLUTION2_DESCRIPTOR);
     assert(isoldr_check_gdi("disc.gdi")==0);
     descriptor("3\r\n1 0 4 2352 \"track01.bin\" 0\r\n2 450 0 2352 track02.raw 0\r\n3 45000 4 2352 track03.bin 0");
     assert(isoldr_check_gdi("disc.gdi")==0);
@@ -140,7 +146,7 @@ int main(void) {
     return 0;
 }
 '''
-        compile_run(support+check+cases)
+        compile_run(support+check+cases.replace('EVOLUTION2_DESCRIPTOR',fixture))
 
     def test_production_reader_faults_and_raw_tails(self):
         reader=(ROOT/"firmware/isoldr/loader/reader.c").read_text()
@@ -239,6 +245,85 @@ int main(void) {
 '''
         compile_run(support+raw+readsectors+cases,["-DDEV_TYPE_IDE"])
 
+    def test_games_menu_launch_failure_cleanup(self):
+        module=(ROOT/"applications/games_menu/modules/module.c").read_text()
+        play=module[module.index("static bool PlayGame("):module.index("static void PostOptimizer(")]
+        start=module.index("static void* MenuExitHelper(void *params)\n{")
+        exit_helper=module[start:module.index("static void CreateMainView(",start)]
+        support=r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+#include <setjmp.h>
+static struct { void *tsunami; } app={(void*)1};
+static struct {
+    __typeof__(app) *app;
+    char item_value_selected[64];
+    int device_selected, game_index_selected, exit_app;
+    void *isoldr;
+    uintptr_t addr;
+} self;
+static struct {
+    int last_device;
+    char last_game[64];
+    struct { int is_folder_name; char folder_name[64], game[64]; } games_array[1];
+} menu_data;
+static int load_ok, freed, saved, executed, opened, console, screen, gui, handoff;
+static char output[1024];
+static jmp_buf jump;
+static int LoadPreset(void) { return load_ok; }
+static void SaveMenuConfig(void) { ++saved; }
+static void FreeAppData(void) { ++freed; assert(freed==1); }
+static void EnableScreen(void) { ++screen; }
+static void GUI_Enable(void) { ++gui; }
+static void OpenMainApp(void) { ++opened; }
+static void ShowConsole(void) { ++console; }
+static const char *isoldr_get_last_error(void) { return "Synthetic launch error"; }
+static void isoldr_exec(void *info,uintptr_t address) {
+    (void)info; (void)address;
+    assert(freed==1);
+    ++executed;
+    if(handoff) longjmp(jump,1);
+}
+static void ds_printf(const char *fmt,...) {
+    size_t n=strlen(output);
+    va_list args; va_start(args,fmt);
+    vsnprintf(output+n,sizeof(output)-n,fmt,args); va_end(args);
+}
+static void reset(void) {
+    memset(&self,0,sizeof(self)); memset(&menu_data,0,sizeof(menu_data));
+    self.app=&app; strcpy(self.item_value_selected,"EVOLUTION2.gdi");
+    strcpy(menu_data.games_array[0].game,"EVOLUTION2.gdi");
+    freed=saved=executed=opened=console=screen=gui=handoff=0;
+    output[0]=0;
+}
+'''
+        cases=r'''
+int main(void) {
+    for(int stage=0;stage<2;++stage) {
+        reset(); load_ok=stage;
+        MenuExitHelper(NULL);
+        assert(freed==1 && opened==1 && console==1 && screen==1 && gui==1);
+        assert(executed==stage && saved==stage);
+        assert(strstr(output,"Synthetic launch error"));
+    }
+    reset(); self.exit_app=1;
+    MenuExitHelper(NULL);
+    assert(freed==1 && opened==1 && !console && !executed);
+    reset(); load_ok=1; handoff=1;
+    if(!setjmp(jump)) {
+        MenuExitHelper(NULL);
+        assert(!"Successful handoff must not reach the failure cleanup");
+    }
+    assert(freed==1 && executed==1 && !opened && !console);
+    return 0;
+}
+'''
+        compile_run(support+play+exit_helper+cases)
+
     def test_native_ui_contract(self):
         root=ET.parse(ROOT/"applications/iso_loader/app.xml").getroot()
         body=root.find("body")
@@ -247,7 +332,7 @@ int main(void) {
                   "message-panel","check-game","baseline","restore-profile","details",
                   "file_browser","run_iso","pages","run-panel",*(f"message-{i}" for i in range(6))}
         self.assertFalse(required-names)
-        self.assertEqual(root.get("version"),"2.0.1")
+        self.assertEqual(root.get("version"),"2.0.2")
         exports=(ROOT/"applications/iso_loader/modules/exports.txt").read_text()
         for e in body.iter():
             for attr in ("onclick","onselect","oncontextclick","onload","onopen","onclose","onunload"):
