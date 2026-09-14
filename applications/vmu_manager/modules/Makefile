@@ -11,7 +11,7 @@ DBG_LIBS = -lds
 EXPORTS_FILE = exports.txt
 
 VER_MAJOR = 2
-VER_MINOR = 0
+VER_MINOR = 1
 VER_MICRO = 0
 
 KOS_CFLAGS += -I./
@@ -26,4 +26,3 @@ rm-elf:
 install: $(TARGET)
 	-rm $(DS_BUILD)/apps/$(APP_NAME)/modules/$(TARGET)
 	cp $(TARGET) $(DS_BUILD)/apps/$(APP_NAME)/modules/$(TARGET)
-

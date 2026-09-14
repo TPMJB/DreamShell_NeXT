@@ -12,6 +12,7 @@
 #include "ui_logic.h"
 #include <errno.h>
 #include "transfer.h"
+#include "bulk.h"
 
 static void ui_init(void);
 static void reset_selected(void);
@@ -716,7 +717,10 @@ void VMU_Manager_ItemClick(dirent_fm_t *fm_ent) {
 					}
 
 					sprintf(src, "%s/%s", GUI_FileManagerGetPath(fmw), ent->name);
-					sprintf(dst, "%s/%12.12s", GUI_FileManagerGetPath(self.filebrowser), ent->name);
+                    char restored_name[13];
+                    vmu_ui_import_name(restored_name,ent->name,!strncmp(GUI_FileManagerGetPath(fmw),"/vm",3));
+                    if(!*restored_name) { ui_status("This save has no valid VMU filename."); return; }
+					sprintf(dst, "%s/%s", GUI_FileManagerGetPath(self.filebrowser), restored_name);
 				}
 
 				if (FileExists(dst) != 0) {

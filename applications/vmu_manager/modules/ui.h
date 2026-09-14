@@ -10,7 +10,7 @@ typedef struct { GUI_Widget *w; int x, y; } ui_node_t;
 static struct {
     kthread_t *worker;
     Event_t *input;
-    volatile int job, busy, stop, modal, answer, armed;
+    volatile int job, busy, stop, modal, answer, armed, bulk, cancel;
     GUI_Widget *pending_widget, *focus;
     dirent_fm_t pending_entry, selected_entry;
     bool selected, preview_only, allow_browse, exit_pending;
@@ -52,13 +52,13 @@ static int ui_nodes(ui_node_t *out) {
             NODE("/sd",414,145); NODE("/ide",554,145);
             NODE("/pc",414,201); NODE("/cd",554,201); NODE("dst-vmu",414,257);
         }
-        NODE("copy-button",94,326); NODE("dump-button",244,326);
+        NODE("copy-button",94,326); NODE("copy-all-button",244,326);
         NODE("location-button",394,326); NODE("tools-button",544,326);
     } else if(page==2) {
         NODE("folder-name",320,216); NODE("confirm-yes",196,279); NODE("confirm-no",444,279);
     } else {
-        NODE("delete-button",320,145); NODE("new-folder",320,197);
-        NODE("format-c",320,249); NODE("tools-back",320,329);
+        NODE("dump-button",320,137); NODE("delete-button",320,185);
+        NODE("new-folder",320,233); NODE("format-c",320,281); NODE("tools-back",320,341);
     }
     NODE("home_but",500,458); NODE("exit-button",580,458);
 #undef NODE
@@ -84,6 +84,8 @@ static void ui_refresh(void) {
     bool from_vmu=ui.selected && ui.selected_entry.obj==(GUI_Object *)self.filebrowser;
     GUI_WidgetSetEnabled(ui_widget("copy-button"),ui.selected && self.m_SelectedFile && other &&
         (!from_vmu || !vmu_ui_read_only(right)));
+    GUI_WidgetSetEnabled(ui_widget("copy-all-button"),other && vmu_dev(left) &&
+        vmu_bulk_destination(right) && !vmu_ui_read_only(right) && strcmp(left,right));
     GUI_WidgetSetEnabled(self.button_dump,other && !vmu_ui_read_only(right) && strncmp(right,"/vmu/",5));
     GUI_WidgetSetEnabled(ui_widget("delete-button"),ui.selected && !vmu_ui_read_only(GUI_FileManagerGetPath((GUI_Widget *)ui.selected_entry.obj)) && strcmp(ui.selected_entry.ent.name,".."));
     GUI_WidgetSetEnabled(ui_widget("new-folder"),other && !vmu_ui_read_only(right) && strncmp(right,"/vmu/",5));
@@ -189,6 +191,54 @@ static void ui_back(void) {
     } else if(page==1) { VMU_Manager_EnableMainPage(); ui.focus=NULL; }
     else { ui.exit_pending=true; }
 }
+static bool ui_bulk_progress(int done,int total,const char *name,void *arg) {
+    (void)arg;
+    char message[96];
+    if(ui.cancel || ui.stop || !(self.m_App->state&APP_STATE_OPENED)) return false;
+    snprintf(message,sizeof(message),"Copying %d / %d: %s",done<total?done+1:done,total,name);
+    GUI_LabelSetText(ui_widget("progress-label"),message);
+    GUI_ProgressBarSetPosition(self.progressbar,total?(double)done/total:0.0);
+    return true;
+}
+static void ui_copy_all(void) {
+    const char *left=GUI_FileManagerGetPath(self.filebrowser);
+    const char *right=GUI_FileManagerGetPath(self.filebrowser2);
+    maple_device_t *source=vmu_dev(left), *target=vmu_dev(right);
+    char message[768];
+    vmu_bulk_plan_t *plan=calloc(1,sizeof(*plan));
+    if(!plan) { ui_status("Not enough memory to copy all saves."); return; }
+    if(!ui_other_open() || !vmu_bulk_prepare(source,target,right,plan)) {
+        ui_status(plan->error==VMU_BULK_SPACE?"Not enough free blocks. No saves were copied.":
+                  plan->error==VMU_BULK_SOURCE?"Could not read the VMU directory. No saves were copied.":
+                  "Cannot copy all here. Check the VMU and SD / IDE destination.");
+        free(plan); return;
+    }
+    if(!plan->pending) {
+        snprintf(message,sizeof(message),plan->count?"0 copied, %d skipped: all filenames already exist.":"No saves on this VMU.",plan->count);
+        ui_status(message); free(plan); return;
+    }
+    snprintf(message,sizeof(message),"Copy %d saves from VMU %.2s to %s? %d existing filenames will be skipped.",
+             plan->pending,left+5,right,plan->count-plan->pending);
+    GUI_LabelSetText(self.confirm_text,message);
+    if(ui_confirm()!=CMD_OK) { ui_status("Copy all cancelled. No saves were copied."); free(plan); return; }
+    ui.cancel=0; ui.bulk=1;
+    GUI_LabelSetText(ui_widget("controls"),"Copying saves... B: stop after the current save");
+    GUI_ProgressBarSetPosition(self.progressbar,0.0);
+    GUI_ContainerAdd(self.vmu_page,self.progressbar_container);
+    vmu_bulk_copy(source,target,right,plan,ui_bulk_progress,NULL);
+    ui.bulk=0;
+    GUI_ContainerRemove(self.vmu_page,self.progressbar_container);
+    GUI_LabelSetText(ui_widget("progress-label"),"Working... keep the VMU connected.");
+    if(!plan->error) snprintf(message,sizeof(message),"Copy all complete: %d copied, %d skipped.",plan->copied,plan->skipped);
+    else if(plan->error==VMU_BULK_CANCELLED) snprintf(message,sizeof(message),"Copy stopped: %d copied, %d skipped. Completed saves were kept.",plan->copied,plan->skipped);
+    else snprintf(message,sizeof(message),"%s failed: %.12s. %d copied, %d skipped; stopped.",
+                  plan->error==VMU_BULK_READ?"Read":"Write",plan->failed_name,plan->copied,plan->skipped);
+    ui_status(message);
+    reset_selected(); clr_statusbar(); ui.selected=false;
+    GUI_FileManagerScan(self.filebrowser2);
+    if(target) free_blocks(right,1);
+    free(plan);
+}
 static void ui_do_widget(GUI_Widget *widget) {
     if(!widget || (GUI_WidgetGetFlags(widget)&WIDGET_DISABLED)) return;
     const char *name=GUI_ObjectGetName(widget);
@@ -215,7 +265,10 @@ static void ui_do_widget(GUI_Widget *widget) {
             dirent_fm_t entry=ui.selected_entry;
             VMU_Manager_ItemContextClick(&entry); ui.selected=false;
         }
-    } else if(!strcmp(name,"dump-button")) { VMU_Manager_Dump(widget); }
+    } else if(!strcmp(name,"copy-all-button")) { ui_copy_all(); }
+    else if(!strcmp(name,"dump-button")) {
+        GUI_CardStackShowIndex(self.pages,1); ui.focus=ui_widget("copy-all-button"); VMU_Manager_Dump(widget);
+    }
     else if(!strcmp(name,"format-c")) { GUI_CardStackShowIndex(self.pages,1); VMU_Manager_format(widget); ui.selected=false; }
 }
 void VMU_Manager_Action(GUI_Widget *widget) {
@@ -348,6 +401,10 @@ static void ui_input(void *event,void *param,int action) {
         else if(ui.armed && button==SDL_DC_B) ui.answer=CMD_ERROR;
         else if(ui.armed && button==SDL_DC_X && ui.allow_browse) ui.answer=CMD_NO_ARG;
         else if(e->type==SDL_MOUSEMOTION || e->type==SDL_MOUSEBUTTONDOWN || e->type==SDL_MOUSEBUTTONUP) GUI_ScreenEvent(GUI_GetScreen(),e,0,0);
+        e->type=SDL_NOEVENT; return;
+    }
+    if(ui.bulk) {
+        if(button==SDL_DC_B) ui.cancel=1;
         e->type=SDL_NOEVENT; return;
     }
     if(e->type==SDL_JOYHATMOTION && !e->jhat.hat) {

@@ -1,8 +1,8 @@
-# VMU Manager 2.0.0
+# VMU Manager 2.1.0
 
 Merge the update's `DS` folder onto the card used by DreamShell NeXT 1.0.
 Replace the VMU Manager files and included font. Launch VMU Manager and check
-that the top-right version reads **NeXT / 2.0**. The update uses the existing
+that the top-right version reads **NeXT / 2.1**. The update uses the existing
 DreamShell core and boot disc.
 
 ## Controls and workflow
@@ -15,14 +15,29 @@ DreamShell core and boot disc.
   the lists. At the end of a list, down reaches the action buttons. A selects
   a save or opens a folder. **X / Copy** copies the selected save to the other
   side; its button states the direction. Browsing/selecting alone does not copy.
-- **Backup VMU** writes a complete 128 KiB image to the displayed writable
-  folder, named `VMU_A1_001.vmd` (with the selected slot and a free number).
-- **Y / More actions** contains Delete, New folder, and Format. B returns to
+- **Copy all >** copies every save from the left VMU to the other location,
+  regardless of which file is selected. On SD or IDE it creates separate
+  `SAVE_NAME.vms` files. With another VMU selected it copies the saves directly.
+  Existing filenames are skipped, with a copied/skipped count when finished.
+  Use a new folder for a fresh backup of saves whose contents have changed.
+  The batch checks free VMU blocks first and stops at the first read/write error.
+  B stops after the current save; completed copies are kept.
+  PC-link bulk copy is unavailable because its driver cannot create files
+  exclusively; single-save copying and full-image backups remain available.
+- **Y / More actions > Create full VMU image (.vmd)** writes a complete
+  128 KiB image to the displayed writable folder, named `VMU_A1_001.vmd`
+  (with the selected slot and a free number). An image preserves the card's
+  filesystem metadata and settings as well as its contents. Use an image for
+  exact whole-card restoration, including VMU-game metadata.
+- **Y / More actions** also contains Delete, New folder, and Format. B returns to
   the previous page or goes up in the other location. **Location** changes the
   device; **VMUs** selects a different source card.
 - Selecting a VMD/VMU image and choosing **Open VMU image** offers **Restore**,
   **Browse image**, or **Cancel**. Browsing an image does not restore it. Full
   restore requires a 128 KiB image and identifies the VMU being replaced.
+- Restore an individual exported VMS by selecting it in the other location
+  and pressing X / Copy to VMU. The added `.vms` suffix is removed so short
+  original filenames such as `ICONDATA_VMS` are preserved.
 - Keyboard arrows/Enter/Escape and X/Y provide the same navigation. Mouse
   clicks select rows and activate labeled buttons. Right-click selects a row;
   deletion is an explicit action. The existing on-screen keyboard edits folder
@@ -40,7 +55,10 @@ provide an atomic rollback operation.
 
 Host tests exercise source-read failures before overwrite, short writes, flush
 and close failures, DCI conversion, protected paths, folder cancellation, and
-confirmation input release. CI compiles and links the SH-4 module against the
+confirmation input release. Bulk-copy tests cover existing files, files appearing
+after the initial scan, incomplete reads, short writes, flush/close failures,
+partial-file cleanup, insufficient VMU space, cancellation, and filename
+restoration. CI compiles and links the SH-4 module against the
 current pinned DreamShell/KallistiOS build. The layout preview is rendered from
 the native XML with illustrative save names; it is not a hardware screenshot.
 Regenerate the six preview screens with

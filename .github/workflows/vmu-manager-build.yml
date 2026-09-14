@@ -136,9 +136,9 @@ jobs:
           with ZipFile('DreamShell-dev.zip') as full:
               assert full.testzip() is None
               prefix='DS/apps/vmu_manager/'
-              assert b'version="2.0.0"' in full.read(prefix+'app.xml')
+              assert b'version="2.1.0"' in full.read(prefix+'app.xml')
               assert len(full.read(prefix+'modules/app_vmu_manager.klf')) > 1000
-              with ZipFile('DreamShell-VMU-Manager-2.0.0.zip','w',ZIP_DEFLATED) as update:
+              with ZipFile('DreamShell-VMU-Manager-2.1.0.zip','w',ZIP_DEFLATED) as update:
                   for name in full.namelist():
                       if name.startswith(prefix) or name=='DS/fonts/ttf/arial_lite.ttf':
                           update.writestr(name,full.read(name))
@@ -148,6 +148,6 @@ jobs:
       - name: Upload update
         uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-VMU-Manager-2.0.0
-          path: DreamShell-VMU-Manager-2.0.0.zip
+          name: DreamShell-VMU-Manager-2.1.0
+          path: DreamShell-VMU-Manager-2.1.0.zip
           if-no-files-found: error

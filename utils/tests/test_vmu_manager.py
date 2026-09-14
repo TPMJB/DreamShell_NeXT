@@ -25,9 +25,20 @@ class VMUManagerTests(unittest.TestCase):
         for e in root.iter():
             for attr,value in e.attrib.items():
                 if value.startswith('export:'):self.assertIn(value[7:].split('(')[0],exports)
-        self.assertEqual(root.get('version'),'2.0.0')
+        self.assertEqual(root.get('version'),'2.1.0')
         for slot in ['A1','A2','B1','B2','C1','C2','D1','D2']:self.assertIn(slot,names)
-        for control in ['copy-button','dump-button','delete-button','format-c','modal-cancel','modal-accept']:self.assertIn(control,names)
+        for control in ['copy-button','copy-all-button','dump-button','delete-button','format-c','modal-cancel','modal-accept']:self.assertIn(control,names)
+        manage=root.find(".//panel[@name='vmu_page']")
+        actions=root.find(".//panel[@name='tools_page']")
+        self.assertIsNotNone(manage.find("input[@name='copy-all-button']"))
+        self.assertIsNotNone(actions.find("input[@name='dump-button']"))
+
+    def test_bulk_copy_failure_and_existing_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe=Path(tmp)/'vmu-bulk'
+            subprocess.run(['gcc','-std=gnu11','-O1','-g','-Wall','-Wextra','-Werror',
+                '-fsanitize=address,undefined','-fno-pie','-no-pie','utils/tests/vmu_bulk_harness.c','-o',str(exe)],cwd=ROOT,check=True)
+            self.assertIn('passed',subprocess.check_output([str(exe)],text=True))
 
     def test_cancel_folder_does_not_call_mkdir(self):
         # Compile the production handler against a minimal UI/storage harness.

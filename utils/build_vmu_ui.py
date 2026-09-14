@@ -5,7 +5,7 @@ import xml.etree.ElementTree as E
 ROOT = Path(__file__).resolve().parents[1]
 
 def build():
-    app = E.Element('app', name='VMU Manager', version='2.0.0', icon='images/icon.png',
+    app = E.Element('app', name='VMU Manager', version='2.1.0', icon='images/icon.png',
                     extensions='.vmd .vmu .dci .vms .vmi')
     res = E.SubElement(app, 'resources')
     E.SubElement(res, 'module', src='modules/app_vmu_manager.klf')
@@ -55,7 +55,7 @@ def build():
     body=E.SubElement(app,'body',width='640',height='480',background='bg',onload='export:Vmu_Manager_Init()',
                       onopen='export:VMU_Manager_Open()',onclose='export:VMU_Manager_Close()',onunload='export:VMU_Manager_Shutdown()')
     label(body,'title','VMU Manager',24,14,420,30,'title')
-    label(body,'version','NeXT / 2.0',514,20,104,20,'small','#53E1E3')
+    label(body,'version','NeXT / 2.1',514,20,104,20,'small','#53E1E3')
     label(body,'subtitle','Choose a memory card to manage its saves.',24,49,592,20,'body','#AFC2D4')
     pages=E.SubElement(body,'cardstack',name='pages',x='0',y='76',width='640',height='338')
     home=panel(pages,'main_page',0,0,640,338)
@@ -85,7 +85,7 @@ def build():
     for name,text,x,y in [('/sd','SD card',352,48),('/ide','IDE drive',492,48),('/pc','PC link',352,104),('/cd','Disc',492,104),('dst-vmu','Another VMU',352,160)]:
         button(manage,name,text,x,y,124,42)
     label(manage,'location-help','Select a location to browse.',352,210,264,18,'small','#AFC2D4')
-    for name,text,x in [('copy-button','Copy save',24),('dump-button','Backup VMU',174),('location-button','Location',324),('tools-button','More actions',474)]:
+    for name,text,x in [('copy-button','Copy save',24),('copy-all-button','Copy all >',174),('location-button','Location',324),('tools-button','More actions',474)]:
         button(manage,name,text,x,234,140,32)
     detail=panel(manage,'save-detail',24,274,592,64,'panel')
     E.SubElement(detail,'image',name='vmu-icon',src='logo',x='8',y='8',width='48',height='48')
@@ -112,7 +112,7 @@ def build():
     button(folder,'confirm-no','Cancel',328,182,232,42)
     tools=panel(pages,'tools_page',0,0,640,338)
     label(tools,'tools-title','More actions',24,0,592,26,'title')
-    for name,text,y,danger in [('delete-button','Delete selected save / folder',48,True),('new-folder','Create a folder in the other location',100,False),('format-c','Format the selected VMU',152,True),('tools-back','Back to saves',232,False)]:
+    for name,text,y,danger in [('dump-button','Create full VMU image (.vmd)',40,False),('delete-button','Delete selected save / folder',88,True),('new-folder','Create a folder in the other location',136,False),('format-c','Format the selected VMU',184,True),('tools-back','Back to saves',244,False)]:
         button(tools,name,text,24,y,592,42,danger=danger)
     label(tools,'tools-help','Delete and Format ask for confirmation before changing data.',24,292,592,20,'small','#AFC2D4')
     label(body,'status','Ready.',24,420,592,20,'small','#AFC2D4')

@@ -48,7 +48,7 @@ class Preview:
         if page == 'locations':
             self.hidden.difference_update({'/sd', '/ide', '/pc', '/cd', 'dst-vmu', 'location-help'})
             self.hidden.add('file_browser2')
-            self.disabled.update({'/ide', '/pc', '/cd', 'copy-button', 'dump-button'})
+            self.disabled.update({'/ide', '/pc', '/cd', 'copy-button', 'copy-all-button', 'dump-button'})
             self.text.update({'right-title': 'CHOOSE A LOCATION', 'right-path': 'SD / IDE / PC / disc / VMU'})
             self.focus = '/sd'
         if page == 'tools':
