@@ -10,7 +10,7 @@ static void next_status(const char *text) {
 static void next_refresh(void) {
     char text[96];
     if(!self.summary) return;
-    if(self.loading) {
+    if(self.loading == 1) {
         GUI_LabelSetText(self.summary, "Reading game information...");
         return;
     }

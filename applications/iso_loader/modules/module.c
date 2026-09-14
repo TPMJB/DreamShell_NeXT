@@ -1877,11 +1877,13 @@ static void *selectFile_worker(void *p) {
 	next_item:
         mutex_lock(&self.select_mutex);
         if(last_id == self.select_id) {
-            self.loading = 0;
+            /* Keep mutations blocked until all metadata widgets are published. */
+            self.loading = 2;
             GUI_WidgetSetEnabled(self.filebrowser, 1);
             GUI_WidgetSetEnabled(self.btn_run, self.isoldr && self.isoldr->exec.size);
             GUI_WidgetSetEnabled(self.btn_check, self.isoldr && self.isoldr->exec.size);
             next_refresh();
+            self.loading = 0;
         }
 	}
 
