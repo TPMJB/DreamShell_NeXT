@@ -1,55 +1,11 @@
-/* DreamShell ##version##
-
-   app_module.h - Settings app module header
-   Copyright (C)2016-2025 SWAT
-*/
-
 #include "ds.h"
-
 void SettingsApp_Init(App_t *app);
-
-void SettingsApp_ShowPage(GUI_Widget *widget);
-
-void SettingsApp_ResetSettings(GUI_Widget *widget);
-
-void SettingsApp_SaveSettings(GUI_Widget *widget);
-
-void SettingsApp_DialogConfirm(GUI_Widget *widget);
-
-void SettingsApp_DialogCancel(GUI_Widget *widget);
-
-void SettingsApp_Reboot(GUI_Widget *widget);
-
-void SettingsApp_ToggleNativeMode(GUI_Widget *widget);
-
-void SettingsApp_ToggleScreenMode(GUI_Widget *widget);
-
-void SettingsApp_ToggleScreenFilter(GUI_Widget *widget);
-
-void SettingsApp_ToggleStartupApp(GUI_Widget *widget);
-
-void SettingsApp_ToggleMainApp(GUI_Widget *widget);
-
-void SettingsApp_ToggleRoot(GUI_Widget *widget);
-
-void SettingsApp_ToggleStartup(GUI_Widget *widget);
-
-void SettingsApp_TimeChange(GUI_Widget *widget);
-
-void SettingsApp_Time(GUI_Widget *widget);
-
-void SettingsApp_Time_Clr(GUI_Widget *widget);
-
-void SettingsApp_TimezoneChange(GUI_Widget *widget);
-
-void SettingsApp_TimezoneClr(GUI_Widget *widget);
-
-void SettingsApp_ToggleSfx(GUI_Widget *widget);
-
-void SettingsApp_ToggleClick(GUI_Widget *widget);
-
-void SettingsApp_ToggleHover(GUI_Widget *widget);
-
-void SettingsApp_ToggleStartupSound(GUI_Widget *widget);
-
-void SettingsApp_VolumeChange(GUI_Widget *widget);
+void SettingsApp_Open(App_t *app);
+void SettingsApp_Close(App_t *app);
+void SettingsApp_Shutdown(App_t *app);
+void SettingsApp_Tab(GUI_Widget *widget);
+void SettingsApp_Change(GUI_Widget *widget);
+void SettingsApp_Save(GUI_Widget *widget);
+void SettingsApp_Back(GUI_Widget *widget);
+void SettingsApp_Confirm(GUI_Widget *widget);
+void SettingsApp_Cancel(GUI_Widget *widget);

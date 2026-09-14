@@ -92,7 +92,8 @@ function FileManager:ShowDialog(title, mode, func, bodyText)
 	self.modal.mode = mode;
 	self.modal.func = func;
 
-	GUI.DialogShow(self.modal.widget, mode, title, bodyText);
+	if mode == GUI.DIALOG_MODE_PROMPT then title = title .. "  (X: keyboard)"; end
+    GUI.DialogShow(self.modal.widget, mode, title, bodyText);
 end
 
 
@@ -184,14 +185,15 @@ function FileManager:copyFile(src, dst, size)
 
 	local function progress_callback(bytes_written)
 		local current_progress = initial_copied_size + bytes_written;
-		GUI.DialogSetProgress(self.modal.widget, current_progress / self.modal.progress_total);
-		return not self.modal.copy_cancelled
+		GUI.DialogSetProgress(self.modal.widget, current_progress / math.max(1, self.modal.progress_total));
+		return self:continueOperation()
 	end
 
 	local ok, err = lfs.copyfile(src, dst, progress_callback, buffer_size);
 	self.copy_error = err;
 	
 	if not ok then
+        os.remove(dst); -- Only a newly created destination; never replace an existing file.
 		return false;
 	end
 
@@ -205,13 +207,16 @@ function FileManager:getPathTotalSize(path)
 	local total_size = 0;
 
 	for file in lfs.dir(path) do
+        if not self:continueOperation() then return nil; end
 		if file.name ~= "." and file.name ~= ".." then
 			local fullpath = path .. (path == "/" and "" or "/") .. file.name;
 
 			if file.attr == 0 then
 				total_size = total_size + file.size;
 			else
-				total_size = total_size + self:getPathTotalSize(fullpath);
+				local child_size = self:getPathTotalSize(fullpath);
+                if not child_size then return nil; end
+                total_size = total_size + child_size;
 			end
 		end
 	end
@@ -226,6 +231,7 @@ function FileManager:copyPathRecursive(src, dst)
 	end
 
 	for file in lfs.dir(src) do
+        if not self:continueOperation() then self.copy_error = "Cancelled; completed files were kept"; return false; end
 		if file.name ~= "." and file.name ~= ".." then
 
 			local full_src_path = src .. (src == "/" and "" or "/") .. file.name;
@@ -249,6 +255,7 @@ end
 function FileManager:copyPath()
 
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 	local mgr = self:getUnfocusedManager();
 	local to = GUI.FileManagerGetPath(mgr.widget);
 
@@ -258,10 +265,21 @@ function FileManager:copyPath()
 		to = to .. f.name;
 	end
 
+    local source_key, target_key = string.lower(f.file), string.lower(to);
+    if target_key == source_key or string.sub(target_key, 1, string.len(source_key) + 1) == source_key .. "/" then
+        return self:showError("Choose a different destination. A folder cannot be copied into itself.");
+    end
+    if DS.FileExists(to) or DS.DirExists(to) then
+        return self:showError("Destination already exists. Rename it or choose another folder.");
+    end
+    self.copy_error = nil;
+    self.modal.copy_cancelled = false;
+
 	if f.attr ~= 0 then
 		self:ShowDialog("Calculating files size...", GUI.DIALOG_MODE_PROGRESS, nil);
 
 		self.modal.progress_total = self:getPathTotalSize(f.file);
+        if not self.modal.progress_total then return self:showError("Copy cancelled before writing any files."); end
 		self.modal.progress_copied_size = 0;
 		self.modal.copy_cancelled = false;
 
@@ -290,6 +308,7 @@ end
 function FileManager:toolbarCopy()
 
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 
 	if f.name == nil then
 		return;
@@ -310,6 +329,7 @@ end
 function FileManager:toolbarRename()
 
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 
 	if f.name == nil then
 		return;
@@ -321,7 +341,11 @@ function FileManager:toolbarRename()
 		self:HideDialog();
 	end
 
-	local dst = f.path .. (f.path == "/" and "" or "/") .. GUI.DialogGetInputText(self.modal.widget);
+	local name = GUI.DialogGetInputText(self.modal.widget);
+    if not self:validName(name) then return self:showError("Use a name without slashes, control characters, or dot entries."); end
+    local dst = f.path .. (f.path == "/" and "" or "/") .. name;
+    if dst == f.file then return; end
+    if DS.FileExists(dst) or DS.DirExists(dst) then return self:showError("That name already exists."); end
 	local ok, err = lfs.rename(f.file, dst);
 
 	if not ok then
@@ -330,6 +354,8 @@ function FileManager:toolbarRename()
 
 	local mgr = self:getFocusedManager();
 	GUI.FileManagerScan(mgr.widget);
+    mgr.ent = {name = nil, size = 0, attr = 0, index = -1};
+    self:tooltip(nil);
 end
 
 
@@ -344,7 +370,11 @@ function FileManager:toolbarMkdir()
 		self:HideDialog();
 	end
 
-	local dst = path .. (path == "/" and "" or "/") .. GUI.DialogGetInputText(self.modal.widget);
+	local name = GUI.DialogGetInputText(self.modal.widget);
+    if not self:validName(name) then return self:showError("Use a name without slashes, control characters, or dot entries."); end
+    if path == "/" then return self:showError("Open a storage device before creating a folder."); end
+    local dst = path .. "/" .. name;
+    if DS.FileExists(dst) or DS.DirExists(dst) then return self:showError("That name already exists."); end
 	local ok, err = lfs.mkdir(dst);
 
 	if not ok then
@@ -358,6 +388,7 @@ end
 function FileManager:toolbarDelete()
 
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 	local title = "Delete file?";
 	local body = f.file;
 
@@ -381,13 +412,16 @@ function FileManager:countFiles(path)
 	local count = 0;
 
 	for file in lfs.dir(path) do
+        if not self:continueOperation() then return nil; end
 		if file.name ~= "." and file.name ~= ".." then
 
 			local fullpath = path .. (path == "/" and "" or "/") .. file.name;
 			count = count + 1;
 
 			if file.attr ~= 0 then
-				count = count + self:countFiles(fullpath);
+				local child_count = self:countFiles(fullpath);
+                if not child_count then return nil; end
+                count = count + child_count;
 			end
 		end
 	end
@@ -398,6 +432,9 @@ end
 
 function FileManager:deletePathRecursive(path)
 	for file in lfs.dir(path) do
+        if not self:continueOperation() then
+            self.delete_error = "Cancelled; items already deleted cannot be restored"; return false;
+        end
 		if file.name ~= "." and file.name ~= ".." then
 
 			local fullpath = path .. (path == "/" and "" or "/") .. file.name;
@@ -416,7 +453,7 @@ function FileManager:deletePathRecursive(path)
 			end
 
 			self.modal.progress_count = self.modal.progress_count + 1;
-			GUI.ProgressBarSetPosition(self.modal.progress, self.modal.progress_count / self.modal.progress_total);
+			GUI.DialogSetProgress(self.modal.widget, self.modal.progress_count / math.max(1, self.modal.progress_total));
 		end
 	end
 	
@@ -435,13 +472,16 @@ function FileManager:deletePath()
 
 	self:ShowDialog("Deleting", GUI.DIALOG_MODE_INFO, nil, "Please wait...");
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 	self.delete_error = nil;
+    self.modal.copy_cancelled = false;
 
 	if f.attr ~= 0 then
 
 		self:ShowDialog("Calculating files...", GUI.DIALOG_MODE_PROGRESS, nil);
 
 		self.modal.progress_total = self:countFiles(f.file);
+        if not self.modal.progress_total then return self:showError("Delete cancelled before removing any files."); end
 		self.modal.progress_count = 0;
 
 		GUI.DialogSetText(self.modal.widget, "Deleting files, please wait...");
@@ -475,17 +515,20 @@ end
 function FileManager:toolbarArchive()
 
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 
 	if f.name == nil then
 		return;
 	end
 
-	local ext = string.lower(string.sub(f.name, -4));
+	local ext = string.lower(string.match(f.name, "(%.[^%.]+)$") or "");
 	local file = self:replace_spaces(f.file);
 	local name = f.name;
 
 	local mgr = self:getUnfocusedManager();
 	local dst = GUI.FileManagerGetPath(mgr.widget);
+    if f.attr ~= 0 then return self:showError("Select an archive or a file to compress."); end
+    if dst ~= "/" then dst = dst .. "/"; end
 
 	local msg = "Uknown";
 	local cmd = "";
@@ -495,7 +538,7 @@ function FileManager:toolbarArchive()
 		msg = "Extract ";
 		cmd = "gzip -d " .. file .. " " .. dst .. string.sub(name, 1, -4);
 
-	elseif ext == "bz2" then
+	elseif ext == ".bz2" then
 
 		if not DS.GetCmdByName("bzip2") then
 			 if not self:loadModule("bzip2") then
@@ -507,7 +550,7 @@ function FileManager:toolbarArchive()
 		msg = "Extract ";
 		cmd = "bzip2 -d " .. file .. " " .. dst .. string.sub(name, 1, -5);
 
-	elseif ext == "zip" then
+	elseif ext == ".zip" then
 
 		if not DS.GetCmdByName("zip") then
 			 if not self:loadModule("zip") then
@@ -543,39 +586,14 @@ end
 
 
 function FileManager:toolbarModeSwitch()
-
-	self.mgr.mode = (self.mgr.mode + 1) % 3;
-
-	if self.mgr.mode == 0 then
-		-- Single mode
-		GUI.ContainerRemove(self.app.body, self.mgr.bottom.widget);
-		GUI.WidgetSetPosition(self.mgr.top.widget, 15, 30);
-		GUI.FileManagerResize(self.mgr.top.widget, 610, 439);
-		
-	elseif self.mgr.mode == 1 then
-		-- Horizontal mode
-		GUI.WidgetSetPosition(self.mgr.top.widget, 15, 30);
-		GUI.FileManagerResize(self.mgr.top.widget, 610, 217);
-		GUI.WidgetSetPosition(self.mgr.bottom.widget, 15, 252);
-		GUI.FileManagerResize(self.mgr.bottom.widget, 610, 217);
-		GUI.ContainerAdd(self.app.body, self.mgr.bottom.widget);
-
-	elseif self.mgr.mode == 2 then
-		-- Vertical mode
-		GUI.WidgetSetPosition(self.mgr.top.widget, 15, 30);
-		GUI.FileManagerResize(self.mgr.top.widget, 304, 439);
-		GUI.WidgetSetPosition(self.mgr.bottom.widget, 321, 30);
-		GUI.FileManagerResize(self.mgr.bottom.widget, 304, 439);
-		GUI.ContainerAdd(self.app.body, self.mgr.bottom.widget);
-	end
-	
-	GUI.WidgetMarkChanged(self.app.body);
+    self:choosePane(self.mgr.top.focus and 1 or 0);
 end
 
 
 function FileManager:toolbarMountISO()
 
 	local f = self:getFile();
+    if not self:validSelection(f) then return; end
 
 	if f.name == nil then
 		return;
@@ -616,18 +634,10 @@ end
 
 
 function FileManager:unloadModules()
-
-	if table.getn(self.modules) > 0 then
-
-		for i = 1, table.getn(self.modules) do
-
-			if self.modules[i] ~= nil then
-				CloseModule(self.modules[i]);
-			end
-
-			table.remove(self.modules, i);
-		end
-	end
+    for i = table.getn(self.modules), 1, -1 do
+        if self.modules[i] then CloseModule(self.modules[i]); end
+        table.remove(self.modules, i);
+    end
 end
 
 
@@ -977,6 +987,7 @@ function FileManager:ItemClick(ent, mgr)
 		if not mgr.ent or (mgr.ent.index ~= ent.index and mgr.ent.name ~= ent.name) then
 			GUI.FileManagerSetSelectedItem(mgr.widget, ent.index);
 			mgr.ent = ent;
+            self:tooltip(nil);
 
 		else
 			self:openFile();
@@ -1009,6 +1020,7 @@ function FileManager:ItemContextClick(ent, mgr)
 	if not mgr.ent or (mgr.ent.index ~= ent.index and mgr.ent.name ~= ent.name) then
 		GUI.FileManagerSetSelectedItem(mgr.widget, ent.index);
 		mgr.ent = ent;
+            self:tooltip(nil);
 	end
 end
 
@@ -1025,6 +1037,7 @@ function FileManager:ItemSelect(ent, mgr)
 
 	if not mgr.ent or (mgr.ent.index ~= ent.index and mgr.ent.name ~= ent.name) then
 		mgr.ent = ent;
+            self:tooltip(nil);
 	end
 end
 
@@ -1050,20 +1063,15 @@ end
 
 
 function FileManager:tooltip(msg)
-
-	if msg then
-		GUI.LabelSetText(self.title, msg);
-	else
-
-		local mgr = self:getFocusedManager();
-		local path = GUI.FileManagerGetPath(mgr.widget);
-
-		if path == "/" then
-			GUI.LabelSetText(self.title, self.app.name .. " v" .. self.app.ver);
-		else
-			GUI.LabelSetText(self.title, path);
-		end
-	end
+    if not self.title then return; end
+    self:updatePaths();
+    if not msg then
+        local f = self:getFile();
+        msg = f.name and (f.name .. (f.attr == 0 and string.format("  /  %.1f KB", f.size / 1024) or "  /  Folder"))
+            or "Select an item. Copy sends it to the other pane.";
+    end
+    if string.len(msg) > 78 then msg = string.sub(msg, 1, 75) .. "..."; end
+    GUI.LabelSetText(self.title, msg);
 end
 
 
@@ -1152,7 +1160,7 @@ function FileManager:Initialize()
 			end
 
 			self:focusManager(self.mgr.top);
-			self:toolbarModeSwitch();
+			self:choosePane(0);
 			self:tooltip(nil);
 		end
 	end
@@ -1161,4 +1169,80 @@ end
 
 function FileManager:Shutdown()
 	self:unloadModules();
+    self.app = nil;
+end
+
+-- NeXT pane controls and operation guards.
+function FileManager:updatePaths()
+    for _, side in ipairs({"top", "bottom"}) do
+        local mgr = self.mgr[side];
+        if mgr.widget then
+            local path = GUI.FileManagerGetPath(mgr.widget);
+            local font = self:getResource("body", DS.LIST_ITEM_GUI_FONT);
+            local tail = path;
+            while string.len(tail) > 0 and GUI.FontGetTextSize(font, "> " .. path).w > 260 do
+                tail = string.sub(tail, 2); path = "..." .. tail;
+            end
+            GUI.LabelSetText(GUI.ButtonGetCaption(self:getElement("path-" .. side)), (mgr.focus and "> " or "  ") .. path);
+        end
+    end
+end
+
+function FileManager:choosePane(index)
+    self:focusManager(index == 0 and self.mgr.top or self.mgr.bottom);
+    self:tooltip(nil);
+end
+
+function FileManager:up(index)
+    if index ~= nil then self:choosePane(index); end
+    local mgr = self:getFocusedManager();
+    local path = GUI.FileManagerGetPath(mgr.widget);
+    if path == "/" then return; end
+    GUI.FileManagerChangeDir(mgr.widget, "..", -2);
+    mgr.ent = {name = nil, size = 0, attr = 0, index = -1};
+    self:tooltip(nil);
+end
+
+function FileManager:devices(index)
+    self:choosePane(index);
+    local mgr = self:getFocusedManager();
+    GUI.FileManagerSetPath(mgr.widget, "/");
+    GUI.FileManagerScan(mgr.widget);
+    mgr.ent = {name = nil, size = 0, attr = 0, index = -1};
+    self:tooltip(nil);
+end
+
+function FileManager:refresh(index)
+    self:choosePane(index);
+    local mgr = self:getFocusedManager();
+    GUI.FileManagerScan(mgr.widget);
+    mgr.ent = {name = nil, size = 0, attr = 0, index = -1};
+    self:tooltip(nil);
+end
+
+function FileManager:validName(name)
+    return name and name ~= "" and name ~= "." and name ~= ".."
+        and not string.find(name, "[/\\%c]") and not string.find(name, "^%s*$");
+end
+
+function FileManager:validSelection(f)
+    if not f.name then self:tooltip("Select a file or folder first."); return false; end
+    if f.name == "." or f.name == ".." or f.path == "/" then
+        self:showError("Open a storage device and select a file or folder inside it.");
+        return false;
+    end
+    return true;
+end
+
+function FileManager:continueOperation()
+    if FileManagerPump and not FileManagerPump() then self.modal.copy_cancelled = true; end
+    return not self.modal.copy_cancelled;
+end
+
+function FileManager:editPrompt()
+    if self.modal.mode ~= GUI.DIALOG_MODE_PROMPT then return; end
+    local content = GUI.ContainerGetChild(self.modal.widget, 0);
+    local body = GUI.ContainerGetChild(content, 1);
+    local entry = GUI.ContainerGetChild(body, 0);
+    if entry then GUI.WidgetClicked(entry, 0, 0); end
 end
