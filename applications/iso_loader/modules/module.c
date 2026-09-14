@@ -61,6 +61,14 @@ static struct {
 	int sector_size;
 
 	bool have_args;
+	volatile int loading;
+	int profile_mode;
+	int nav_preview;
+	GUI_Widget *status, *summary, *verify_boot, *preview_media, *message;
+	GUI_Widget *btn_check;
+	Event_t *input_event;
+	char preset_source[NAME_MAX];
+	char launch_report[2048];
 
 	GUI_Widget *pages;
 
@@ -173,6 +181,11 @@ void isoLoader_RemovePreset(GUI_Widget *widget);
 int isoLoader_LoadPreset(GUI_Widget *widget);
 int isoLoader_SavePreset(GUI_Widget *widget);
 static void setIcon(int size);
+static void next_status(const char *text);
+static void next_message(const char *text);
+static void next_report(const char *path, const isoldr_info_t *info, uint32 addr, const char *stage);
+static void next_refresh(void);
+static void next_input(void *event, void *param, int action);
 static int getIconSizeFromWidget(GUI_Widget *widget);
 static int getCurrentIconSize(void);
 static int isCoverPvrSource(void);
@@ -237,6 +250,7 @@ void FFplayTogglePlayback(GUI_Widget *widget) {
 }
 
 void isoLoader_ShowPage(GUI_Widget *widget) {
+    if(self.loading) return;
 
 	GUI_WidgetSetEnabled(self.link, 1);
 	GUI_WidgetSetEnabled(self.extensions, 1);
@@ -258,6 +272,17 @@ void isoLoader_ShowPage(GUI_Widget *widget) {
 		GUI_WidgetSetEnabled(self.link, 0);
 	}
 
+	int games_page = GUI_CardStackGetIndex(self.pages) == 0;
+    if(games_page) {
+        GUI_WidgetClearFlags(self.run_pane, WIDGET_HIDDEN);
+        GUI_WidgetClearFlags(self.status, WIDGET_HIDDEN);
+    } else {
+        GUI_WidgetSetFlags(self.run_pane, WIDGET_HIDDEN);
+        GUI_WidgetSetFlags(self.status, WIDGET_HIDDEN);
+    }
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), games_page ? 0 : 1);
+    SDL_DC_EmulateMouse(games_page ? SDL_FALSE : SDL_TRUE);
+	next_refresh();
 	GUI_WidgetMarkChanged(self.run_pane);
 }
 
@@ -441,8 +466,9 @@ static void showROMInfo(const char *path) {
 	memset(title, 0, sizeof(title));
 	memset(noext, 0, sizeof(noext));
 
-	strncpy(noext, (!strchr(self.filename, '/')) ? self.filename : (strchr(self.filename, '/')+1), sizeof(noext));
-	strcpy(noext, strtok(noext, "."));
+	snprintf(noext, sizeof(noext), "%s", strrchr(self.filename, '/') ? strrchr(self.filename, '/') + 1 : self.filename);
+	char *noext_dot = strrchr(noext, '.');
+	if(noext_dot) *noext_dot = '\0';
 
 	int preferred_region = -1;
 
@@ -519,8 +545,9 @@ static void showCover() {
 	memset(title, 0, sizeof(title));
 	memset(noext, 0, sizeof(noext));
 
-	strncpy(noext, (!strchr(self.filename, '/')) ? self.filename : (strchr(self.filename, '/')+1), sizeof(noext));
-	strcpy(noext, strtok(noext, "."));
+    snprintf(noext, sizeof(noext), "%s", strrchr(self.filename, '/') ? strrchr(self.filename, '/') + 1 : self.filename);
+    char *noext_dot = strrchr(noext, '.');
+    if(noext_dot) *noext_dot = '\0';
 
 	if(is_dni) {
 		showROMInfo(path);
@@ -1085,8 +1112,15 @@ void isoLoader_togglePatchAddr(GUI_Widget *widget) {
 
 /* Switch to the selected volume */
 void isoLoader_SwitchVolume(void *dir) {
+    if(self.loading) { next_status("Wait for game information before changing devices."); return; }
+    self.filename[0] = '\0';
+    self.current_item = self.current_item_dir = -1;
+    if(self.isoldr) { free(self.isoldr); self.isoldr = NULL; }
+    if(self.btn_run) GUI_WidgetSetEnabled(self.btn_run, 0);
+    if(self.btn_check) GUI_WidgetSetEnabled(self.btn_check, 0);
 	GUI_FileManagerSetPath(self.filebrowser, (char *)dir);
 	highliteDevice();
+    next_refresh();
 }
 
 void isoLoader_toggleOS(GUI_Widget *widget) {
@@ -1109,6 +1143,8 @@ void isoLoader_toggleAsync(GUI_Widget *widget) {
 }
 
 void isoLoader_toggleDMA(GUI_Widget *widget) {
+    if(self.isoldr && !strcmp(self.isoldr->fs_dev, ISOLDR_DEV_SDCARD))
+        GUI_WidgetSetState(widget, 0);
 	
 	if (GUI_WidgetGetState(widget) && self.isoldr != NULL && isoldr_can_use_dma(self.isoldr) > 1) {
 		if (!strncmp(GUI_LabelGetText(self.async_label), "none", 4)) {
@@ -1463,8 +1499,12 @@ void isoLoader_Run(GUI_Widget *widget) {
 
 	char filepath[NAME_MAX];
 	const char *tmpval;
+	char address_text[24];
+	int check_only = widget == self.btn_check;
+	int detected_type;
+	if(self.loading || !self.filename[0]) { next_status("Select a game and wait for its information."); return; }
 	uint32 addr = ISOLDR_DEFAULT_ADDR_LOW;
-	(void)widget;
+	
 
 	memset(filepath, 0, NAME_MAX);
 	snprintf(filepath, NAME_MAX, "%s/%s", 
@@ -1474,9 +1514,9 @@ void isoLoader_Run(GUI_Widget *widget) {
 	StopCDDATrack();
 	stopFFplayPlayback();
 	if(!GUI_WidgetGetState(self.fastboot)) {
-		ScreenFadeOutEx("Starting...", 1);
+		ScreenFadeOutEx(check_only ? "Checking game..." : "Preparing game...", 1);
 	}
-	if(GUI_CardStackGetIndex(self.pages) != 0) {
+	if(!check_only && GUI_CardStackGetIndex(self.pages) != 0) {
 		isoLoader_SavePreset(NULL);
 	}
 	int want_test_mode = GUI_WidgetGetState(self.test_mode);
@@ -1488,15 +1528,17 @@ void isoLoader_Run(GUI_Widget *widget) {
 	self.isoldr = isoldr_get_info(filepath, want_test_mode);
 
 	if(self.isoldr == NULL) {
-		ShowConsole();
-		ScreenFadeIn();
-		return;
-	}
+        ScreenFadeIn();
+        next_message(isoldr_get_last_error());
+        next_report(filepath, NULL, addr, "Image inspection failed");
+        return;
+    }
+    detected_type = self.isoldr->exec.type;
 
-	char *preset = isoldr_find_preset(filepath, self.md5, 0);
+	char *preset = self.profile_mode ? NULL : isoldr_find_preset(filepath, self.md5, 0);
 	if(isoldr_apply_preset(self.isoldr, preset) == (uintptr_t)-1) {
-		ShowConsole();
 		ScreenFadeIn();
+		next_message(isoldr_get_last_error());
 		return;
 	}
 
@@ -1528,10 +1570,8 @@ void isoLoader_Run(GUI_Widget *widget) {
 				tmpval = GUI_ObjectGetName((GUI_Object *)self.heap[i]);
 
 				if(strlen(tmpval) < 8) {
-					char text[24];
-					memset(text, 0, sizeof(text));
-					strncpy(text, tmpval, 10);
-					tmpval = strncat(text, GUI_TextEntryGetText(self.heap_memory_text), 10);
+					snprintf(address_text, sizeof(address_text), "%s%s", tmpval, GUI_TextEntryGetText(self.heap_memory_text));
+				tmpval = address_text;
 				}
 
 				self.isoldr->heap = strtoul(tmpval, NULL, 16);
@@ -1547,27 +1587,19 @@ void isoLoader_Run(GUI_Widget *widget) {
 	tmpval = GUI_TextEntryGetText(self.device);
 
 	if(strncmp(tmpval, "auto", 4) != 0) {
-		strncpy(self.isoldr->fs_dev, tmpval, sizeof(self.isoldr->fs_dev));
+		snprintf(self.isoldr->fs_dev, sizeof(self.isoldr->fs_dev), "%s", tmpval);
 	}
 
-	if(self.current_cover && self.current_cover != self.default_cover && !self.isoldr->fast_boot) {
-
-		SDL_Surface *surf = GUI_SurfaceGet(self.current_cover);
-
-		if(surf) {
-			self.isoldr->gdtex = (uint32)surf->pixels;
-		}
-	}
 
 	for(int i = 0; i < sizeof(self.os_chk) >> 2; i++) {
-		if(i && GUI_WidgetGetState(self.os_chk[i])) {
-			self.isoldr->exec.type = i;
+		if(GUI_WidgetGetState(self.os_chk[i])) {
+			self.isoldr->exec.type = i ? i : detected_type;
 			break;
 		}
 	}
 
 	for(int i = 0; i < sizeof(self.boot_mode_chk) >> 2; i++) {
-		if(i && GUI_WidgetGetState(self.boot_mode_chk[i])) {
+		if(GUI_WidgetGetState(self.boot_mode_chk[i])) {
 			self.isoldr->boot_mode = i;
 			break;
 		}
@@ -1580,10 +1612,8 @@ void isoLoader_Run(GUI_Widget *widget) {
 			tmpval = GUI_ObjectGetName((GUI_Object *)self.memory_chk[i]);
 
 			if(strlen(tmpval) < 8) {
-				char text[24];
-				memset(text, 0, sizeof(text));
-				strncpy(text, tmpval, 10);
-				tmpval = strncat(text, GUI_TextEntryGetText(self.memory_text), 10);
+				snprintf(address_text, sizeof(address_text), "%s%s", tmpval, GUI_TextEntryGetText(self.memory_text));
+				tmpval = address_text;
 			}
 			addr = strtoul(tmpval, NULL, 16);
 			break;
@@ -1591,6 +1621,8 @@ void isoLoader_Run(GUI_Widget *widget) {
 	}
 
 	for(int i = 0; i < sizeof(self.isoldr->patch_addr) >> 2; ++i) {
+		self.isoldr->patch_addr[i] = 0;
+		self.isoldr->patch_value[i] = 0;
 		if(self.pa[i] & 0xffffff) {
 			self.isoldr->patch_addr[i] = self.pa[i];
 			self.isoldr->patch_value[i] = self.pv[i];
@@ -1609,7 +1641,9 @@ void isoLoader_Run(GUI_Widget *widget) {
 		if(GUI_WidgetGetState(self.vmu_shared)) {
 
 			if (priv_size > 0) {
-				fs_unlink(priv_path);
+				next_message("A private VMU already exists for this game. Choose Private VMU to keep using it. The save file was preserved.");
+				ScreenFadeIn();
+				return;
 			}
 
 		} else {
@@ -1627,12 +1661,21 @@ void isoLoader_Run(GUI_Widget *widget) {
 			}
 			int src_size = FileSize(vmupath);
 
-			if (src_size > 0 && priv_size != src_size) {
-				if (priv_size > 0) {
-					fs_unlink(priv_path);
-				}
-				CopyFile(vmupath, priv_path, 0);
-			}
+            if(src_size <= 0) {
+                next_message("The empty VMU template is missing. Reinstall the ISO Loader app.");
+                ScreenFadeIn(); return;
+            }
+            if(priv_size > 0 && priv_size != src_size) {
+                next_message("Existing VMU size differs. Select the matching VMU size; its contents were preserved.");
+                ScreenFadeIn(); return;
+            }
+            if(priv_size <= 0 && !check_only) {
+                CopyFile(vmupath, priv_path, 0);
+                if(FileSize(priv_path) != src_size) {
+                    next_message("Could not create the private VMU. Check free space.");
+                    ScreenFadeIn(); return;
+                }
+            }
 		}
 	}
 	else {
@@ -1643,7 +1686,9 @@ void isoLoader_Run(GUI_Widget *widget) {
 
 	if(self.image_type != IMAGE_TYPE_ROM_NAOMI) {
 		if(GUI_WidgetGetState(self.alt_boot)) {
-			isoldr_set_boot_file(self.isoldr, filepath, ALT_BOOT_FILE);
+			if(isoldr_set_boot_file(self.isoldr, filepath, ALT_BOOT_FILE) < 0) {
+				next_message(isoldr_get_last_error()); ScreenFadeIn(); return;
+			}
 		}
 	}
 
@@ -1656,11 +1701,29 @@ void isoLoader_Run(GUI_Widget *widget) {
 		}
 	}
 
-	isoldr_exec(self.isoldr, addr);
+    if(!strcmp(self.isoldr->fs_dev, ISOLDR_DEV_SDCARD)) {
+        self.isoldr->use_dma = 0;
+        self.isoldr->alt_read = 0;
+    }
+    if(check_only || (GUI_WidgetGetState(self.verify_boot) && self.isoldr->image_type != IMAGE_TYPE_ROM_NAOMI && !self.isoldr->bleem)) {
+        next_status("Checking executable bytes...");
+        if(isoldr_check_boot(self.isoldr, filepath) < 0) {
+            next_report(filepath, self.isoldr, addr, "Executable check failed");
+            ScreenFadeIn(); next_message(isoldr_get_last_error()); return;
+        }
+    }
+    next_report(filepath, self.isoldr, addr, check_only ? "Executable check passed; game not started" : "Handoff requested; game success is not recorded");
+    if(check_only) {
+        char result[256];
+        snprintf(result, sizeof(result), "Executable read check passed. CRC %08lx. This checks readable executable data, not game compatibility. Play will compare the loader's read against this CRC.", self.isoldr->boot_crc32);
+        ScreenFadeIn(); next_message(result); return;
+    }
+    isoldr_exec(self.isoldr, addr);
 
 	/* If we there, then something wrong... */
-	ShowConsole();
 	ScreenFadeIn();
+	next_report(filepath, self.isoldr, addr, "Launch returned before handoff");
+	next_message(isoldr_get_last_error());
 	free(self.isoldr);
 	self.isoldr = NULL;
 }
@@ -1744,7 +1807,7 @@ static void *selectFile_worker(void *p) {
 
 		strncpy(self.filename, filename, NAME_MAX);
 		trailer_path = relativeFilename("trailer.avi");
-		trailer_exists = FileExists(trailer_path);
+		trailer_exists = GUI_WidgetGetState(self.preview_media) && FileExists(trailer_path);
 
 		showCover();
 		isoLoader_LoadPreset(NULL);
@@ -1796,22 +1859,27 @@ static void *selectFile_worker(void *p) {
 			}
 		}
 
-		if(GUI_WidgetGetState(self.cdda) && !trailer_playing) {
+		if(GUI_WidgetGetState(self.preview_media) && GUI_WidgetGetState(self.cdda) && !trailer_playing) {
 			char filepath[NAME_MAX];
 			size_t track_size = GetCDDATrackFilename(5,
 				GUI_FileManagerGetPath(self.filebrowser), filename, filepath);
 
 			if(track_size) {
-				do {
-					track_size = GetCDDATrackFilename((random() % 15) + 4,
-									GUI_FileManagerGetPath(self.filebrowser), filename, filepath);
-				} while(track_size < (5 << 10));
-				PlayCDDATrack(filepath, 0);
+				for(int attempt = 0; attempt < 20 && track_size < (5 << 10); ++attempt)
+                    track_size = GetCDDATrackFilename((random() % 15) + 4,
+                        GUI_FileManagerGetPath(self.filebrowser), filename, filepath);
+                if(track_size >= (5 << 10)) PlayCDDATrack(filepath, 0);
 			}
 		}
 
 	next_item:
-		mutex_lock(&self.select_mutex);
+        mutex_lock(&self.select_mutex);
+        if(last_id == self.select_id) {
+            self.loading = 0;
+            GUI_WidgetSetEnabled(self.btn_run, self.isoldr && self.isoldr->exec.size);
+            GUI_WidgetSetEnabled(self.btn_check, self.isoldr && self.isoldr->exec.size);
+            next_refresh();
+        }
 	}
 
 	mutex_unlock(&self.select_mutex);
@@ -1819,8 +1887,13 @@ static void *selectFile_worker(void *p) {
 }
 
 static void selectFile(char *name, int index) {
+    if(!self.select_thd) { next_message("Cannot start the game browser worker. Reopen the app."); return; }
+    self.loading = 1;
+    self.profile_mode = 0;
+    GUI_WidgetSetEnabled(self.btn_run, 0);
+    GUI_WidgetSetEnabled(self.btn_check, 0);
+    next_status("Reading game information...");
 
-	GUI_WidgetSetEnabled(self.btn_run, 1);
 
 	if(GUI_FileManagerGetSelectedItem(self.filebrowser) != index) {
 		GUI_FileManagerSetSelectedItem(self.filebrowser, index);
@@ -1831,7 +1904,7 @@ static void selectFile(char *name, int index) {
 	highliteDevice();
 
 	mutex_lock(&self.select_mutex);
-	strncpy(self.select_filename, name, NAME_MAX);
+	snprintf(self.select_filename, sizeof(self.select_filename), "%s", name);
 	self.select_new = 1;
 	self.select_id++;
 	cond_signal(&self.select_cond);
@@ -1846,12 +1919,17 @@ static void selectFile(char *name, int index) {
 
 
 static void changeDir(dirent_t *ent) {
+	if(self.loading) { next_status("Wait for game information before changing folders."); return; }
 	self.current_item = -1;
 	self.current_item_dir = -1;
 	memset(self.filename, 0, NAME_MAX);
 	GUI_FileManagerChangeDir(self.filebrowser, ent->name, ent->size);
-	highliteDevice();
-	GUI_WidgetSetEnabled(self.btn_run, 0);
+    if(self.isoldr) { free(self.isoldr); self.isoldr = NULL; }
+    setTitle("Select a game");
+    highliteDevice();
+    GUI_WidgetSetEnabled(self.btn_run, 0);
+    GUI_WidgetSetEnabled(self.btn_check, 0);
+    next_refresh();
 }
 
 enum {
@@ -1873,6 +1951,7 @@ static int getImagePriority(const char *filename) {
 	if(strncasecmp(ext, ".iso", 4) == 0) return IMG_PRIORITY_OTHER;
 	if(strncasecmp(ext, ".cdi", 4) == 0) return IMG_PRIORITY_OTHER;
 	if(strncasecmp(ext, ".cso", 4) == 0) return IMG_PRIORITY_OTHER;
+	if(strncasecmp(ext, ".zso", 4) == 0) return IMG_PRIORITY_OTHER;
 
 	return IMG_PRIORITY_NONE;
 }
@@ -1952,8 +2031,9 @@ void isoLoader_ItemChange(dirent_fm_t *fm_ent, int change_dir) {
 		}
 	}
 	else if(self.current_item == fm_ent->index) {
-		isoLoader_Run(NULL);
-	}
+        /* Selection callbacks must never launch a game. Play is explicit. */
+        if(change_dir) next_status("Selected. Press Start or Play to launch.");
+    }
 	else if(IsFileSupportedByApp(self.app, ent->name)) {
 		selectFile(ent->name, fm_ent->index);
 		self.current_item_dir = -1;
@@ -1961,7 +2041,7 @@ void isoLoader_ItemChange(dirent_fm_t *fm_ent, int change_dir) {
 }
 
 void isoLoader_ItemClick(dirent_fm_t *fm_ent) {
-	isoLoader_ItemChange(fm_ent, 1);
+	isoLoader_ItemChange(fm_ent, !self.nav_preview);
 }
 
 void isoLoader_ItemContextClick(dirent_fm_t *fm_ent) {
@@ -2208,6 +2288,7 @@ int isoLoader_LoadPreset(GUI_Widget *widget) {
 	char filepath[NAME_MAX];
 	snprintf(filepath, NAME_MAX, "%s/%s", GUI_FileManagerGetPath(self.filebrowser), self.filename);
 	char *filename = isoldr_find_preset(filepath, self.md5, !!widget);
+	snprintf(self.preset_source, sizeof(self.preset_source), "%s", filename ? filename : "Automatic device defaults");
 
 	if(self.isoldr) {
 		free(self.isoldr);
@@ -2217,14 +2298,8 @@ int isoLoader_LoadPreset(GUI_Widget *widget) {
 	self.isoldr = isoldr_get_info(filepath, 0);
 
 	if (!self.isoldr) {
-		self.isoldr = (isoldr_info_t *)malloc(sizeof(isoldr_info_t));
-		if (!self.isoldr) {
-			isoLoader_DefaultPreset();
-			return -1;
-		}
-		memset(self.isoldr, 0, sizeof(isoldr_info_t));
-		self.isoldr->image_type = self.image_type;
-		strncpy(self.isoldr->image_file, filepath, sizeof(self.isoldr->image_file) - 1);
+		next_status(isoldr_get_last_error());
+		return -1;
 	}
 
 	int detected_type = self.isoldr->exec.type;
@@ -2243,6 +2318,7 @@ int isoLoader_LoadPreset(GUI_Widget *widget) {
 	}
 
 	int bin_type = (self.isoldr->exec.type != BIN_TYPE_AUTO) ? self.isoldr->exec.type : detected_type;
+	if(bin_type < 0 || bin_type >= 4) bin_type = BIN_TYPE_AUTO;
 
 	GUI_WidgetSetState(self.dma, self.isoldr->use_dma);
 	isoLoader_toggleDMA(self.dma);
@@ -2465,6 +2541,14 @@ void isoLoader_Init(App_t *app) {
 		self.current_item_dir = -1;
 		self.sector_size = 2048;
 
+		self.status = APP_GET_WIDGET("launch-status");
+		self.summary = APP_GET_WIDGET("launch-summary");
+		self.verify_boot = APP_GET_WIDGET("verify-boot");
+		self.preview_media = APP_GET_WIDGET("preview-media");
+		self.message = APP_GET_WIDGET("message-panel");
+		self.btn_check = APP_GET_WIDGET("check-game");
+		GUI_WidgetSetFlags(self.message, WIDGET_HIDDEN);
+
 		self.btn_dev[APP_DEVICE_CD]  = APP_GET_WIDGET("btn_cd");
 		self.btn_dev[APP_DEVICE_SD]  = APP_GET_WIDGET("btn_sd");
 		self.btn_dev[APP_DEVICE_IDE] = APP_GET_WIDGET("btn_hdd");
@@ -2474,17 +2558,17 @@ void isoLoader_Init(App_t *app) {
 		self.item_focus    = APP_GET_SURFACE("item-focus");
 		self.item_selected = APP_GET_SURFACE("item-selected");
 
-		self.btn_dev_norm[APP_DEVICE_CD]  = APP_GET_SURFACE("btn_cd_norm");
-		self.btn_dev_over[APP_DEVICE_CD]  = APP_GET_SURFACE("btn_cd_over");
+		self.btn_dev_norm[APP_DEVICE_CD]  = APP_GET_SURFACE("next-button");
+		self.btn_dev_over[APP_DEVICE_CD]  = APP_GET_SURFACE("next-primary");
 		
-		self.btn_dev_norm[APP_DEVICE_SD]  = APP_GET_SURFACE("btn_sd_norm");
-		self.btn_dev_over[APP_DEVICE_SD]  = APP_GET_SURFACE("btn_sd_over");
+		self.btn_dev_norm[APP_DEVICE_SD]  = APP_GET_SURFACE("next-button");
+		self.btn_dev_over[APP_DEVICE_SD]  = APP_GET_SURFACE("next-primary");
 		
-		self.btn_dev_norm[APP_DEVICE_IDE] = APP_GET_SURFACE("btn_hdd_norm");
-		self.btn_dev_over[APP_DEVICE_IDE] = APP_GET_SURFACE("btn_hdd_over");
+		self.btn_dev_norm[APP_DEVICE_IDE] = APP_GET_SURFACE("next-button");
+		self.btn_dev_over[APP_DEVICE_IDE] = APP_GET_SURFACE("next-primary");
 		
-		self.btn_dev_norm[APP_DEVICE_PC]  = APP_GET_SURFACE("btn_pc_norm");
-		self.btn_dev_over[APP_DEVICE_PC]  = APP_GET_SURFACE("btn_pc_over");
+		self.btn_dev_norm[APP_DEVICE_PC]  = APP_GET_SURFACE("next-button");
+		self.btn_dev_over[APP_DEVICE_PC]  = APP_GET_SURFACE("next-primary");
 
 		self.default_cover = self.current_cover = APP_GET_SURFACE("cover");
 
@@ -2695,7 +2779,7 @@ void isoLoader_Init(App_t *app) {
 			GUI_LabelSetText(w, vers);
 		}
 
-		if(strncmp(getenv("PATH"), "/sd", 3)) {
+		if(GUI_WidgetGetState(self.preview_media) && strncmp(getenv("PATH"), "/sd", 3)) {
 			self.ffmpeg_thd = thd_create(0, load_ffmpeg_modules_thd, NULL);
 		}
 		
@@ -2705,6 +2789,9 @@ void isoLoader_Init(App_t *app) {
 		mutex_init(&self.select_mutex, MUTEX_TYPE_NORMAL);
 		cond_init(&self.select_cond);
 		self.select_thd = thd_create(0, selectFile_worker, NULL);
+		self.input_event = AddEvent("NeXTISOLoaderInput", EVENT_TYPE_INPUT, EVENT_PRIO_DEFAULT, next_input, NULL);
+		if(self.input_event) SetEventActive(self.input_event, 0);
+		if(!self.select_thd) next_status("Game browser could not start. Reopen the app.");
 	}
 	else {
 		ds_printf("DS_ERROR: %s: Attempting to call %s is not by the app initiate.\n", 
@@ -2734,6 +2821,8 @@ static void release_resources(void) {
 }
 
 void isoLoader_Shutdown(App_t *app) {
+	isoLoader_Close();
+	if(self.input_event) { RemoveEvent(self.input_event); self.input_event = NULL; }
 	(void)app;
 	release_resources();
 
@@ -2746,6 +2835,8 @@ void isoLoader_Shutdown(App_t *app) {
 }
 
 void isoLoader_Exit(GUI_Widget *widget) {
+
+	isoLoader_Close();
 
 	(void)widget;
 	App_t *app = NULL;
@@ -2770,3 +2861,5 @@ void isoLoader_Exit(GUI_Widget *widget) {
 		OpenApp(app, NULL);
 	}
 }
+
+#include "next_ui.h"

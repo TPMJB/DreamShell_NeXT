@@ -13,6 +13,7 @@
 #endif
 
 #include "isofs/gdi.h"
+#include "isofs/gdi_parse.h"
 #include "internal.h"
 
 //#define DEBUG 1
@@ -60,7 +61,7 @@ static int check_gdi_image(file_t fd) {
 		return -1;
 	}
 	
-	track_count = strtoul(line, NULL, 0);
+	track_count = ds_gdi_count(line);
 	
 	if(track_count == 0 || track_count > 99) {
 #ifdef DEBUG
@@ -86,8 +87,9 @@ GDI_header_t *gdi_open(file_t fd, const char *filename) {
 	dbglog(DBG_DEBUG, "%s: %d tracks in image\n", __func__, track_count);
 #endif
 
-	int track_no, i, rc;
-	char line[NAME_MAX], fname[NAME_MAX / 2];
+	int i;
+	char line[NAME_MAX];
+    ds_gdi_track parsed;
 	char *path = NULL;
 	GDI_header_t *hdr;
 	
@@ -121,26 +123,14 @@ GDI_header_t *gdi_open(file_t fd, const char *filename) {
 #ifdef DEBUG
 		dbglog(DBG_DEBUG, "%s: %s", __func__, line);
 #endif
-#ifdef __DREAMCAST__
-		rc = sscanf(line, "%d %ld %ld %ld %s %ld", 
-#else
-		rc = sscanf(line, "%d %d %d %d %s %d", 
-#endif
-					&track_no, 
-					&hdr->tracks[i]->start_lba, 
-					&hdr->tracks[i]->flags, 
-					&hdr->tracks[i]->sector_size,
-					fname, 
-					&hdr->tracks[i]->offset);
-					
-		if(rc < 6) {
-#ifdef DEBUG
-			dbglog(DBG_DEBUG, "%s: Invalid line in GDI: %s\n", __func__, line);
-#endif
-			goto error;
-		}
-		
-		snprintf(hdr->tracks[i]->filename, NAME_MAX, "%s/%s", path, fname);
+        if(!ds_gdi_parse(line, &parsed) || parsed.number != (uint32_t)i + 1 ||
+           (i && parsed.lba <= hdr->tracks[i - 1]->start_lba)) goto error;
+        hdr->tracks[i]->start_lba = parsed.lba;
+        hdr->tracks[i]->flags = parsed.flags;
+        hdr->tracks[i]->sector_size = parsed.sector_size;
+        hdr->tracks[i]->offset = parsed.offset;
+        if(!path || snprintf(hdr->tracks[i]->filename, NAME_MAX, "%s/%s", path, parsed.name) >= NAME_MAX)
+            goto error;
 	}
 
 	free(path);
@@ -279,7 +269,8 @@ uint32 gdi_get_offset(GDI_header_t *hdr, uint32 lba, uint16 *sector_size) {
 		return -1;
 	}
 
-	uint32 offset = (lba - track->start_lba) * track->sector_size;
+	uint64_t offset = (uint64_t)(lba - track->start_lba) * track->sector_size + track->offset;
+    if(offset > UINT32_MAX) return -1;
 	*sector_size = gdi_track_sector_size(track);
 	
 	return offset;
@@ -299,7 +290,7 @@ int gdi_read_sectors(GDI_header_t *hdr, uint8 *buff, uint32 start, uint32 count)
 	dbglog(DBG_DEBUG, "%s: %ld %ld at %ld mode %d\n", __func__, start, count, offset, sector_size);
 #endif
 
-	fs_seek(hdr->track_fd, offset, SEEK_SET);
+	if(fs_seek(hdr->track_fd, offset, SEEK_SET) != (off_t)offset) return -1;
 	return read_sectors_data(hdr->track_fd, count, sector_size, buff);
 }
 

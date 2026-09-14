@@ -20,6 +20,24 @@ void isoldr_vm2_bank_switch(const char *ipbin_info_sec);
 void isoldr_unmount_all_presets_romdisks(void);
 int builtin_isoldr_cmd(int argc, char *argv[]);
 
+#include <isoldr/check.h>
+#include <isofs/gdi_parse.h>
+#include <stdarg.h>
+
+static char isoldr_last_error[256];
+
+const char *isoldr_get_last_error(void) {
+    return isoldr_last_error[0] ? isoldr_last_error : "Launch failed. Open the console for details.";
+}
+
+void isoldr_error(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(isoldr_last_error, sizeof(isoldr_last_error), fmt, args);
+    va_end(args);
+    ds_printf("DS_ERROR: %s", isoldr_last_error);
+}
+
 DEFAULT_MODULE_HEADER(isoldr);
 
 void isoldr_naomi_eeprom_prepare(isoldr_info_t *info);
@@ -43,7 +61,7 @@ static void get_ipbin_info(isoldr_info_t *info, file_t fd, uint8 *sec, char *pse
 
 	if(fs_ioctl(fd, ISOFS_IOCTL_GET_BOOT_SECTOR_DATA, sec) < 0) {
 
-		ds_printf("DS_ERROR: Can't get boot sector data\n");
+		isoldr_error("Can't get boot sector data\n");
 
 	} else {
 
@@ -162,7 +180,7 @@ static int get_naomi_rom_info(isoldr_info_t *info, file_t fd, const char *rom_fi
 	char *pbuf = NULL;
 
 	if(isoldr_naomi_read_header(fd, &cart_hdr) < 0) {
-		ds_printf("DS_ERROR: Invalid NAOMI ROM header\n");
+		isoldr_error("Invalid NAOMI ROM header\n");
 		return -1;
 	}
 
@@ -175,7 +193,7 @@ static int get_naomi_rom_info(isoldr_info_t *info, file_t fd, const char *rom_fi
 
 	int len = strlen(pbuf);
 
-	if(len > NAME_MAX) {
+	if(len >= NAME_MAX) {
 		len = NAME_MAX - 1;
 	}
 
@@ -202,7 +220,68 @@ static int get_naomi_rom_info(isoldr_info_t *info, file_t fd, const char *rom_fi
 	return 0;
 }
 
+/* Validate every referenced track before ISOFS can silently use a partial set.
+ * The standalone reader reconstructs trackNN names, so reject unsupported names
+ * and offsets with a useful error instead of accepting a mount-only success. */
+static int isoldr_check_gdi(const char *filename) {
+    const char *ext = strrchr(filename, '.');
+    if(!ext || strcasecmp(ext, ".gdi")) return 0;
+    file_t fd = fs_open(filename, O_RDONLY);
+    if(fd == FILEHND_INVALID) { isoldr_error("Cannot open GDI descriptor.\n"); return -1; }
+    size_t size = fs_total(fd);
+    char *data = size && size <= 32768 ? malloc(size + 1) : NULL;
+    if(!data) { fs_close(fd); isoldr_error("GDI descriptor is too large or memory is unavailable.\n"); return -1; }
+    if(fs_read(fd, data, size) != (ssize_t)size) {
+        fs_close(fd); free(data); isoldr_error("Incomplete GDI descriptor read.\n"); return -1;
+    }
+    fs_close(fd); data[size] = 0;
+    int rc = -1, count;
+    char *line = data, *next = strchr(line, '\n');
+    if(next) *next++ = 0;
+    count = ds_gdi_count(line);
+    if(count < 1) { isoldr_error("Invalid GDI track count.\n"); goto done; }
+    uint32_t last_lba = 0;
+    for(int i = 1; i <= count; ++i) {
+        ds_gdi_track track;
+        line = next;
+        if(!line) { isoldr_error("GDI descriptor has missing track entries.\n"); goto done; }
+        next = strchr(line, '\n');
+        if(next) *next++ = 0;
+        if(!ds_gdi_parse(line, &track) || track.number != (uint32_t)i ||
+           (i > 1 && track.lba <= last_lba)) {
+            isoldr_error("Invalid GDI entry for track %d.\n", i); goto done;
+        }
+        last_lba = track.lba;
+        char expected[32], path[NAME_MAX];
+        const char *suffix = strrchr(track.name, '.');
+        snprintf(expected, sizeof(expected), "track%02d%s", i, suffix ? suffix : "");
+        if(strcmp(expected, track.name) || !suffix || track.offset ||
+           (track.flags == 4 && strcasecmp(suffix, track.sector_size == 2048 ? ".iso" : ".bin")) ||
+           (track.flags == 0 && strcasecmp(suffix, ".raw") && strcasecmp(suffix, ".wav"))) {
+            isoldr_error("Track %d needs standard trackNN.iso/bin/raw names and offset 0 for this loader.\n", i); goto done;
+        }
+        const char *slash = strrchr(filename, '/');
+        int prefix = slash ? (int)(slash - filename + 1) : 0;
+        if(snprintf(path, sizeof(path), "%.*s%s", prefix, filename, track.name) >= sizeof(path)) {
+            isoldr_error("GDI track path is too long.\n"); goto done;
+        }
+        fd = fs_open(path, O_RDONLY);
+        if(fd == FILEHND_INVALID) { isoldr_error("Missing GDI track: %s\n", track.name); goto done; }
+        size_t bytes = fs_total(fd);
+        fs_close(fd);
+        if(!bytes || (strcasecmp(suffix, ".wav") && bytes % track.sector_size)) {
+            isoldr_error("GDI track is empty or incomplete: %s\n", track.name); goto done;
+        }
+    }
+    if(next) { const char *tail = next; ds_gdi_space(&tail); if(*tail) { isoldr_error("Unexpected extra GDI entries.\n"); goto done; } }
+    rc = 0;
+done:
+    free(data); return rc;
+}
+
 static int get_image_info(isoldr_info_t *info, const char *iso_file) {
+    if(isoldr_check_gdi(iso_file) < 0) return -1;
+
 
 	file_t fd;
 	char fn[NAME_MAX];
@@ -221,13 +300,13 @@ static int get_image_info(isoldr_info_t *info, const char *iso_file) {
 	if(fd != FILEHND_INVALID) {
 		fs_close(fd);
 		if(fs_iso_unmount(mount) < 0) {
-			ds_printf("DS_ERROR: Can't unmount %s\n", mount);
+			isoldr_error("Can't unmount %s\n", mount);
 			return -1;
 		}
 	}
 
 	if(fs_iso_mount(mount, iso_file) < 0) {
-		ds_printf("DS_ERROR: Can't mount %s to %s\n", iso_file, mount);
+		isoldr_error("Can't mount %s to %s\n", iso_file, mount);
 		return -1;
 	}
 
@@ -249,16 +328,18 @@ static int get_image_info(isoldr_info_t *info, const char *iso_file) {
 	fd = fs_open(fn, O_RDONLY);
 
 	if(fd == FILEHND_INVALID) {
-		ds_printf("DS_ERROR: Can't open %s\n", fn);
+		isoldr_error("Can't open %s\n", fn);
 		goto image_error;
 	}
 
-	/* TODO check errors */
-	fs_ioctl(fd, ISOFS_IOCTL_GET_FD_LBA, &info->exec.lba);
-	fs_ioctl(fd, ISOFS_IOCTL_GET_IMAGE_TYPE, &info->image_type);
-	fs_ioctl(fd, ISOFS_IOCTL_GET_DATA_TRACK_LBA, &info->track_lba[0]);
-	fs_ioctl(fd, ISOFS_IOCTL_GET_DATA_TRACK_SECTOR_SIZE, &info->sector_size);
-	fs_ioctl(fd, ISOFS_IOCTL_GET_TOC_DATA, &info->toc);
+	if(fs_ioctl(fd, ISOFS_IOCTL_GET_FD_LBA, &info->exec.lba) < 0 ||
+       fs_ioctl(fd, ISOFS_IOCTL_GET_IMAGE_TYPE, &info->image_type) < 0 ||
+       fs_ioctl(fd, ISOFS_IOCTL_GET_DATA_TRACK_LBA, &info->track_lba[0]) < 0 ||
+       fs_ioctl(fd, ISOFS_IOCTL_GET_DATA_TRACK_SECTOR_SIZE, &info->sector_size) < 0 ||
+       fs_ioctl(fd, ISOFS_IOCTL_GET_TOC_DATA, &info->toc) < 0) {
+        isoldr_error("Cannot read image metadata. Check the descriptor and tracks.\n");
+        goto image_error;
+    }
 
 	if(info->image_type == ISOFS_IMAGE_TYPE_CDI) {
 
@@ -314,7 +395,7 @@ static int get_image_info(isoldr_info_t *info, const char *iso_file) {
 	info->exec.size = fs_total(fd);
 
 	if(get_executable_info(info, fd) < 0) {
-		ds_printf("DS_ERROR: Can't get executable info\n");
+		isoldr_error("Can't get executable info\n");
 		goto image_error;
 	}
 
@@ -363,7 +444,7 @@ static int get_device_info(isoldr_info_t *info, const char *iso_file) {
 		}
 
 	} else {
-		ds_printf("DS_ERROR: isoldr doesn't support this device\n");
+		isoldr_error("isoldr doesn't support this device\n");
 		return -1;
 	}
 
@@ -374,6 +455,8 @@ static int get_device_info(isoldr_info_t *info, const char *iso_file) {
 
 isoldr_info_t *isoldr_get_info(const char *file, int test_mode) {
 
+	isoldr_last_error[0] = '\0';
+
 	isoldr_info_t *info = NULL;
 	file_t fd;
 	const char *ext = NULL;
@@ -381,13 +464,14 @@ isoldr_info_t *isoldr_get_info(const char *file, int test_mode) {
 	fd = fs_open(file, O_RDONLY);
 
 	if(fd == FILEHND_INVALID) {
+		isoldr_error("Cannot open image: %s\n", file);
 		goto error;
 	}
 
 	info = (isoldr_info_t *) malloc(sizeof(*info));
 
 	if(info == NULL) {
-		ds_printf("DS_ERROR: No free memory\n");
+		isoldr_error("No free memory\n");
 		fs_close(fd);
 		goto error;
 	}
@@ -434,33 +518,93 @@ error:
 
 
 int isoldr_set_boot_file(isoldr_info_t *info, const char *iso_file, const char *boot_file) {
+    char fn[NAME_MAX];
+    const char *mount = "/isoldr";
+    file_t fd = FILEHND_INVALID;
+    int result = -1;
+    if(!info || !boot_file || strlen(boot_file) >= sizeof(info->exec.file))
+        return -1;
+    if(fs_iso_mount(mount, iso_file) < 0) {
+        isoldr_error("Cannot mount image for alternate executable.\n");
+        return -1;
+    }
+    snprintf(fn, sizeof(fn), "%s/%s", mount, boot_file);
+    fd = fs_open(fn, O_RDONLY);
+    if(fd == FILEHND_INVALID ||
+       fs_ioctl(fd, ISOFS_IOCTL_GET_FD_LBA, &info->exec.lba) < 0) {
+        isoldr_error("Cannot open alternate executable: %s\n", boot_file);
+        goto done;
+    }
+    info->exec.lba += 150;
+    info->exec.size = fs_total(fd);
+    strcpy(info->exec.file, boot_file);
+    result = get_executable_info(info, fd);
+done:
+    if(fd != FILEHND_INVALID) fs_close(fd);
+    fs_iso_unmount(mount);
+    return result;
+}
 
-	file_t fd;
-	char fn[NAME_MAX];
-	char *mount = "/isoldr";
+/* This checksum covers executable bytes, not the whole disc and not patches. */
+int isoldr_check_boot(isoldr_info_t *info, const char *image_file) {
+    const char *mount = "/iso_check";
+    char path[NAME_MAX];
+    file_t fd = FILEHND_INVALID;
+    uint8_t *buf = NULL;
+    uint32_t crc = ~0U, remaining, extent;
+    int result = -1;
+    if(!info || !image_file) { isoldr_error("Missing image information.\n"); return -1; }
+    uint32_t skip = !strcasecmp(info->exec.file, "0WINCEOS.BIN") ? 2048 : 0;
 
-	if(fs_iso_mount(mount, iso_file) < 0) {
-		ds_printf("DS_ERROR: Can't mount %s to %s\n", iso_file, mount);
-		return -1;
-	}
-
-	snprintf(fn, NAME_MAX, "%s/%s", mount, boot_file);
-	fd = fs_open(fn, O_RDONLY);
-
-	if(fd == FILEHND_INVALID) {
-		return -1;
-	}
-
-	fs_ioctl(fd, ISOFS_IOCTL_GET_FD_LBA, &info->exec.lba);
-
-	info->exec.lba += 150;
-	info->exec.size = fs_total(fd);
-	strncpy(info->exec.file, boot_file, sizeof(info->exec.file) - 1);
-	info->exec.file[sizeof(info->exec.file) - 1] = '\0';
-
-	fs_close(fd);
-	fs_iso_unmount(mount);
-	return 0;
+    info->magic[10] = '\0';
+    info->boot_crc32 = 0;
+    if(info->image_type == IMAGE_TYPE_ROM_NAOMI || info->bleem) {
+        isoldr_error("Executable CRC is available for Dreamcast disc images.\n");
+        return -1;
+    }
+    if(!isoldr_boot_extent(info->exec.addr, info->exec.size, 2048, &extent)) {
+        isoldr_error("Executable has an invalid size or RAM address.\n");
+        return -1;
+    }
+    if(fs_iso_mount(mount, image_file) < 0) {
+        isoldr_error("Cannot mount image for executable check.\n");
+        return -1;
+    }
+    snprintf(path, sizeof(path), "%s/%s", mount, info->exec.file);
+    fd = fs_open(path, O_RDONLY);
+    if(fd == FILEHND_INVALID || (uint64_t)info->exec.size + skip != fs_total(fd)) {
+        isoldr_error("Executable is missing or its size changed.\n");
+        goto done;
+    }
+    if(fs_seek(fd, skip, SEEK_SET) != (off_t)skip) {
+        isoldr_error("Cannot seek to executable data.\n");
+        goto done;
+    }
+    buf = memalign(32, 32768);
+    if(!buf) {
+        isoldr_error("Not enough memory for executable check.\n");
+        goto done;
+    }
+    remaining = info->exec.size;
+    while(remaining) {
+        size_t want = remaining < 32768 ? remaining : 32768;
+        if(fs_read(fd, buf, want) != (ssize_t)want) {
+            isoldr_error("Incomplete executable read. Check the image and storage.\n");
+            goto done;
+        }
+        crc = isoldr_crc32_update(crc, buf, want);
+        remaining -= want;
+        thd_pass();
+    }
+    info->boot_crc32 = ~crc;
+    info->magic[10] = ISOLDR_VERIFY_MARKER;
+    info->magic[11] = '\0';
+    result = 0;
+done:
+    free(buf);
+    if(fd != FILEHND_INVALID) fs_close(fd);
+    fs_iso_unmount(mount);
+    return result;
 }
 
 
@@ -492,7 +636,7 @@ static int patch_loader_addr(uint8 *loader, uint32 size, uint32 addr) {
 
 	EXPT_GUARD_CATCH;
 
-	ds_printf("DS_ERROR: Loader memory patch failed\n");
+	isoldr_error("Loader memory patch failed\n");
 	EXPT_GUARD_RETURN -1;
 
 	EXPT_GUARD_END;
@@ -529,6 +673,12 @@ static void set_loader_type(isoldr_info_t *info) {
 
 void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 
+	isoldr_last_error[0] = '\0';
+	if(!strcmp(info->fs_dev, ISOLDR_DEV_SDCARD)) {
+		info->use_dma = 0;
+		info->alt_read = 0;
+	}
+
 	char fn[NAME_MAX];
 	uint8_t *loader = NULL;
 	size_t len = 0;
@@ -552,16 +702,32 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 			getenv("PATH"), lib_get_name(), info->fs_dev);
 	}
 
-	fd = fs_open(fn, O_RDONLY);
+	char elf_path[NAME_MAX];
+    snprintf(elf_path, sizeof(elf_path), "%s", fn);
+    char *elf_dot = strrchr(elf_path, '.');
+    if(elf_dot) strcpy(elf_dot, ".elf");
+    if(FileExists(elf_path)) {
+        if(isoldr_elf_load(elf_path, addr, &loader, &len) < 0) {
+            isoldr_error("Cannot load ELF firmware: %s\n", elf_path);
+            return;
+        }
+        ds_printf("DS_PROCESS: Loader: %s\n", elf_path);
+    }
+    else {
+    fd = fs_open(fn, O_RDONLY);
 
-	if(fd != FILEHND_INVALID) {
-		len = fs_total(fd) + ISOLDR_PARAMS_SIZE;
+    if(fd != FILEHND_INVALID) {
+        size_t binary_size = fs_total(fd);
+        if(binary_size < 4 || binary_size > 2 * 1024 * 1024) {
+            fs_close(fd); isoldr_error("Invalid firmware size.\n"); return;
+        }
+        len = binary_size + ISOLDR_PARAMS_SIZE;
 		buf_size = len < 0x20000 ? 0x25000 : len + 0x5000;
 		loader = (uint8_t *) memalign(32, buf_size);
 
 		if(loader == NULL) {
 			fs_close(fd);
-			ds_printf("DS_ERROR: No free memory, needed %d bytes\n", len);
+			isoldr_error("No free memory, needed %d bytes\n", len);
 			return;
 		}
 
@@ -570,17 +736,20 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 
 		memset(loader, 0, buf_size);
 
-		if(fs_read(fd, loader + ISOLDR_PARAMS_SIZE, len) != (len - ISOLDR_PARAMS_SIZE)) {
+		if(fs_read(fd, loader + ISOLDR_PARAMS_SIZE, len - ISOLDR_PARAMS_SIZE) != (len - ISOLDR_PARAMS_SIZE)) {
 			fs_close(fd);
 			free(loader);
-			ds_printf("DS_ERROR: Can't load %s\n", fn);
+			isoldr_error("Can't load %s\n", fn);
 			return;
 		}
 
 		fs_close(fd);
 
 		if(addr != ISOLDR_DEFAULT_ADDR) {
-			patch_loader_addr(loader + ISOLDR_PARAMS_SIZE, len - ISOLDR_PARAMS_SIZE, addr);
+			if(patch_loader_addr(loader + ISOLDR_PARAMS_SIZE, len - ISOLDR_PARAMS_SIZE, addr) < 0) {
+				free(loader);
+				return;
+			}
 		}
 	}
 	else {
@@ -594,19 +763,22 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 		}
 	}
 
-	/* Extra filesystem code can outgrow a low-address game's preset. Check
-	 * before leaving DreamShell, so loading the executable cannot overwrite
-	 * the loader. Syscall/Bleem modes select a different address below. */
-	uint32_t loader_phys = (uint32_t)addr & 0x1fffffff;
-	uint32_t boot_phys = info->exec.addr & 0x1fffffff;
-	if (info->image_type != IMAGE_TYPE_ROM_NAOMI &&
-		info->syscalls != 1 && info->bleem != 1 &&
-		loader_phys < boot_phys && (uint64_t)loader_phys + len + 32 > boot_phys) {
-		ds_printf("DS_ERROR: Loader no longer fits below the game executable.\n"
-			"Select loader address 0x8ce00000 or fewer emulation features.\n");
-		free(loader);
-		return;
-	}
+    }
+
+    /* Validate the complete loader extent, including parameters and BSS. */
+    uint32_t loader_phys = (uint32_t)addr & 0x1fffffff;
+    uint32_t boot_phys = info->exec.addr & 0x1fffffff;
+    uint32_t boot_bytes;
+    if(info->image_type != IMAGE_TYPE_ROM_NAOMI &&
+       info->syscalls != 1 && info->bleem != 1 &&
+       (!isoldr_boot_extent(info->exec.addr, info->exec.size, 2048, &boot_bytes) ||
+        loader_phys < 0x0c000100 || (uint64_t)loader_phys + len + 32 > 0x0cfff000 ||
+        isoldr_ranges_overlap(loader_phys, len + 32, boot_phys, boot_bytes))) {
+        isoldr_error("Loader and executable do not fit at this address.\n"
+                    "Try the baseline profile or adjust the loader address.\n");
+        free(loader);
+        return;
+    }
 
 	if(info->syscalls == 1) {
 
@@ -623,7 +795,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 
 			if(buff == NULL) {
 				fs_close(fd);
-				ds_printf("DS_ERROR: No free memory, needed %d bytes\n", sc_len);
+				isoldr_error("No free memory, needed %d bytes\n", sc_len);
 				info->syscalls = 0;
 			}
 			else {
@@ -631,7 +803,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 					fn, sc_len, (uintptr_t)buff);
 
 				if (fs_read(fd, buff, sc_len) != sc_len) {
-					ds_printf("DS_ERROR: Can't load %s\n", fn);
+					isoldr_error("Can't load %s\n", fn);
 					info->syscalls = 0;
 				}
 				else {
@@ -663,14 +835,14 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 
 			if(buff == NULL) {
 				fs_close(fd);
-				ds_printf("DS_ERROR: No free memory, needed %d bytes\n", blen);
+				isoldr_error("No free memory, needed %d bytes\n", blen);
 				info->bleem = 0;
 			}
 			else {
 				ds_printf("DS_PROCESS: Loading %s %d bytes to %08lx\n", fn, blen, (uintptr_t)buff);
 
 				if(fs_read(fd, buff, blen) != blen) {
-					ds_printf("DS_ERROR: Can't load %s\n", fn);
+					isoldr_error("Can't load %s\n", fn);
 					info->bleem = 0;
 				}
 				else {
@@ -690,7 +862,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 		fd = fs_open(fn, O_RDONLY);
 
 		if(fd == FILEHND_INVALID) {
-			ds_printf("DS_ERROR: Can't open file: %s\n", fn);
+			isoldr_error("Can't open file: %s\n", fn);
 			free(loader);
 			return;
 		}
@@ -700,7 +872,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 		if(buff == NULL) {
 			fs_close(fd);
 			free(loader);
-			ds_printf("DS_ERROR: No memory for naomi irq table\n");
+			isoldr_error("No memory for naomi irq table\n");
 			return;
 		}
 		ds_printf("DS_PROCESS: Loading %s %d bytes to %08lx\n",
@@ -710,7 +882,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 			fs_close(fd);
 			free(buff);
 			free(loader);
-			ds_printf("DS_ERROR: Can't load %s\n", fn);
+			isoldr_error("Can't load %s\n", fn);
 			return;
 		}
 		fs_close(fd);
@@ -721,7 +893,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 		if(fd == FILEHND_INVALID) {
 			free(buff);
 			free(loader);
-			ds_printf("DS_ERROR: Can't open file: %s\n", fn);
+			isoldr_error("Can't open file: %s\n", fn);
 			return;
 		}
 
@@ -733,7 +905,7 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 			fs_close(fd);
 			free(buff);
 			free(loader);
-			ds_printf("DS_ERROR: Can't load %s\n", fn);
+			isoldr_error("Can't load %s\n", fn);
 			return;
 		}
 		fs_close(fd);
@@ -782,19 +954,19 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
 						fn, (int)flen, (uintptr_t)(buff + plen));
 				}
 				else {
-					ds_printf("DS_ERROR: Can't read flashrom dump file: %s\n", fn);
+					isoldr_error("Can't read flashrom dump file: %s\n", fn);
 					free(buff);
 					info->firmware = 0;
 				}
 			}
 			else {
-				ds_printf("DS_ERROR: No memory for flashrom\n");
+				isoldr_error("No memory for flashrom\n");
 				info->firmware = 0;
 			}
 			fs_close(fd);
 		}
 		else {
-			ds_printf("DS_ERROR: Can't open flashrom dump file: %s\n", fn);
+			isoldr_error("Can't open flashrom dump file: %s\n", fn);
 			info->firmware = 0;
 		}
 	}
@@ -927,7 +1099,7 @@ int builtin_isoldr_cmd(int argc, char *argv[]) {
 	CMD_DEFAULT_ARGS_PARSER(options);
 
 	if(file == NULL) {
-		ds_printf("DS_ERROR: Too few arguments (ISO file) \n");
+		isoldr_error("Too few arguments (ISO file) \n");
 		return CMD_ERROR;
 	}
 

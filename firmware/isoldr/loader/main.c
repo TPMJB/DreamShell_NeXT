@@ -29,7 +29,8 @@ int main(int argc, char *argv[]) {
 
 	OpenLog();
 	printf(NULL);
-	printf("DreamShell ISO from "DEV_NAME" loader v"VERSION"\n");
+	printf("DreamShell NeXT | TPMJB\n");
+	printf(DEV_NAME" game loader v"VERSION"\n");
 
 	malloc_init(1);
 #ifdef HAVE_NAOMI
@@ -214,6 +215,7 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
+	printf("Preparing game hardware...\n");
 	setup_machine();
 
 	if(IsoInfo->boot_mode == BOOT_MODE_DIRECT) {
@@ -225,8 +227,13 @@ int main(int argc, char *argv[]) {
 	}
 
 error:
-	printf("Failed!\n");
-	Load_DS();
+    IsoInfo->fast_boot = 0;
+    printf("Boot failed. Returning to DreamShell...\n");
+    timer_spin_sleep(3000);
+    if(Load_DS() <= 0) {
+        printf("Recovery failed. Reset the console.\n");
+        for(;;) vid_waitvbl();
+    }
 	launch(APP_BIN_ADDR);
 	return -1;
 }

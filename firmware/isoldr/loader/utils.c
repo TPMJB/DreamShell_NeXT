@@ -7,6 +7,7 @@
 #include <main.h>
 #include <drivers/hollysh.h>
 #include <limits.h>
+#include <isoldr/check.h>
 #include <arch/cache.h>
 #include <dc/sq.h>
 #include <dcload.h>
@@ -98,53 +99,57 @@ void setup_machine(void) {
 }
 
 uint Load_BootBin() {
-	
-	int rv, bsec;
-	uint32 bs = 0xfff000; /* FIXME: switch stack pointer for use all memory */
-	uint32 exec_addr = CACHED_ADDR(IsoInfo->exec.addr);
-	const uint32 sec_size = IsoInfo->sector_size < 2048 ? IsoInfo->sector_size : 2048;
-	uint8 *buff = (uint8*)(NONCACHED_ADDR(IsoInfo->exec.addr));
+    uint32 bytes, done = 0;
+    uint32 exec_addr = CACHED_ADDR(IsoInfo->exec.addr);
+    uint8 *buff = (uint8 *)NONCACHED_ADDR(IsoInfo->exec.addr);
 
-	if(IsoInfo->exec.size < bs) {
-		bs = IsoInfo->exec.size;
-	}
-	
-	bsec = (bs / sec_size) + ( bs % sec_size ? 1 : 0);
-	
-	if(loader_addr > exec_addr && loader_addr < (exec_addr + bs)) {
+    if(!isoldr_boot_extent(exec_addr, IsoInfo->exec.size, 2048, &bytes) ||
+       isoldr_ranges_overlap(PHYS_ADDR(exec_addr), bytes,
+                             PHYS_ADDR(loader_addr), loader_end - loader_addr)) {
+        printf("Executable overlaps loader or exceeds RAM.\n");
+        return 0;
+    }
 
-		int count = (loader_addr - exec_addr) / sec_size;
-		int part = (ISOLDR_MAX_MEM_USAGE / sec_size) + count;
-		
-		rv = ReadSectors(buff, IsoInfo->exec.lba, count, NULL);
-		
-		if(rv == COMPLETED) {
-			rv = ReadSectors(buff + (part * sec_size), IsoInfo->exec.lba + part, bsec - part, NULL);
-		}
-		
-	} else {
-		rv = ReadSectors(buff, IsoInfo->exec.lba, bsec, NULL);
-	}
+    /* Limit each request: raw GDI unpacking must not depend on a multi-MiB read. */
+    while(done < bytes) {
+        uint32 count = (bytes - done) / 2048;
+        if(count > 32) count = 32;
+        if(ReadSectors(buff + done, IsoInfo->exec.lba + done / 2048,
+                       count, NULL) != COMPLETED) {
+            printf("Executable read failed.\n");
+            return 0;
+        }
+        done += count * 2048;
+    }
+    printf("Executable read complete.\n");
+
+    if(IsoInfo->magic[10] == ISOLDR_VERIFY_MARKER) {
+        uint32 crc = ~isoldr_crc32_update(~0U, buff, IsoInfo->exec.size);
+        if(crc != IsoInfo->boot_crc32) {
+            /* Visible even if fast boot was selected. Do not execute bad data. */
+            IsoInfo->fast_boot = 0;
+            printf("Executable CRC mismatch. Launch stopped.\n");
+            return 0;
+        }
+        printf("Executable CRC matched.\n");
+    }
 
 #ifndef HAVE_LIMIT
-	if(rv == COMPLETED && IsoInfo->exec.type == BIN_TYPE_KOS) {
-
-		uint8 *src = (uint8 *)NONCACHED_ADDR(IsoInfo->exec.addr);
-
-		if(src[1] != 0xD0) {
-
-			LOGF("Descrambling...\n");
-
-			uint32 exec_addr = NONCACHED_ADDR(IsoInfo->exec.addr);
-			uint8 *dest = (uint8 *)(exec_addr + (IsoInfo->exec.size * 3));
-
-			descramble(src, dest, IsoInfo->exec.size);
-			memcpy(src, dest, IsoInfo->exec.size);
-		}
-	}
+    if(IsoInfo->exec.type == BIN_TYPE_KOS && buff[1] != 0xD0) {
+        uint64_t temp = (uint64_t)PHYS_ADDR(exec_addr) + (uint64_t)IsoInfo->exec.size * 3;
+        if(temp + IsoInfo->exec.size > 0x0cfff000U ||
+           isoldr_ranges_overlap((uint32)temp, IsoInfo->exec.size,
+                                  PHYS_ADDR(loader_addr), loader_end - loader_addr)) {
+            printf("No safe space to descramble executable.\n");
+            return 0;
+        }
+        printf("Descrambling executable...\n");
+        uint8 *dest = (uint8 *)NONCACHED_ADDR((uint32)temp);
+        descramble(buff, dest, IsoInfo->exec.size);
+        memcpy(buff, dest, IsoInfo->exec.size);
+    }
 #endif
-
-	return rv == COMPLETED ? 1 : 0;
+    return 1;
 }
 
 void rom_memcpy(void* dst, void* src, size_t cnt) {
@@ -498,7 +503,7 @@ int printf(const char *fmt, ...) {
 
 	bfont_draw_str(vram + ((print_y * 24 + 4) * 640) + 12, 0xffff, 0x0000, buff);
 
-	if(buff[strlen(buff)-1] == '\n') {
+	if(buff[0] && buff[strlen(buff)-1] == '\n') {
 		if (print_y++ > 15) {
 			print_y = 0;
 			memset((uint32 *)vram, 0, 2 * 1024 * 1024);

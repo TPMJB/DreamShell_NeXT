@@ -205,7 +205,10 @@ typedef struct isoldr_info {
 
 	isoldr_exec_info_t exec;              /* Executable info */
 
-	uint32_t gdtex;                       /* Memory address for GD texture (unused) */
+	union {
+		uint32_t gdtex;                  /* Legacy unused cover pointer. */
+		uint32_t boot_crc32;             /* Expected CRC when magic[10] is 'V'. */
+	};
 	uint32_t patch_addr[2];               /* Memory addresses for patching every frame or interrupt */
 	uint32_t patch_value[2];              /* Values for patching */
 	uint32_t heap;                        /* Memory address or mode for heap. See isoldr_heap_mode_t */
@@ -222,6 +225,17 @@ typedef struct isoldr_info {
 	uint32_t cdda_offset[40];             /* CDDA tracks offset, only for CDI images */
 
 } isoldr_info_t;
+
+/* Keep the on-disc parameter ABI exactly one KiB. */
+typedef char isoldr_params_fit[(sizeof(isoldr_info_t) <= ISOLDR_PARAMS_SIZE) ? 1 : -1];
+#define ISOLDR_VERIFY_MARKER 'V'
+
+/* Error text remains valid until the next loader operation. */
+const char *isoldr_get_last_error(void);
+void isoldr_error(const char *fmt, ...);
+/* Read the logical executable through DreamShell and enable loader read-back CRC. */
+int isoldr_check_boot(isoldr_info_t *info, const char *image_file);
+
 
 
 /**

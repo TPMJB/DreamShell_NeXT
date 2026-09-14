@@ -10,3 +10,6 @@ isoldr_find_preset
 isoldr_apply_preset
 isoldr_save_preset
 isoldr_exec
+
+isoldr_get_last_error
+isoldr_check_boot
