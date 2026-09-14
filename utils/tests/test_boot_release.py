@@ -1,6 +1,7 @@
 """Boot payload safety and the real startup sound player's EOF/failure paths."""
 from pathlib import Path
 import gzip
+import hashlib
 import struct
 import subprocess
 import tempfile
@@ -11,6 +12,24 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class BootTests(unittest.TestCase):
+    def test_boot_disc_badge_preserves_bootstrap_code(self):
+        ip = (ROOT/'resources/IP.BIN').read_bytes()
+        badge = (ROOT/'resources/boot-disc-badge.mr').read_bytes()
+        start, end = 0x3820, 0x3820 + 8192
+        self.assertEqual(len(ip), 32768)
+        self.assertEqual(badge[:2], b'MR')
+        size, _, offset, width, height, _, colors = struct.unpack_from('<7I', badge, 2)
+        self.assertEqual(size, len(badge))
+        self.assertLessEqual(size, 8192)
+        self.assertEqual((width, height), (320, 90))
+        self.assertTrue(0 < colors <= 128)
+        self.assertEqual(offset, 30 + colors * 4)
+        self.assertEqual(ip[start:start+size], badge)
+        # Baseline bootstrap from NeXT 1.0: branding cannot alter executable
+        # bytes, hardware flags, entry points, or the original disc header.
+        self.assertEqual(hashlib.sha256(ip[:start]+ip[end:]).hexdigest(),
+                         '44762cb534ef9a5c35a8ad35c29c595841268c86f63f83a281b166e0b7a64274')
+
     def test_splash_fits_pvr_texture_and_640x480_viewport(self):
         data = gzip.decompress((ROOT/'romdisk/logo.kmg.gz').read_bytes())
         magic, version, platform, fmt, width, height, size = struct.unpack_from('<7I', data)
