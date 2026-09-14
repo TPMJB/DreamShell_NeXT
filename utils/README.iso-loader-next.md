@@ -1,15 +1,27 @@
 # DreamShell NeXT ISO Loader 2.0.5 + Games 1.0.1
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
-This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
+This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, ISOFS and ISO Loader modules, and standalone 0.9.2 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
 
 ## Install
 1. Back up the existing DS/apps/iso_loader, DS/apps/games_menu/app.xml, DS/apps/games_menu/modules/app_games_menu.klf, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
-3. Restart DreamShell. ISO Loader should show v2.0.5; Games is v1.0.1; the standalone loader should show v0.9.1.
+3. Restart DreamShell. ISO Loader should show v2.0.5; Games is v1.0.1; the standalone loader should show v0.9.2.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
 
-## 2.0.5 / Games 1.0.1: WinCE baseline and launch reports
+## Firmware 0.9.2: WinCE SD physical DMA destinations
+
+The Bust-A-Move 4 console video reaches **Executable CRC matched**, **Preparing game hardware**, and **Executing** before going black. Its Baseline report confirms loader address `8c000100`, CDDA/IRQ/VMU off, and executable CRC `f6902800`. Initial executable reading and verification succeeded; the failure occurs at or after handoff.
+
+SD emulates GD-ROM DMA reads using CPU copies. GD DMA requests supply physical destination addresses, but the loader passed those directly to the CPU read path. Under WinCE's MMU, a physical address in P0 is interpreted as a virtual address and can fault or access a different page. Firmware 0.9.2 converts normal WinCE SD DMA read destinations to the untranslated P1 alias; the existing transfer code writes back and invalidates that range. WinCE PIO pointers retain their virtual addresses. Other executable types and IDE/CD paths retain their existing behavior. The GD DMA buffer convention is documented by the [KallistiOS implementation](https://github.com/KallistiOS/KallistiOS/blob/master/kernel/arch/dreamcast/hardware/cdrom.c).
+
+The regression test submits requests through production `gdcReqCmd` and the production transfer functions, covering synchronous, chunked and pseudo-async reads, cache-purge destinations, virtual PIO pointers, existing cached/uncached aliases, Katana and IDE behavior. It does not emulate a Dreamcast or prove Bust-A-Move 4 uses the affected command.
+
+For the console check, keep the same Bust-A-Move 4 image and **Baseline** settings, press **Play**, and confirm the standalone banner says **0.9.2**. Check whether the game reaches its title screen; also recheck the known-working Code Veronica. Both launch apps use the updated firmware. If Bust-A-Move 4 still fails after **Executing**, that remains a runtime compatibility failure needing deeper diagnostics. The separate SD restriction on WinCE DMA *streaming* remains; this fix covers ordinary DMA sector reads.
+
+The download contains `DS` directly, with no nested ZIP. App versions remain ISO Loader **2.0.5** and Games **1.0.1**; only the standalone firmware advances to **0.9.2**.
+
+## Earlier 2.0.5 / Games 1.0.1: WinCE baseline and launch reports
 
 Bust-A-Move 4 is identified as WinCE in the bundled presets. ISO Loader's Baseline button previously forced every disc to loader address `8ce00000`, overriding the WinCE address `8c000100` used by automatic defaults and Games. Baseline now inspects the executable again, bypassing any saved OS override, and selects `8c000100` for WinCE. Other executable types retain `8ce00000`. The selected address is shown in the status line. This fixes the diagnostic profile; it does not establish that Bust-A-Move 4 boots on serial SD.
 

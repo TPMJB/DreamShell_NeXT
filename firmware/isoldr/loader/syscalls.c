@@ -877,6 +877,17 @@ int gdcReqCmd(int cmd, uint32 *param) {
 		
 		LOGF("\n");
 
+#ifdef DEV_TYPE_SD
+		/* GD DMA requests carry a physical destination, not a CPU virtual
+		 * pointer. SD copies with the CPU: under WinCE's MMU, dereferencing
+		 * that P0 address can fault or reach a different page. Use the
+		 * untranslated P1 alias; the transfer code purges it after writing.
+		 * PIO destinations are virtual and must remain untouched. */
+		if(cmd == CMD_DMAREAD && IsoInfo->exec.type == BIN_TYPE_WINCE) {
+			GDS->param[2] = CACHED_ADDR(GDS->param[2]);
+		}
+#endif
+
 		if(is_transfer_cmd(GDS->cmd)) {
 			
 #ifdef HAVE_CDDA
