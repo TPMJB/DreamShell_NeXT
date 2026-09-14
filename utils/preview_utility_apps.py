@@ -6,6 +6,7 @@ from PIL import Image,ImageDraw,ImageFont
 import sys
 ROOT=Path(__file__).resolve().parents[1]
 S=2
+RESAMPLE=getattr(Image,'Resampling',Image).LANCZOS
 
 class Preview:
     def __init__(self,app,values,focus='',hidden=()):
@@ -28,7 +29,7 @@ class Preview:
                 if fw>0 and fh>0:self.rect(x+fx,y+fy,fw,fh,fill.get('color'))
         elif surface.tag=='image':
             with Image.open(self.path/surface.get('src')) as image:
-                image=image.convert('RGBA').resize((w*S,h*S),Image.Resampling.LANCZOS)
+                image=image.convert('RGBA').resize((w*S,h*S),RESAMPLE)
                 self.canvas.paste(image,(x*S,y*S),image)
     def text(self,name,text,x,y,w,h,font='body',color='#EFF5FC'):
         f=self.fonts[font];width=self.draw.textlength(text,font=f)
@@ -93,7 +94,7 @@ def main(folder):
         path=ROOT/'applications'/app;root=E.parse(path/'app.xml').getroot()
         x,y=60+(i%4)*306,186+(i//4)*244
         with Image.open(path/root.get('icon')) as im:
-            im=im.convert('RGBA').resize((128,128),Image.Resampling.LANCZOS);icons.paste(im,(x,y),im)
+            im=im.convert('RGBA').resize((128,128),RESAMPLE);icons.paste(im,(x,y),im)
         d.text((x,y+144),root.get('name'),font=font,fill='#EFF5FC')
     icons.save(folder/'icons.png')
     sheet=Image.new('RGB',(2560,1920),'#101923')
