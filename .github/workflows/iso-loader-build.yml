@@ -196,11 +196,15 @@ jobs:
                   update.write('/tmp/games-preview/Games-Preview.png','Games-Preview.png')
                   update.writestr('SOURCE-REVISION.txt',os.environ['GITHUB_SHA']+'\n')
                   update.writestr('SHA256SUMS.txt','\n'.join(sums)+'\n')
+          # GitHub supplies the download ZIP. Upload the contents, not our ZIP.
+          with ZipFile('DreamShell-ISO-Loader-2.0.5.zip') as update:
+              assert update.testzip() is None
+              update.extractall('iso-loader-update')
           PY_PACKAGE
 
       - name: Upload update
         uses: actions/upload-artifact@v4
         with:
           name: DreamShell-ISO-Loader-2.0.5
-          path: DreamShell-ISO-Loader-2.0.5.zip
+          path: iso-loader-update/
           if-no-files-found: error
