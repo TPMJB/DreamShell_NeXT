@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Verify the generated boot CDI and package the TPMJB artwork edition."""
+"""Verify and package the NeXT bootloader without replacing the SD installation."""
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -10,8 +11,15 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from build_boot_disc_branding import MR_OFFSET, validate_badge
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = 'DreamShell-NeXT-TPMJB-Bootdisc.zip'
-CDI = 'DreamShell-NeXT-TPMJB-bootloader-v3.0.cdi'
+def boot_version():
+    makefile = (ROOT/'firmware/bootloader/Makefile').read_text()
+    return tuple(re.search(rf'^VER_{part}\s*=\s*(\d+)\s*$', makefile, re.M).group(1)
+                 for part in ('MAJOR', 'MINOR', 'MICRO'))
+
+
+VERSION = '.'.join(boot_version()[:2])
+PACKAGE = f'DreamShell-NeXT-Bootloader-{VERSION}.zip'
+CDI = f'DreamShell-NeXT-TPMJB-bootloader-v{VERSION}.cdi'
 
 
 def verify_cdi(data):
@@ -27,7 +35,7 @@ def verify_cdi(data):
         expected = Path(temp)/'IP.BIN'
         subprocess.run(['bash', str(ROOT/'utils/update_ip_bin.sh'),
                         str(ROOT/'resources/IP.BIN'), str(expected),
-                        '3', '0', '0', '0x30', 'bootloader'],
+                        *boot_version(), '0x30', 'bootloader'],
                        check=True, stdout=subprocess.DEVNULL)
         ref = expected.read_bytes()
     # Release date may cross midnight during a build; all other bytes must
@@ -45,15 +53,16 @@ def main():
     with ZipFile(ROOT/'DreamShell-dev.zip') as full:
         if full.testzip() is not None:
             raise ValueError('Build archive failed CRC validation')
-        cdi = full.read('DreamShell_bootloader_v3.0.cdi')
+        cdi = full.read(f'DreamShell_bootloader_v{VERSION}.cdi')
     start = verify_cdi(cdi)
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    info = dict(project='DreamShell NeXT', edition='TPMJB boot-disc branding',
-                bootloader='3.0', source_commit=commit,
+    info = dict(project='DreamShell NeXT', edition='TPMJB bootloader recovery and settings',
+                bootloader=VERSION, source_commit=commit,
                 badge='resources/boot-disc-badge.svg',
                 website='https://github.com/TPMJB', console_tested=False)
     files = {CDI: cdi, 'build-info.json': (json.dumps(info, indent=2)+'\n').encode()}
     for src, dest in [('utils/README.boot-branding.md', 'README-FIRST.md'),
+                      ('resources/boot.cfg.example', 'boot.cfg.example'),
                       ('resources/boot-disc-badge.png', 'boot-disc-badge.png'),
                       ('LICENSE', 'LICENSE'), ('NOTICE', 'NOTICE')]:
         files[dest] = (ROOT/src).read_bytes()

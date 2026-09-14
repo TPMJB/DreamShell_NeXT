@@ -31,9 +31,8 @@ static void load(uint8 *dest, uint32 size) {
     source += size;
 }
 
-static inline void handle_chunk(uint8 *ptr, int sz) {
+static inline void handle_chunk(uint8 *ptr, int sz, int *idx) {
 	
-    int idx[MAXCHUNK / 32];
     int i;
 
     /* Convert chunk size to number of slices */
@@ -59,7 +58,12 @@ static inline void handle_chunk(uint8 *ptr, int sz) {
     }
 }
 
-void descramble(uint8 *source, uint8 *dest, uint32 size) {
+int descramble(uint8 *source, uint8 *dest, uint32 size) {
+
+    if(!source || !dest || !size) return -1;
+    uint32 chunk = size < MAXCHUNK ? size : MAXCHUNK;
+    int *idx = chunk >= 32 ? malloc((chunk / 32) * sizeof(*idx)) : NULL;
+    if(chunk >= 32 && !idx) return -1;
 
     load(source, 0);
     my_srand(size);
@@ -70,7 +74,7 @@ void descramble(uint8 *source, uint8 *dest, uint32 size) {
     {
         while(size >= chunksz)
         {
-	        handle_chunk(dest, chunksz);
+        handle_chunk(dest, chunksz, idx);
 	        size -= chunksz;
 	        dest += chunksz;
         }
@@ -79,4 +83,6 @@ void descramble(uint8 *source, uint8 *dest, uint32 size) {
     /* !!! Load final incomplete slice */
     if(size)
         load(dest, size);
+    free(idx);
+    return 0;
 }

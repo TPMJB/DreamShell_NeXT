@@ -7,6 +7,7 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
+from package_boot_branding import VERSION as BOOT_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +19,7 @@ def main():
     output = ROOT/f'DreamShell-NeXT-v{version}.zip'
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     info = dict(project='DreamShell NeXT', version=version, source_commit=commit,
-                base_core='DreamShell 4.0.5 Beta 3', bootloader='3.0',
+                base_core='DreamShell 4.0.5 Beta 3', bootloader=BOOT_VERSION,
                 gd_ripper='2.2.0', launcher='2.0.2', iso_loader='0.9.0',
                 kallistios=(ROOT/'sdk/doc/KallistiOS.txt').read_text().strip(),
                 kernel_patches=sorted(p.name for p in (ROOT/'sdk/kos-patches').glob('*.patch')))
@@ -31,7 +32,7 @@ def main():
         'DS/doc/LICENSE', 'DS/doc/NOTICE', 'DS/lua/startup.lua',
         'host-tools/verify_gd_dump.py', 'host-tools/make_gd_redump_db.py',
         'exfat-guide.md', 'input-ui-guide.md', 'readback-guide.md',
-        'README-FIRST.md', 'upstream-review.md', 'DreamShell_bootloader_v3.0.cdi',
+        'README-FIRST.md', 'upstream-review.md', f'DreamShell_bootloader_v{BOOT_VERSION}.cdi',
         f'DreamShell-NeXT-v{version}.cdi',
     }
     with ZipFile(ROOT/'DreamShell-dev.zip') as source:

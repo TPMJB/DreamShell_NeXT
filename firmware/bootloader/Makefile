@@ -5,7 +5,7 @@
 
 TARGET = bootloader
 VER_MAJOR = 3
-VER_MINOR = 0
+VER_MINOR = 1
 VER_MICRO = 0
 VERSION = $(VER_MAJOR).$(VER_MINOR)
 TARGET_NAME = DreamShell_$(TARGET)_v$(VERSION)
@@ -55,7 +55,7 @@ BIOS_INSTALL_SPECS = \
 
 UTILS = $(DS_BASE)/src/utils
 
-OBJS = src/main.o src/spiral.o src/menu.o src/descramble.o \
+OBJS = src/main.o src/spiral.o src/menu.o src/descramble.o src/loader.o src/boot_config.o \
 		$(DS_BASE)/src/fs/fs.o \
 		$(UTILS)/memcpy.op $(UTILS)/memset.op romdisk.o
 

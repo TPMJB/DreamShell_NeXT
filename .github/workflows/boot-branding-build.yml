@@ -1,4 +1,4 @@
-name: TPMJB boot disc
+name: NeXT bootloader disc
 
 on:
   push:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Build branded boot disc
+    name: Build bootloader 3.1 disc
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     permissions:
@@ -56,7 +56,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Test storage interoperability and GD Ripper
+      - name: Test storage, GD Ripper and boot recovery
         run: python3 -m unittest discover -s utils/tests -v
 
       - name: Prepare directories
@@ -118,15 +118,21 @@ jobs:
           path: /usr/local/dc/kos/kos-ports
           key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
 
+      - name: Compile bootloader sources
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          make -C firmware/bootloader src/main.o src/menu.o src/loader.o \
+            src/boot_config.o src/descramble.o src/spiral.o
+
       - name: Build DreamShell release
         run: bash .github/scripts/dev-build.sh release
 
-      - name: Verify and package branded boot disc
+      - name: Verify and package bootloader disc
         run: python3 utils/package_boot_branding.py
 
       - name: Upload boot disc
         uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-NeXT-TPMJB-Bootdisc
-          path: DreamShell-NeXT-TPMJB-Bootdisc.zip
+          name: DreamShell-NeXT-Bootloader-3.1
+          path: DreamShell-NeXT-Bootloader-3.1.zip
           if-no-files-found: error
