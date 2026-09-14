@@ -1,177 +1,167 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<app name="Region Changer" version="1.8.6" icon="images/icon.png">
-	<resources>
-		<module src="../../modules/tolua.klf" />
-		<module src="../../modules/luaDS.klf" />
-		<module src="../../modules/luaGUI.klf" />
-		<module src="../../modules/luaKOS.klf" />
-		<module src="modules/app_region_changer.klf" />
-		<script type="text/lua" src="lua/main.lua" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="18" name="comic-18" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="14" name="comic" />
-		<image src="../../gui/back/grey.png" name="back" />
-		<image src="../../gui/buttons/big_green/normal.png" name="mNorm" />
-		<image src="../../gui/buttons/big_green/highlight.png" name="mHigh" />
-		<image src="../../gui/buttons/big_green/pressed.png" name="mPress" />
-		<image src="../../gui/buttons/big_green2/normal.png" name="bNorm" />
-		<image src="../../gui/buttons/big_green2/highlight.png" name="bHigh" />
-		<image src="../../gui/buttons/big_green2/pressed.png" name="bPress" />
-		<image src="../../gui/buttons/checkbox/check.png" name="bCheck" />
-		<image src="../../gui/buttons/checkbox/uncheck.png" name="bUncheck" />
-		<image src="images/label.png" name="label" />
-		<image src="images/logo.png" name="logo" />
-		<image src="images/about.png" name="about" />
-		<image src="images/menu.png" name="menu" />
-		<surface width="270" height="30" name="pb-b">
-			<fill color="#AAAAAA" />
-			<fill x="2" y="2" width="266" height="26" color="#F5F5F5" />
-		</surface>
-		<surface width="270" height="30" name="pb-p">
-			<fill color="#AAAAAA" />
-			<fill x="2" y="2" width="266" height="26" color="#9FDF54" />
-		</surface>
-		<theme>
-			<input type="button" normal="mNorm" highlight="mHigh" pressed="mPress" disabled="mNorm" name="mBut" />
-			<input type="button" normal="bNorm" highlight="bHigh" pressed="bPress" disabled="bNorm" name="bBut" />
-			<input type="checkbox" onnormal="bCheck" onhighlight="bCheck" offnormal="bUncheck" offhighlight="bUncheck" />
-		</theme>
-	</resources>
-	<body width="640" height="480" background="back" onload="RegionChanger:Initialize()">
-		<cardstack width="100%" height="100%" name="pages">
-			<panel name="home-page">
-				<image src="logo" height="100" name="logo" />
-				<panel height="50">
-					<image src="label" width="262" height="23" x="189">
-						  <label font="comic" color="#EEEEEE" text="Region Changer" />
-					</image>
-				</panel>
-				<panel x="233" y="180" width="181" height="250">
-					<input type="button" onclick="RegionChanger:ShowPage(1)" theme="bBut" height="40">
-						<label font="comic-18" color="#EEEEEE" text="Change Region" />
-					</input>
-					<input type="button" onclick="RegionChanger:ShowPage(2)" theme="bBut" y="50" height="40">
-						<label font="comic-18" color="#EEEEEE" text="Backup Flash" />
-					</input>
-					<input type="button" onclick="RegionChanger:ShowPage(3)" theme="bBut" y="100" height="40">
-						<label font="comic-18" color="#EEEEEE" text="Clear Flash" />
-					</input>
-					<input type="button" onclick="RegionChanger:ShowPage(4)" theme="bBut" y="150" height="40">
-						<label font="comic-18" color="#EEEEEE" text="About" />
-					</input>
-					<input type="button" onclick="console:app -o" theme="bBut" y="200" height="40">
-						<label font="comic-18" color="#EEEEEE" text="Exit" />
-					</input>
-				</panel>
-			</panel>
-			<panel name="change-page">
-				<panel height="40">
-					<image src="label" width="262" height="23" x="189">
-						  <label font="comic" color="#EEEEEE" text="Change region code" />
-					</image>
-				</panel>
-				<panel height="30">
-					<image src="menu" />
-				</panel>
-				<input type="checkbox" onclick="RegionChanger:SelectCountry(1)" x="50" y="100" width="120" height="30" name="change-country-japan-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Japan" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectCountry(2)" x="50" y="130" width="120" height="30" name="change-country-usa-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="USA" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectCountry(3)" x="50" y="160" width="120" height="30" name="change-country-europe-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Europe" align="left" />
-				</input>
-				<input type="checkbox" x="50" y="250" width="180" height="30" name="change-swirl-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Set swirl color to black" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectBroadcast(1)" x="250" y="100" width="120" height="30" name="change-ntsc-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="NTSC" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectBroadcast(2)" x="250" y="130" width="120" height="30" name="change-pal-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="PAL" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectBroadcast(3)" x="250" y="160" width="120" height="30" name="change-palm-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="PAL_M" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectBroadcast(4)" x="250" y="190" width="120" height="30" name="change-paln-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="PAL_N" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectLang(1)" x="450" y="100" width="120" height="30" name="change-lang-japan-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Japan" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectLang(2)" x="450" y="130" width="120" height="30" name="change-lang-english-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="English" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectLang(3)" x="450" y="160" width="120" height="30" name="change-lang-german-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="German" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectLang(4)" x="450" y="190" width="120" height="30" name="change-lang-french-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="French" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectLang(5)" x="450" y="220" width="120" height="30" name="change-lang-spanish-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Spanish" align="left" />
-				</input>
-				<input type="checkbox" onclick="RegionChanger:SelectLang(6)" x="450" y="250" width="120" height="30" name="change-lang-italian-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Italian" align="left" />
-				</input>
-				<input type="button" onclick="RegionChanger:Read()" theme="mBut" x="115" y="380" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Read" />
-				</input>
-				<input type="button" onclick="RegionChanger:Write()" theme="mBut" x="251" y="380" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Write" />
-				</input>
-				<input type="button" onclick="console:dc -reboot" theme="mBut" x="389" y="380" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Reboot" />
-				</input>
-				<input type="button" onclick="RegionChanger:ShowPage(0)" theme="mBut" x="251" y="430" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Back" />
-				</input>
-			</panel>
-			<panel name="backup-page">
-				<panel height="50">
-					<image src="label" width="262" height="23" x="189">
-						<label font="comic" color="#EEEEEE" text="Flash factory settings backup" />
-					</image>
-				</panel>
-				<panel x="258" y="170" width="110" height="30">
-					<label font="comic" color="#000000" text=".::Progress::." />
-				</panel>
-				<progressbar width="270" height="30" x="185" y="200" name="backup-progress" pos="0.0" bimage="pb-b" pimage="pb-p" />
-				<input type="button" onclick="RegionChanger:CreateBackup()" theme="mBut" x="185" y="275" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Create" />
-				</input>
-				<input type="button" onclick="RegionChanger:RestoreBackup()" theme="mBut" x="320" y="275" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Restore" />
-				</input>
-				<input type="button" onclick="RegionChanger:ShowPage(0)" theme="mBut" x="251" y="350" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Back" />
-				</input>
-			</panel>
-			<panel name="clear-page">
-				<panel height="50">
-					<image src="label" width="262" height="23" x="189">
-						<label font="comic" color="#EEEEEE" text="Clear flashrom" />
-					</image>
-				</panel>
-				<input type="checkbox" x="50" y="130" width="180" height="30" name="clear-game-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="Game Settings" align="left" />
-				</input>
-				<input type="checkbox" x="50" y="100" width="180" height="30" name="clear-sys-checkbox">
-					<label x="25" height="20" font="comic" color="#000000" text="ISP/SYS Settings" align="left" />
-				</input>
-				<input type="button" onclick="RegionChanger:ClearFlashrom()" theme="mBut" x="251" y="300" width="135" height="40">
-					<label width="135" height="40" font="comic-18" color="#EEEEEE" text="Clear" />
-				</input>
-				<input type="button" onclick="RegionChanger:ShowPage(0)" theme="mBut" x="251" y="350" width="135" height="40">
-					<label width="135" height="40" font="comic-18" color="#EEEEEE" text="Back" />
-				</input>
-			</panel>
-			<panel name="about-page">
-				<image src="about" height="300" align="center" valign="top" />
-				<input type="button" onclick="RegionChanger:ShowPage(0)" theme="mBut" x="251" y="350" width="135" height="40">
-					<label font="comic-18" color="#EEEEEE" text="Back" />
-				</input>
-			</panel>
-		</cardstack>
-	</body>
+<?xml version='1.0' encoding='UTF-8'?>
+<app name="Region Changer" version="2.0.0" icon="images/icon.png">
+  <resources>
+    <module src="modules/app_region_changer.klf" />
+    <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="small" size="14" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <surface name="bg" width="640" height="480">
+      <fill color="#101923" />
+    </surface>
+    <surface name="panel" width="592" height="320">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b116x32-normal" width="116" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b116x32-highlight" width="116" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-pressed" width="116" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-disabled" width="116" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="maintenance-panel" width="592" height="274">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b592x34-normal" width="592" height="34">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b592x34-highlight" width="592" height="34">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="588" height="30" color="#155B71" />
+    </surface>
+    <surface name="b592x34-pressed" width="592" height="34">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="588" height="30" color="#155B71" />
+    </surface>
+    <surface name="b592x34-disabled" width="592" height="34">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b192x32-normal" width="192" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b192x32-highlight" width="192" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="188" height="28" color="#155B71" />
+    </surface>
+    <surface name="b192x32-pressed" width="192" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="188" height="28" color="#155B71" />
+    </surface>
+    <surface name="b192x32-disabled" width="192" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="picker-bg" width="592" height="204">
+      <fill color="#14212E" />
+    </surface>
+    <surface name="picker-row" width="572" height="28">
+      <fill color="#182838" />
+    </surface>
+    <surface name="picker-focus" width="572" height="28">
+      <fill color="#225765" />
+    </surface>
+    <surface name="picker-select" width="572" height="28">
+      <fill color="#155B71" />
+    </surface>
+    <surface name="b80x32-normal" width="80" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b80x32-highlight" width="80" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="76" height="28" color="#155B71" />
+    </surface>
+    <surface name="b80x32-pressed" width="80" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="76" height="28" color="#155B71" />
+    </surface>
+    <surface name="b80x32-disabled" width="80" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b180x32-normal" width="180" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b180x32-highlight" width="180" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="176" height="28" color="#155B71" />
+    </surface>
+    <surface name="b180x32-pressed" width="180" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="176" height="28" color="#155B71" />
+    </surface>
+    <surface name="b180x32-disabled" width="180" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="progress-bg" width="592" height="4">
+      <fill color="#263749" />
+    </surface>
+    <surface name="progress-fill" width="592" height="4">
+      <fill color="#53E1E3" />
+    </surface>
+  </resources>
+  <body width="640" height="480" background="bg" onload="export:RegionChanger_Init()" onopen="export:RegionChanger_Open()" onclose="export:RegionChanger_Close()" onunload="export:RegionChanger_Shutdown()">
+    <label name="heading" text="Region Changer" x="24" y="18" width="430" height="30" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Your console. Your region." x="24" y="48" width="580" height="20" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="menu" type="button" x="500" y="20" width="116" height="32" onclick="export:RegionChanger_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+      <label name="menu-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="main-panel" x="24" y="82" width="592" height="274" background="maintenance-panel">
+      <input name="row-0" type="button" x="0" y="0" width="592" height="34" onclick="export:RegionChanger_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-0-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-1" type="button" x="0" y="38" width="592" height="34" onclick="export:RegionChanger_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-1-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-2" type="button" x="0" y="76" width="592" height="34" onclick="export:RegionChanger_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-2-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-3" type="button" x="0" y="114" width="592" height="34" onclick="export:RegionChanger_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-3-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-4" type="button" x="0" y="152" width="592" height="34" onclick="export:RegionChanger_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-4-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-5" type="button" x="0" y="190" width="592" height="34" onclick="export:RegionChanger_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-5-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <label name="detail-0" text="" x="12" y="232" width="568" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+      <label name="detail-1" text="" x="12" y="251" width="568" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    </panel>
+    <input name="action-0" type="button" x="24" y="430" width="192" height="32" onclick="export:RegionChanger_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-0-caption" text="Back up" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-1" type="button" x="224" y="430" width="192" height="32" onclick="export:RegionChanger_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-1-caption" text="Restore file" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-2" type="button" x="424" y="430" width="192" height="32" onclick="export:RegionChanger_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-2-caption" text="Apply changes" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="browser-panel" x="24" y="82" width="592" height="274" background="maintenance-panel">
+      <label name="picker-path" text="/" x="8" y="0" width="576" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+      <input name="up" type="button" x="0" y="30" width="80" height="32" onclick="export:RegionChanger_Up()" normal="b80x32-normal" highlight="b80x32-highlight" pressed="b80x32-pressed" disabled="b80x32-disabled">
+        <label name="up-caption" text="Up" x="12" y="0" width="56" height="32" font="small" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="devices" type="button" x="88" y="30" width="116" height="32" onclick="export:RegionChanger_Devices()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+        <label name="devices-caption" text="Devices" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="choose-folder" type="button" x="212" y="30" width="192" height="32" onclick="export:RegionChanger_Folder()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+        <label name="choose-folder-caption" text="Use folder (X)" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="picker-cancel" type="button" x="412" y="30" width="180" height="32" onclick="export:RegionChanger_Back()" normal="b180x32-normal" highlight="b180x32-highlight" pressed="b180x32-pressed" disabled="b180x32-disabled">
+        <label name="picker-cancel-caption" text="Cancel" x="12" y="0" width="156" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <filemanager name="file-picker" path="/" x="0" y="70" width="592" height="204" background="picker-bg" item_font="small" item_font_color="#EFF5FC" item_normal="picker-row" item_highlight="picker-focus" item_pressed="picker-select" item_disabled="picker-row" item_selected_normal="picker-select" item_selected_highlight="picker-focus" item_selected_pressed="picker-select" item_selected_disabled="picker-row" onclick="export:RegionChanger_Item()" />
+    </panel>
+    <label name="status" text="Ready." x="24" y="365" width="592" height="22" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="note" text="" x="24" y="390" width="592" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <panel x="24" y="414" width="592" height="4" background="progress-bg" />
+    <panel name="progress" x="24" y="414" width="592" height="4" background="progress-fill" />
+    <label name="controls" text="D-pad Select / Adjust     A Choose     B Back / Stop     START Menu" x="24" y="463" width="592" height="16" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <dialog name="dialog" font="body" x="50" y="80" width="540" height="326" onconfirm="export:RegionChanger_Confirm()" oncancel="export:RegionChanger_Cancel()" />
+  </body>
 </app>

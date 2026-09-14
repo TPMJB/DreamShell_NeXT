@@ -1,148 +1,167 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<app name="Speedtest" version="0.5.0" icon="images/icon.png">
-    <resources>
-        <module src="modules/app_speedtest.klf" />
-        <font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="22" name="comic-22" />
-        <font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="16" name="comic-16" />
-        <font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="14" name="comic-15" />
-        <surface width="100%" height="100%" name="back">
-            <blit surface="../../gui/back/nautilus.jpg" />
-        </surface>
-        <surface height="45" name="header-bg">
-            <fill color="#C9DADE" />
-            <fill color="#BBBBBB" height="1" y="43" />
-            <fill color="#CCCCCC" height="1" y="44" />
-        </surface>
-        <surface width="190" height="250" name="card_bg">
-            <fill color="#EEEEEE" />
-            <fill x="2" y="2" width="186" height="246" color="#3E6BA4" />
-        </surface>
-        <image src="images/icon_sd.png" name="icon_sd" />
-        <image src="images/icon_ide.png" name="icon_ide" />
-        <image src="images/icon_gd.png" name="icon_gd" />
-        <image src="../../gui/icons/normal/button_cancel.png" name="iExitNorm" />
-        <image src="../../gui/icons/highlight/button_cancel.png" name="iExitHigh" />
-    </resources>
-
-    <body width="100%" height="100%" background="back"
-        onload="export:Speedtest_Init()"
-        onopen="export:Speedtest_Open()">
-
-        <panel height="45" background="header-bg" name="header-panel">
-            <label font="comic-22" color="#666666" text="Speedtest" />
-        </panel>
-
-        <panel x="25" y="95" width="590" height="250">
-            <panel x="0" y="0" width="190" height="250">
-                <panel width="190" height="250" backgroundCenter="card_bg" name="dev-sd">
-
-                    <panel x="6" y="8" width="178" height="28">
-                        <label width="100%" height="28" font="comic-22" color="#FFFFFF" text="SD Card" align="center" />
-                    </panel>
-
-                    <panel x="63" y="40" width="64" height="64">
-                        <image src="icon_sd" />
-                    </panel>
-
-                    <panel x="6" y="112" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="sd-size" text="Size: N/A" align="left" />
-                    </panel>
-
-                    <panel x="6" y="132" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="sd-lba" text="Mode: N/A" align="left" />
-                    </panel>
-
-                    <panel x="6" y="152" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="sd-iface" text="Interface: N/A" align="left" />
-                    </panel>
-
-                    <panel y="198" width="190" height="36">
-                        <input type="button" width="120" height="30" align="center"
-                                onclick="export:Speedtest_Run()" name="/sd">
-                            <label font="comic-16" color="#EEEEEE" text="Speed Test" align="center" />
-                        </input>
-                    </panel>
-
-                </panel>
-            </panel>
-
-            <panel x="200" y="0" width="190" height="250">
-                <panel width="190" height="250" backgroundCenter="card_bg" name="dev-ide">
-
-                    <panel x="6" y="8" width="178" height="28">
-                        <label width="100%" height="28" font="comic-22" color="#FFFFFF" text="IDE Drive" align="center" />
-                    </panel>
-
-                    <panel x="63" y="40" width="64" height="64">
-                        <image src="icon_ide" />
-                    </panel>
-
-                    <panel x="6" y="112" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="ide-size" text="Size: N/A" align="left" />
-                    </panel>
-
-                    <panel x="6" y="132" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="ide-lba" text="Mode: N/A" align="left" />
-                    </panel>
-
-                    <panel x="6" y="152" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="ide-iface" text="Interface: N/A" align="left" />
-                    </panel>
-
-                    <panel y="198" width="190" height="36">
-                        <input type="button" width="120" height="30" align="center"
-                                onclick="export:Speedtest_Run()" name="/ide">
-                            <label font="comic-16" color="#EEEEEE" text="Speed Test" align="center" />
-                        </input>
-                    </panel>
-
-                </panel>
-            </panel>
-
-            <panel x="400" y="0" width="190" height="250">
-                <panel width="190" height="250" backgroundCenter="card_bg" name="dev-cd">
-
-                    <panel x="6" y="8" width="178" height="28">
-                        <label width="100%" height="28" font="comic-22" color="#FFFFFF" text="GD-ROM" align="center" />
-                    </panel>
-
-                    <panel x="63" y="40" width="64" height="64">
-                        <image src="icon_gd" />
-                    </panel>
-
-                    <panel x="6" y="112" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="cd-size" text="Size: N/A" align="left" />
-                    </panel>
-
-                    <panel x="6" y="132" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="cd-lba" text="Mode: LBA48" align="left" />
-                    </panel>
-
-                    <panel x="6" y="152" width="178" height="18">
-                        <label width="100%" height="18" font="comic-15" color="#FFFFFF" name="cd-iface" text="Interface: GD-ROM" align="left" />
-                    </panel>
-
-                    <panel y="198" width="190" height="36">
-                        <input type="button" width="120" height="30" align="center"
-                                onclick="export:Speedtest_Run()" name="/cd">
-                            <label font="comic-16" color="#EEEEEE" text="Speed Test" align="center" />
-                        </input>
-                    </panel>
-
-                </panel>
-            </panel>
-        </panel>
-
-        <input type="button"
-                normal="iExitNorm"
-                highlight="iExitHigh"
-                pressed="iExitNorm"
-                disabled="iExitNorm"
-                onclick="console:app -o"
-                x="584" y="424" width="48" height="48" />
-
-        <dialog name="results-dialog" font="comic-22"
-                x="50" y="80" width="540" height="320"
-                onconfirm="export:Speedtest_DialogConfirm" />
-    </body>
+<?xml version='1.0' encoding='UTF-8'?>
+<app name="Speedtest" version="2.0.0" icon="images/icon.png">
+  <resources>
+    <module src="modules/app_speedtest.klf" />
+    <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="small" size="14" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <surface name="bg" width="640" height="480">
+      <fill color="#101923" />
+    </surface>
+    <surface name="panel" width="592" height="320">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b116x32-normal" width="116" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b116x32-highlight" width="116" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-pressed" width="116" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-disabled" width="116" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="maintenance-panel" width="592" height="274">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b592x34-normal" width="592" height="34">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b592x34-highlight" width="592" height="34">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="588" height="30" color="#155B71" />
+    </surface>
+    <surface name="b592x34-pressed" width="592" height="34">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="588" height="30" color="#155B71" />
+    </surface>
+    <surface name="b592x34-disabled" width="592" height="34">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b192x32-normal" width="192" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b192x32-highlight" width="192" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="188" height="28" color="#155B71" />
+    </surface>
+    <surface name="b192x32-pressed" width="192" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="188" height="28" color="#155B71" />
+    </surface>
+    <surface name="b192x32-disabled" width="192" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="picker-bg" width="592" height="204">
+      <fill color="#14212E" />
+    </surface>
+    <surface name="picker-row" width="572" height="28">
+      <fill color="#182838" />
+    </surface>
+    <surface name="picker-focus" width="572" height="28">
+      <fill color="#225765" />
+    </surface>
+    <surface name="picker-select" width="572" height="28">
+      <fill color="#155B71" />
+    </surface>
+    <surface name="b80x32-normal" width="80" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b80x32-highlight" width="80" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="76" height="28" color="#155B71" />
+    </surface>
+    <surface name="b80x32-pressed" width="80" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="76" height="28" color="#155B71" />
+    </surface>
+    <surface name="b80x32-disabled" width="80" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b180x32-normal" width="180" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b180x32-highlight" width="180" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="176" height="28" color="#155B71" />
+    </surface>
+    <surface name="b180x32-pressed" width="180" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="176" height="28" color="#155B71" />
+    </surface>
+    <surface name="b180x32-disabled" width="180" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="progress-bg" width="592" height="4">
+      <fill color="#263749" />
+    </surface>
+    <surface name="progress-fill" width="592" height="4">
+      <fill color="#53E1E3" />
+    </surface>
+  </resources>
+  <body width="640" height="480" background="bg" onload="export:Speedtest_Init()" onopen="export:Speedtest_Open()" onclose="export:Speedtest_Close()" onunload="export:Speedtest_Shutdown()">
+    <label name="heading" text="Speedtest" x="24" y="18" width="430" height="30" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Measure storage. Verify the data." x="24" y="48" width="580" height="20" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="menu" type="button" x="500" y="20" width="116" height="32" onclick="export:Speedtest_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+      <label name="menu-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="main-panel" x="24" y="82" width="592" height="274" background="maintenance-panel">
+      <input name="row-0" type="button" x="0" y="0" width="592" height="34" onclick="export:Speedtest_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-0-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-1" type="button" x="0" y="38" width="592" height="34" onclick="export:Speedtest_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-1-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-2" type="button" x="0" y="76" width="592" height="34" onclick="export:Speedtest_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-2-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-3" type="button" x="0" y="114" width="592" height="34" onclick="export:Speedtest_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-3-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-4" type="button" x="0" y="152" width="592" height="34" onclick="export:Speedtest_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-4-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-5" type="button" x="0" y="190" width="592" height="34" onclick="export:Speedtest_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-5-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <label name="detail-0" text="" x="12" y="232" width="568" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+      <label name="detail-1" text="" x="12" y="251" width="568" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    </panel>
+    <input name="action-0" type="button" x="24" y="430" width="192" height="32" onclick="export:Speedtest_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-0-caption" text="Run test" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-1" type="button" x="224" y="430" width="192" height="32" onclick="export:Speedtest_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-1-caption" text="Save report" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-2" type="button" x="424" y="430" width="192" height="32" onclick="export:Speedtest_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-2-caption" text="Clear results" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="browser-panel" x="24" y="82" width="592" height="274" background="maintenance-panel">
+      <label name="picker-path" text="/" x="8" y="0" width="576" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+      <input name="up" type="button" x="0" y="30" width="80" height="32" onclick="export:Speedtest_Up()" normal="b80x32-normal" highlight="b80x32-highlight" pressed="b80x32-pressed" disabled="b80x32-disabled">
+        <label name="up-caption" text="Up" x="12" y="0" width="56" height="32" font="small" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="devices" type="button" x="88" y="30" width="116" height="32" onclick="export:Speedtest_Devices()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+        <label name="devices-caption" text="Devices" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="choose-folder" type="button" x="212" y="30" width="192" height="32" onclick="export:Speedtest_Folder()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+        <label name="choose-folder-caption" text="Use folder (X)" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="picker-cancel" type="button" x="412" y="30" width="180" height="32" onclick="export:Speedtest_Back()" normal="b180x32-normal" highlight="b180x32-highlight" pressed="b180x32-pressed" disabled="b180x32-disabled">
+        <label name="picker-cancel-caption" text="Cancel" x="12" y="0" width="156" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <filemanager name="file-picker" path="/" x="0" y="70" width="592" height="204" background="picker-bg" item_font="small" item_font_color="#EFF5FC" item_normal="picker-row" item_highlight="picker-focus" item_pressed="picker-select" item_disabled="picker-row" item_selected_normal="picker-select" item_selected_highlight="picker-focus" item_selected_pressed="picker-select" item_selected_disabled="picker-row" onclick="export:Speedtest_Item()" />
+    </panel>
+    <label name="status" text="Ready." x="24" y="365" width="592" height="22" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="note" text="" x="24" y="390" width="592" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <panel x="24" y="414" width="592" height="4" background="progress-bg" />
+    <panel name="progress" x="24" y="414" width="592" height="4" background="progress-fill" />
+    <label name="controls" text="D-pad Select / Adjust     A Choose     B Back / Stop     START Menu" x="24" y="463" width="592" height="16" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <dialog name="dialog" font="body" x="50" y="80" width="540" height="326" onconfirm="export:Speedtest_Confirm()" oncancel="export:Speedtest_Cancel()" />
+  </body>
 </app>

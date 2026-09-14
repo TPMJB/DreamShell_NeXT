@@ -1,15 +1,16 @@
 include kos/exports.h
-include rc.h
+include app_module.h
 
-#tolua_RC_open
-flash_write_file
-flash_read_file
-flash_write_factory
-flash_read_factory
-flash_clear
-flash_factory_get_values
-flash_factory_set_lang
-flash_factory_set_broadcast
-flash_factory_set_country
-flash_factory_free_values
-flash_factory_free_data
+RegionChanger_Init
+RegionChanger_Open
+RegionChanger_Close
+RegionChanger_Shutdown
+RegionChanger_Row
+RegionChanger_Action
+RegionChanger_Back
+RegionChanger_Confirm
+RegionChanger_Cancel
+RegionChanger_Item
+RegionChanger_Up
+RegionChanger_Devices
+RegionChanger_Folder

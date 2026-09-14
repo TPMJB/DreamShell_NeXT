@@ -1,16 +1,16 @@
 include kos/exports.h
 include app_module.h
 
-# Main
 NetworkApp_Init
-NetworkApp_Shutdown
 NetworkApp_Open
-NetworkApp_ToggleEthernet
-NetworkApp_ToggleModem
-NetworkApp_ToggleFTP
-NetworkApp_ToggleHTTP
-NetworkApp_Exit
-NetworkApp_DialogConfirm
-NetworkApp_DialogCancel
-NetworkApp_ToggleEth
-NetworkApp_TogglePpp
+NetworkApp_Close
+NetworkApp_Shutdown
+NetworkApp_Row
+NetworkApp_Action
+NetworkApp_Back
+NetworkApp_Confirm
+NetworkApp_Cancel
+NetworkApp_Item
+NetworkApp_Up
+NetworkApp_Devices
+NetworkApp_Folder

@@ -3,5 +3,14 @@ include app_module.h
 
 Speedtest_Init
 Speedtest_Open
-Speedtest_Run
-Speedtest_DialogConfirm
+Speedtest_Close
+Speedtest_Shutdown
+Speedtest_Row
+Speedtest_Action
+Speedtest_Back
+Speedtest_Confirm
+Speedtest_Cancel
+Speedtest_Item
+Speedtest_Up
+Speedtest_Devices
+Speedtest_Folder

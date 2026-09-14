@@ -5,15 +5,18 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as E
 ROOT=Path(__file__).resolve().parents[1]
+APPS = {'filemanager':'2.0.0', 'settings':'2.0.0', 'gdplay':'2.0.0',
+        'bios_flasher':'3.0.0', 'region_changer':'2.0.0', 'speedtest':'2.0.0',
+        'memtest':'2.0.0', 'network':'2.0.0'}
 
 def package(source,dest):
     with ZipFile(source) as full, ZipFile(dest,'w',ZIP_DEFLATED) as out:
         assert full.testzip() is None
         files={'DS/fonts/ttf/arial_lite.ttf'}
-        prefixes=tuple('DS/apps/'+app+'/' for app in ('filemanager','settings','gdplay'))
-        for app in ('filemanager','settings','gdplay'):
+        prefixes=tuple('DS/apps/'+app+'/' for app in APPS)
+        for app,version in APPS.items():
             xml=E.fromstring(full.read('DS/apps/'+app+'/app.xml'))
-            assert xml.get('version')=='2.0.0'
+            assert xml.get('version')==version
             assert len(full.read('DS/apps/'+app+'/modules/app_'+app+'.klf'))>1024
         for path in (ROOT/'applications').glob('*/app.xml'):
             icon=E.parse(path).getroot().get('icon')

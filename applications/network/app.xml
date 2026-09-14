@@ -1,132 +1,167 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<app name="Network" version="0.4.0" icon="images/icon.png">
-	<resources>
-		<module src="modules/app_network.klf" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="22" name="comic-22" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="20" name="comic-20" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="16" name="comic-16" />
-		<surface height="45" name="header-bg">
-			<fill color="#C9DADE" />
-			<fill color="#BBBBBB" height="1" y="43" />
-			<fill color="#CCCCCC" height="1" y="44" />
-		</surface>
-	</resources>
-	<body width="100%" height="100%" background="#DDDDDD"
-		onload="export:NetworkApp_Init()"
-		onunload="export:NetworkApp_Shutdown()"
-		onopen="export:NetworkApp_Open()">
-		<panel height="45" background="header-bg">
-			<label font="comic-22" color="#31799F" text="DreamShell Network" />
-		</panel>
-		<cardstack name="pages">
-			<panel name="main-page" y="30">
-				<panel height="65" width="50%">
-					<input type="button" width="280" height="60"
-						onclick="export:NetworkApp_ToggleEthernet()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="" name="eth-but-txt" />
-					</input>
-				</panel>
-				<panel height="65" width="50%">
-					<input type="button" width="280" height="60"
-						onclick="export:NetworkApp_ToggleFTP()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="" name="ftpd-but-txt" />
-					</input>
-				</panel>
-				<panel height="65" width="50%">
-					<input type="button" width="280" height="60"
-						onclick="export:NetworkApp_ToggleModem()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="" name="ppp-but-txt" />
-					</input>
-				</panel>
-				<panel height="65" width="50%">
-					<input type="button" width="280" height="60"
-						onclick="export:NetworkApp_ToggleHTTP()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="" name="httpd-but-txt" />
-					</input>
-				</panel>
-				<panel height="65" width="100%">
-					<input type="button" width="280" height="60"
-						onclick="export:NetworkApp_Exit()" align="center">
-						<label font="comic-22" color="#EEEEEE" text="Exit" />
-					</input>
-				</panel>
-				<panel height="100" width="100%">
-					<panel x="20" y="10">
-						<panel width="50%" height="35">
-							<panel width="130" height="30">
-								<label font="comic-20" color="#31799F" align="left"
-									text="Status:" />
-							</panel>
-							<panel width="150" height="30">
-								<label font="comic-20" color="#CF3311" align="left"
-									text="disconnected" name="net-status" />
-							</panel>
-						</panel>
-						<panel width="50%" height="35">
-							<panel width="140" height="30">
-								<label font="comic-20" color="#31799F" align="left"
-									text="FTP Server:" />
-							</panel>
-							<panel width="160" height="30">
-								<label font="comic-20" color="#CF3311" align="left"
-									text="stopped" name="ftpd-status" />
-							</panel>
-						</panel>
-						<panel width="50%" height="35">
-							<panel width="130" height="30">
-								<label font="comic-20" color="#31799F" align="left"
-									text="IP address:" />
-							</panel>
-							<panel width="150" height="30">
-								<label font="comic-20" color="#CF3311" align="left"
-									text="0.0.0.0" name="ip-addr" />
-							</panel>
-						</panel>
-						<panel width="50%" height="35">
-							<panel width="140" height="30">
-								<label font="comic-20" color="#31799F" align="left"
-									text="HTTP Server:" />
-							</panel>
-							<panel width="160" height="30">
-								<label font="comic-20" color="#CF3311" align="left"
-									text="stopped" name="httpd-status" />
-							</panel>
-						</panel>
-					</panel>
-				</panel>
-				<panel height="85" width="100%">
-					<panel x="3%" width="94%">
-						<panel width="48%">
-							<panel width="100%" height="25">
-								<input type="checkbox" name="startup-connect-eth-but" onclick="export:NetworkApp_ToggleEth">
-									<label x="27" height="20" font="comic-16" color="#31799F" text="Connect ethernet at startup" align="left" />
-								</input>
-							</panel>
-							<panel width="100%" height="25">
-								<input type="checkbox" name="startup-connect-ppp-but" onclick="export:NetworkApp_TogglePpp">
-									<label x="27" height="20" font="comic-16" color="#31799F" text="Connect dial up at startup" align="left" />
-								</input>
-							</panel>
-							<panel width="100%" height="25">
-								<input type="checkbox" name="startup-ntp-but">
-									<label x="27" height="20" font="comic-16" color="#31799F" text="Sync time at startup (NTP)" align="left" />
-								</input>
-							</panel>
-						</panel>
-						<panel x="48%" width="52%">
-							<panel width="100%" height="25">
-								<input type="checkbox" name="keep-running-but">
-									<label x="27" height="20" font="comic-16" color="#31799F" text="Keep servers running in background" align="left" />
-								</input>
-							</panel>
-						</panel>
-					</panel>
-				</panel>
-			</panel>
-		</cardstack>
-		<dialog name="dialog" font="comic-16"
-				x="120" y="160" width="400" height="160"
-				onconfirm="export:NetworkApp_DialogConfirm"
-				oncancel="export:NetworkApp_DialogCancel" />
-	</body>
+<?xml version='1.0' encoding='UTF-8'?>
+<app name="Network" version="2.0.0" icon="images/icon.png">
+  <resources>
+    <module src="modules/app_network.klf" />
+    <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="small" size="14" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <surface name="bg" width="640" height="480">
+      <fill color="#101923" />
+    </surface>
+    <surface name="panel" width="592" height="320">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b116x32-normal" width="116" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b116x32-highlight" width="116" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-pressed" width="116" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-disabled" width="116" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="maintenance-panel" width="592" height="274">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b592x34-normal" width="592" height="34">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b592x34-highlight" width="592" height="34">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="588" height="30" color="#155B71" />
+    </surface>
+    <surface name="b592x34-pressed" width="592" height="34">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="588" height="30" color="#155B71" />
+    </surface>
+    <surface name="b592x34-disabled" width="592" height="34">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b192x32-normal" width="192" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b192x32-highlight" width="192" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="188" height="28" color="#155B71" />
+    </surface>
+    <surface name="b192x32-pressed" width="192" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="188" height="28" color="#155B71" />
+    </surface>
+    <surface name="b192x32-disabled" width="192" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="picker-bg" width="592" height="204">
+      <fill color="#14212E" />
+    </surface>
+    <surface name="picker-row" width="572" height="28">
+      <fill color="#182838" />
+    </surface>
+    <surface name="picker-focus" width="572" height="28">
+      <fill color="#225765" />
+    </surface>
+    <surface name="picker-select" width="572" height="28">
+      <fill color="#155B71" />
+    </surface>
+    <surface name="b80x32-normal" width="80" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b80x32-highlight" width="80" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="76" height="28" color="#155B71" />
+    </surface>
+    <surface name="b80x32-pressed" width="80" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="76" height="28" color="#155B71" />
+    </surface>
+    <surface name="b80x32-disabled" width="80" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b180x32-normal" width="180" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b180x32-highlight" width="180" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="176" height="28" color="#155B71" />
+    </surface>
+    <surface name="b180x32-pressed" width="180" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="176" height="28" color="#155B71" />
+    </surface>
+    <surface name="b180x32-disabled" width="180" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="progress-bg" width="592" height="4">
+      <fill color="#263749" />
+    </surface>
+    <surface name="progress-fill" width="592" height="4">
+      <fill color="#53E1E3" />
+    </surface>
+  </resources>
+  <body width="640" height="480" background="bg" onload="export:NetworkApp_Init()" onopen="export:NetworkApp_Open()" onclose="export:NetworkApp_Close()" onunload="export:NetworkApp_Shutdown()">
+    <label name="heading" text="Network" x="24" y="18" width="430" height="30" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Connections, services and startup preferences." x="24" y="48" width="580" height="20" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="menu" type="button" x="500" y="20" width="116" height="32" onclick="export:NetworkApp_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+      <label name="menu-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="main-panel" x="24" y="82" width="592" height="274" background="maintenance-panel">
+      <input name="row-0" type="button" x="0" y="0" width="592" height="34" onclick="export:NetworkApp_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-0-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-1" type="button" x="0" y="38" width="592" height="34" onclick="export:NetworkApp_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-1-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-2" type="button" x="0" y="76" width="592" height="34" onclick="export:NetworkApp_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-2-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-3" type="button" x="0" y="114" width="592" height="34" onclick="export:NetworkApp_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-3-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-4" type="button" x="0" y="152" width="592" height="34" onclick="export:NetworkApp_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-4-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-5" type="button" x="0" y="190" width="592" height="34" onclick="export:NetworkApp_Row()" normal="b592x34-normal" highlight="b592x34-highlight" pressed="b592x34-pressed" disabled="b592x34-disabled">
+        <label name="row-5-caption" text="" x="12" y="0" width="568" height="34" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <label name="detail-0" text="" x="12" y="232" width="568" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+      <label name="detail-1" text="" x="12" y="251" width="568" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    </panel>
+    <input name="action-0" type="button" x="24" y="430" width="192" height="32" onclick="export:NetworkApp_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-0-caption" text="Connect Ethernet" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-1" type="button" x="224" y="430" width="192" height="32" onclick="export:NetworkApp_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-1-caption" text="Refresh status" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-2" type="button" x="424" y="430" width="192" height="32" onclick="export:NetworkApp_Action()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+      <label name="action-2-caption" text="Options / Status" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="browser-panel" x="24" y="82" width="592" height="274" background="maintenance-panel">
+      <label name="picker-path" text="/" x="8" y="0" width="576" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+      <input name="up" type="button" x="0" y="30" width="80" height="32" onclick="export:NetworkApp_Up()" normal="b80x32-normal" highlight="b80x32-highlight" pressed="b80x32-pressed" disabled="b80x32-disabled">
+        <label name="up-caption" text="Up" x="12" y="0" width="56" height="32" font="small" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="devices" type="button" x="88" y="30" width="116" height="32" onclick="export:NetworkApp_Devices()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+        <label name="devices-caption" text="Devices" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="choose-folder" type="button" x="212" y="30" width="192" height="32" onclick="export:NetworkApp_Folder()" normal="b192x32-normal" highlight="b192x32-highlight" pressed="b192x32-pressed" disabled="b192x32-disabled">
+        <label name="choose-folder-caption" text="Use folder (X)" x="12" y="0" width="168" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="picker-cancel" type="button" x="412" y="30" width="180" height="32" onclick="export:NetworkApp_Back()" normal="b180x32-normal" highlight="b180x32-highlight" pressed="b180x32-pressed" disabled="b180x32-disabled">
+        <label name="picker-cancel-caption" text="Cancel" x="12" y="0" width="156" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <filemanager name="file-picker" path="/" x="0" y="70" width="592" height="204" background="picker-bg" item_font="small" item_font_color="#EFF5FC" item_normal="picker-row" item_highlight="picker-focus" item_pressed="picker-select" item_disabled="picker-row" item_selected_normal="picker-select" item_selected_highlight="picker-focus" item_selected_pressed="picker-select" item_selected_disabled="picker-row" onclick="export:NetworkApp_Item()" />
+    </panel>
+    <label name="status" text="Ready." x="24" y="365" width="592" height="22" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="note" text="" x="24" y="390" width="592" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <panel x="24" y="414" width="592" height="4" background="progress-bg" />
+    <panel name="progress" x="24" y="414" width="592" height="4" background="progress-fill" />
+    <label name="controls" text="D-pad Select / Adjust     A Choose     B Back / Stop     START Menu" x="24" y="463" width="592" height="16" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <dialog name="dialog" font="body" x="50" y="80" width="540" height="326" onconfirm="export:NetworkApp_Confirm()" oncancel="export:NetworkApp_Cancel()" />
+  </body>
 </app>

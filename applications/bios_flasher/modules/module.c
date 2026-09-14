@@ -1,783 +1,162 @@
-/* DreamShell ##version##
-
-   module.c - Bios flasher app module
-   Copyright (C)2013 Yev
-   Copyright (C)2013, 2014, 2024, 2025 SWAT
-
-*/
-
+/* DreamShell NeXT BIOS Flasher.
+ * Original (C) 2009-2025 SWAT, 2013 Yev. NeXT (C) 2026 contributors. */
 #include "ds.h"
-#include "drivers/bflash.h"
-#include <time.h>
-#include <stdbool.h>
-
+#include <drivers/bflash.h>
+#include "../../maintenance_ui.h"
+#include "../../maintenance_model.h"
 DEFAULT_MODULE_EXPORTS(app_bios_flasher);
 
-typedef enum OperationState
-{
-	eNone = -1,
-	eErasing = 0,
-	eWriting,
-	eReading,
-	eCompare
-}OperationState_t;
+static struct {
+    bflash_manufacturer_t *maker;
+    bflash_dev_t *chip;
+    size_t bank;
+    int writable, sector_erase;
+    char image[MA_PATH], folder[MA_PATH], backup[MA_PATH];
+} self;
 
-typedef enum OperationError
-{
-	eSuccess = 0,
-	eUnknownFail = -1,
-	eDetectionFail = -2,
-	eFileFail = -3,
-	eErasingFail = -4,
-	eWritingFail = -5,
-	eReadingFail = -6,
-	eDataMissmatch = 1
-}OperationError_t;
-
-static const size_t CHUNK_SIZE = 128 << 10;
-
-#define UPDATE_GUI(state, progress, gui) do { if(gui) gui(state, progress); } while(0)
-
-typedef void BiosFlasher_OperationCallback(OperationState_t state, float progress);
-
-int BiosFlasher_WriteBiosFileToFlash(const char* filename, BiosFlasher_OperationCallback guiClbk);
-int BiosFlasher_CompareBiosWithFile(const char* filename, BiosFlasher_OperationCallback guiClbk);
-int BiosFlasher_ReadBiosToFile(const char* filename, BiosFlasher_OperationCallback guiClbk);
-void BiosFlasher_EnableMainPage();
-void BiosFlasher_EnableChoseFilePage();
-void BiosFlasher_EnableProgressPage();
-void BiosFlasher_EnableResultPage(int result, const char* fileName);
-void BiosFlasher_EnableSettingsPage();
-void BiosFlasher_OnOperationProgress(OperationState_t state, float progress);
-
-struct
-{
-	App_t* m_App;
-
-	GUI_Widget *m_LabelProgress;
-	GUI_Widget *m_LabelProgressDesc;
-	GUI_Widget *m_ProgressBar;
-	GUI_Widget *filebrowser;
-	GUI_Widget *pages;
-
-	GUI_Surface *m_ItemNormal;
-	GUI_Surface *m_ItemSelected;
-
-	char* m_SelectedBiosFile;
-	OperationState_t m_CurrentOperation;
-
-	bool have_args;
-}self;
-
-struct
-{
-	size_t m_DataStart;
-	size_t m_DataLength;
-}settings;
-
-
-void BiosFlasher_ResetSelf()
-{
-	memset(&self, 0, sizeof(self));
-	self.m_CurrentOperation = eNone;
-	memset(&settings, 0, sizeof(settings));
+static void refresh(void) {
+    ma_row(0, "Chip:  %s", self.chip ? self.chip->name : "Not detected");
+    ma_row(1, "Visible bank:  %u KiB  /  %s", (unsigned)(self.bank / 1024),
+        self.writable ? "Programming supported" : "Read only / unsupported layout");
+    ma_row(2, "BIOS image:  %s", *self.image ? ma_tail(self.image, 54) : "Choose a file...");
+    ma_row(3, "Backup folder:  %s", *self.folder ? ma_tail(self.folder, 50) : "Choose SD / IDE / PC...");
+    ma_row(4, "Bank selection:  Physical switch on your hardware");
+    ma_row(5, "Detect chip again");
+    ma_text(ui.detail[0], "Exact full-bank images only. No partial offsets or cross-bank erases.");
+    ma_text(ui.detail[1], "Write: verified backup first, full read-back verification afterwards.");
 }
-
-// BIOS 
-bflash_dev_t* BiosFlasher_DetectFlashChip()
-{
-	bflash_manufacturer_t* mfr = 0;
-	bflash_dev_t* dev = 0;
-	
-	if (bflash_detect(&mfr, &dev) < 0)
-	{
-		dev = (bflash_dev_t*)malloc(sizeof(*dev));
-		memset(dev, 0, sizeof(*dev));
-		dev->name = strdup("Unknown");
-	}
-
-	return dev;
+static void detect(void) {
+    self.maker = NULL; self.chip = NULL; self.bank = 0; self.writable = 0;
+    LockVideo();
+    int rc = bflash_detect(&self.maker, &self.chip);
+    UnlockVideo();
+    if(rc < 0 || !self.chip) { self.chip = NULL; ma_status("No supported chip detected.", 1); refresh(); return; }
+    size_t capacity = (size_t)self.chip->size * 1024;
+    self.bank = capacity > 0x200000 ? 0x200000 : capacity;
+    self.sector_erase = !!(self.chip->flags & F_FLASH_ERASE_SECTOR);
+    self.writable = (self.chip->flags & F_FLASH_PROGRAM) &&
+        (self.sector_erase || (self.chip->flags & F_FLASH_ERASE_ALL)) &&
+        maintenance_bank_layout(capacity, self.bank, self.chip->sectors,
+            self.chip->sec_count, !self.sector_erase) &&
+        self.chip->page_size && !(self.bank % self.chip->page_size) &&
+        !(65536 % self.chip->page_size);
+    ma_status(self.writable ? "Chip detected. Select an image to compare or write." :
+        "Chip detected. Backup and compare are available.", 0);
+    ma_text(ui.note, "%s / ID %04X / %u KiB chip", self.maker ? self.maker->name : "Unknown maker",
+        self.chip->id, self.chip->size);
+    refresh();
 }
-
-int BiosFlasher_WriteBiosFileToFlash(const char* filename, BiosFlasher_OperationCallback guiClbk)
-{
-	size_t i = 0;
-	uint8* data 	= 0;
-	file_t pFile 	= 0;
-
-	UPDATE_GUI(eReading, 0.0f, guiClbk);
-	// Detect writible flash
-	bflash_dev_t *dev = NULL;
-	bflash_manufacturer_t *mrf = NULL;
-	if( bflash_detect(&mrf, &dev) < 0   ||
-		!(dev->flags & F_FLASH_PROGRAM) ) 
-	{
-		ds_printf("DS_ERROR: flash chip detection error.\n");
-		return eDetectionFail;
-	}
-
-	// Read bios file from file to memory
-	pFile = fs_open(filename, O_RDONLY);
-	if (pFile == FILEHND_INVALID)
-	{
-		ds_printf("DS_ERROR: Can't open bios file: %s.\n", filename);
-		return eFileFail;
-	}
-	
-	size_t fileSize = fs_total(pFile);
-	if(fileSize > dev->size * 1024) 
-	{
-		ds_printf("DS_ERROR: The firmware larger than a flash chip (%d KB vs %d KB).\n", (fileSize / 1024), dev->size);
-		fs_close(pFile);
-		return eFileFail;
-	}
-
-	data = (uint8 *) memalign(32, fileSize);
-	if(data == NULL) 
-	{
-		ds_printf("DS_ERROR: Not enough memory\n");
-		fs_close(pFile);
-		return eUnknownFail;
-	}
-	size_t readLen = 0;
-	size_t totalRead = 0;
-
-	while (totalRead < fileSize)
-	{
-		size_t toRead = (fileSize - totalRead > CHUNK_SIZE) ?
-			CHUNK_SIZE : fileSize - totalRead;
-		readLen = fs_read(pFile, data + totalRead, toRead);
-
-		if (readLen <= 0)
-		{
-			ds_printf("DS_ERROR: File wasn't loaded fully to memory\n");
-			free(data);
-			fs_close(pFile);
-			return eFileFail;
-		}
-
-		totalRead += readLen;
-		UPDATE_GUI(eReading, (float)totalRead / fileSize, guiClbk);
-	}
-	
-	if (fileSize != totalRead)
-	{
-		ds_printf("DS_ERROR: File wasn't loaded fully to memory\n");
-		free(data);
-		fs_close(pFile);
-		return eFileFail;
-	}
-	fs_close(pFile);
-	pFile = FILEHND_INVALID;
-
-	EXPT_GUARD_BEGIN;
-
-		// Erasing
-		if(dev->flags & F_FLASH_ERASE_SECTOR)
-		{
-			for (i = 0; i < dev->sec_count; ++i)
-			{
-				/* Don't erase the other banks of sectors. */
-				if(dev->sectors[i] >= 0x200000)
-					break;
-
-				UPDATE_GUI(eErasing, (float)i / dev->sec_count, guiClbk);
-
-				if (bflash_erase_sector(dev, dev->sectors[i]) < 0)
-				{
-					ds_printf("DS_ERROR: Can't erase flash\n");
-					free(data);
-					EXPT_GUARD_RETURN eErasingFail;
-				}
-			}
-		}
-		else if (dev->flags & F_FLASH_ERASE_ALL)
-		{
-			UPDATE_GUI(eErasing, 0.5f, guiClbk);
-			if (bflash_erase_all(dev) < 0)
-			{
-				free(data);
-				EXPT_GUARD_RETURN eErasingFail;
-			}
-			UPDATE_GUI(eErasing, 1.0f, guiClbk);
-		}
-
-		// Writing
-		size_t offset = 0;
-		if (fileSize >= settings.m_DataStart + settings.m_DataLength)
-		{
-			offset = settings.m_DataStart;
-			fileSize = (settings.m_DataLength > 0) ? offset + settings.m_DataLength : fileSize - offset;
-		}
-
-		size_t chunkCount = fileSize / CHUNK_SIZE;
-		for (i = 0; i <= chunkCount; ++i)
-		{
-			UPDATE_GUI(eWriting, chunkCount ? (float)i / chunkCount : 1.0f, guiClbk);
-
-			size_t dataPos = i * CHUNK_SIZE + offset;
-			size_t dataLen = (dataPos + CHUNK_SIZE > fileSize) ? fileSize - dataPos : CHUNK_SIZE;
-//			ScreenWaitUpdate();
-			LockVideo();
-			int result = bflash_write_data(dev, dataPos, data + dataPos, dataLen);
-			UnlockVideo();
-			
-			if (result < 0)
-			{
-				ds_printf("DS_ERROR: Can't write flash\n");
-				free(data);
-				EXPT_GUARD_RETURN eWritingFail;
-			}
-		}
-
-	EXPT_GUARD_CATCH;
-	
-		ds_printf("DS_ERROR: Fatal error\n");
-		free(data);
-		if (pFile != FILEHND_INVALID)
-		{
-			fs_close(pFile);
-			pFile = FILEHND_INVALID;
-		}
-		EXPT_GUARD_RETURN eFileFail;
-		
-	EXPT_GUARD_END;
-
-	free(data);
-	return 0;
+static int read_chip(void *ctx, void *data, size_t size) {
+    (void)ctx;
+    if(!self.chip || size != self.bank) return -1;
+    if(self.chip->flags & F_FLASH_PROGRAM) bflash_reset(self.chip);
+    /* Complete the G1 read before starting any filesystem IO. */
+    memcpy(data, (const void *)BIOS_FLASH_ADDR, size); return 0;
 }
-
-int BiosFlasher_CompareBiosWithFile(const char* filename, BiosFlasher_OperationCallback guiClbk)
-{
-	uint8* data 	= 0;
-	file_t pFile 	= 0;
-
-	UPDATE_GUI(eReading, 0.0f, guiClbk);
-	// Detect writible flash
-	bflash_dev_t *dev = NULL;
-	bflash_manufacturer_t *mrf = NULL;
-	if (bflash_detect(&mrf, &dev) < 0) 
-	{
-		ds_printf("DS_ERROR: flash chip detection error.\n");
-		return eDetectionFail;
-	}
-	
-	// Read bios file from file to memory
-	pFile = fs_open(filename, O_RDONLY);
-	if (pFile == FILEHND_INVALID)
-	{
-		ds_printf("DS_ERROR: Can't open bios file: %s.\n", filename);
-		return eFileFail;
-	}
-	
-	size_t fileSize = fs_total(pFile);
-	if (fileSize > dev->size * 1024) 
-	{
-		ds_printf("DS_ERROR: The firmware larger than a flash chip (%d KB vs %d KB).\n", (fileSize / 1024), dev->size);
-		fs_close(pFile);
-		return eDataMissmatch;
-	}
-
-	data = (uint8 *) memalign(32, CHUNK_SIZE);
-	if(data == NULL) 
-	{
-		ds_printf("DS_ERROR: Not enough memory\n");
-		fs_close(pFile);
-		return eUnknownFail;
-	}
-
-	int ret = eSuccess;
-	int i = 0;
-	size_t chunkCount = fileSize / CHUNK_SIZE;
-	size_t dataPos, dataLen, readLen;
-	
-	for (i = 0; i <= chunkCount; ++i)
-	{
-
-		dataPos = i * CHUNK_SIZE;
-		dataLen = (dataPos + CHUNK_SIZE > fileSize) ? fileSize - dataPos : CHUNK_SIZE;
-
-		UPDATE_GUI(eReading, (float)i / chunkCount, guiClbk);
-		
-		readLen = fs_read(pFile, data, dataLen);
-		if (readLen != dataLen)
-		{
-			ds_printf("DS_ERROR: Part of file wasn't loaded to memory\n");
-			free(data);
-			fs_close(pFile);
-			return eFileFail;
-		}
-
-		if (memcmp(data, (uint8*)BIOS_FLASH_ADDR + dataPos, dataLen) != 0)
-		{
-			ret = eDataMissmatch;
-			break;
-		}
-	}
-
-	free(data);
-	fs_close(pFile);
-
-	return ret;
+static int backup_chip(void *ctx, const void *data, size_t size) {
+    (void)ctx;
+    return ma_save_verified(self.folder, "bios-backup", "bin", data, size,
+        self.backup, sizeof(self.backup));
 }
-
-int BiosFlasher_ReadBiosToFile(const char* filename, BiosFlasher_OperationCallback guiClbk)
-{
-	uint8* data 	= 0;
-	file_t pFile 	= 0;
-
-	UPDATE_GUI(eReading, 0.0f, guiClbk);
-	// Detect writible flash
-	bflash_dev_t *dev = NULL;
-	bflash_manufacturer_t *mrf = NULL;
-	if (bflash_detect(&mrf, &dev) < 0) 
-	{
-		ds_printf("DS_ERROR: flash chip detection error.\n");
-		return eDetectionFail;
-	}
-
-	// Read bios from file to memory
-	pFile = fs_open(filename, O_WRONLY | O_TRUNC | O_CREAT);
-	if (pFile == FILEHND_INVALID)
-	{
-		ds_printf("DS_ERROR: Can't open bios file: %s.\n", filename);
-		return eFileFail;
-	}
-
-	size_t fileSize = dev->size * 1024;
-	size_t offset = 0;
-	if (fileSize >= settings.m_DataStart + settings.m_DataLength)
-	{
-		offset = settings.m_DataStart;
-		fileSize = (settings.m_DataLength > 0) ? offset + settings.m_DataLength : fileSize - offset;
-	}
-
-	data = memalign(32, fileSize);
-	if(!data) {
-		ds_printf("DS_ERROR: Not enough memory\n");
-		fs_close(pFile);
-		return eUnknownFail;
-	}
-	
-	/* 
-	 * We can't use G1 bus simultaneously for IDE and BIOS, 
-	 * so need copy BIOS data to RAM 
-	 */
-	memcpy(data, (uint8*)BIOS_FLASH_ADDR, fileSize);
-
-	int i = 0;
-	size_t chunkCount = fileSize / CHUNK_SIZE;
-	for (i = 0; i <= chunkCount; ++i)
-	{
-		UPDATE_GUI(eReading, (float)i / chunkCount, guiClbk);
-
-		size_t dataPos = i * CHUNK_SIZE + offset;
-		size_t dataLen = (dataPos + CHUNK_SIZE > fileSize) ? fileSize - dataPos : CHUNK_SIZE;
-		size_t writeLen = fs_write(pFile, data + dataPos, dataLen);
-		if (writeLen != dataLen)
-		{
-			ds_printf("DS_ERROR: Can't write data to file\n");
-			fs_close(pFile);
-			free(data);
-			return eFileFail;
-		}
-	}
-
-	free(data);
-	fs_close(pFile);
-
-	return 0;
+static int unchanged(void *ctx, const void *old, size_t size) {
+    (void)ctx; bflash_manufacturer_t *maker = NULL; bflash_dev_t *chip = NULL;
+    LockVideo();
+    int rc = bflash_detect(&maker, &chip);
+    if(rc >= 0 && (chip != self.chip || maker != self.maker ||
+            memcmp(old, (const void *)BIOS_FLASH_ADDR, size))) rc = -1;
+    UnlockVideo(); return rc;
 }
-
-char* BiosFlasher_GenerateBackupName()
-{
-	char tmp[128];
-	
-	time_t t;
-	struct tm* ti;
-	time(&t);
-	ti = localtime(&t);
-
-	sprintf(tmp, "backup_%04d-%02d-%02d_%02d-%02d-%02d.bios", 
-			1900 + ti->tm_year, 1 + ti->tm_mon, ti->tm_mday, 
-			ti->tm_hour, ti->tm_min, ti->tm_sec);
-
-	ds_printf("Backup filename: %s\n", tmp);
-
-	char* filename = strdup(tmp);
-	return filename;
+static void critical(void *ctx, int begin) {
+    (void)ctx;
+    if(begin) {
+        ma_status("Writing BIOS. Keep power on; do not change the bank switch.", 1);
+        ma_note("The display pauses during erase / programming. Exit is available after verification.");
+        thd_sleep(50); LockVideo();
+    } else { bflash_reset(self.chip); UnlockVideo(); }
 }
-
-// HELPERS
-void* BiosFlasher_GetElement(const char *name, ListItemType type, int from) 
-{
-	Item_t *item;
-	item = listGetItemByName(from ? self.m_App->elements : self.m_App->resources, name);
-
-	if(item != NULL && item->type == type) {
-		return item->data;
-	}
-
-	ds_printf("Resource not found: %s\n", name);
-	return NULL;
+static int erase_chip(void *ctx) {
+    (void)ctx;
+    if(!self.sector_erase) return bflash_erase_all(self.chip);
+    for(unsigned i = 0; i < self.chip->sec_count && self.chip->sectors[i] < self.bank; i++)
+        if(bflash_erase_sector(self.chip, self.chip->sectors[i]) < 0) return -1;
+    return 0;
 }
-
-GUI_Widget* BiosFlasher_GetWidget(const char* name)
-{
-	return (GUI_Widget *) BiosFlasher_GetElement(name, LIST_ITEM_GUI_WIDGET, 1);
+static int program(void *ctx, size_t offset, const void *data, size_t size) {
+    (void)ctx;
+    return bflash_write_data(self.chip, offset, (void *)data, size);
 }
-
-int BiosFlasher_GetNumFilesCurrentDir()
-{
-	GUI_Widget *w = GUI_FileManagerGetItemPanel(self.filebrowser);
-	return GUI_ContainerGetCount(w);
+static void progress(void *ctx, int phase, size_t done, size_t total) {
+    (void)ctx;
+    if(phase == MF_BACKUP) ma_status("Saving and verifying the current BIOS backup...", 0);
+    ma_progress(done, total);
 }
-
-// HANDLERS
-
-void BiosFlasher_ItemClick(dirent_fm_t *fm_ent) 
-{
-	dirent_t *ent = &fm_ent->ent;
-	GUI_Widget *fmw = (GUI_Widget*)fm_ent->obj;
-	
-	if(ent->attr == O_DIR) 
-	{
-		GUI_FileManagerChangeDir(fmw, ent->name, ent->size);
-		return;
-	}
-
-	if (IsFileSupportedByApp(self.m_App, ent->name))
-	{
-		if(self.m_SelectedBiosFile) {
-			free(self.m_SelectedBiosFile);
-		}
-		
-		self.m_SelectedBiosFile = strdup(ent->name);
-		
-		int i;
-		GUI_Widget *panel, *w;
-		panel = GUI_FileManagerGetItemPanel(fmw);
-		
-		for(i = 0; i < GUI_ContainerGetCount(panel); i++) {
-			
-			w = GUI_FileManagerGetItem(fmw, i);
-			
-			if(i != fm_ent->index) {
-				GUI_ButtonSetNormalImage(w, self.m_ItemNormal);
-				GUI_ButtonSetHighlightImage(w, self.m_ItemNormal);
-			} else {
-				GUI_ButtonSetNormalImage(w, self.m_ItemSelected);
-				GUI_ButtonSetHighlightImage(w, self.m_ItemSelected);
-			}
-		}
-	}
+static void run(int action) {
+    if(!self.chip || !self.bank) { ma_status("Detect a supported chip first.", 1); return; }
+    if(action == 3 && !self.writable) { ma_status("This chip or bank layout cannot be programmed.", 1); return; }
+    uint8_t *old = memalign(32, self.bank), *image = NULL;
+    if(action != 1) image = memalign(32, self.bank);
+    if(!old || (action != 1 && !image)) {
+        ma_status("Not enough free RAM. Nothing was written.", 1); goto cleanup;
+    }
+    ma_busy(1); self.backup[0] = 0;
+    if(action != 1 && ma_load(self.image, image, self.bank) < 0) {
+        ma_status("Image must be readable and exactly match the visible bank size.", 1); goto done;
+    }
+    if(action == 1) {
+        read_chip(NULL, old, self.bank);
+        ma_status("Saving and verifying BIOS backup...", 0);
+        int rc = backup_chip(NULL, old, self.bank);
+        ma_status(rc ? "Backup failed verification. Do not use this file to restore." : "BIOS backup saved and verified.", rc != 0);
+        ma_note(self.backup);
+    } else if(action == 2) {
+        read_chip(NULL, old, self.bank);
+        size_t i; for(i = 0; i < self.bank && old[i] == image[i]; i++) {}
+        ma_status(i == self.bank ? "Exact match. The image equals the current BIOS bank." : "The image differs from the current BIOS bank.", 0);
+        if(i != self.bank) ma_text(ui.note, "First difference at 0x%06lX: chip %02X / image %02X", (unsigned long)i, old[i], image[i]);
+        else ma_note(ma_tail(self.image, 80));
+    } else {
+        maintenance_flash_ops ops = {NULL, read_chip, backup_chip, unchanged, critical,
+            erase_chip, program, progress};
+        /* Reuse the original snapshot only after its verified backup and the
+         * unchanged check. Saves 2 MiB on a stock Dreamcast. */
+        int result = maintenance_flash_run(&ops, image, self.bank, 65536, old, old);
+        static const char *messages[] = {"", "BIOS read failed. Nothing erased.",
+            "Backup failed verification. Nothing erased.", "Chip or bank changed. Nothing erased.",
+            "Erase failed. BIOS may be incomplete; retain the backup.",
+            "Programming failed. BIOS is incomplete; retain the backup.",
+            "Verification failed. BIOS differs from the image; retain the backup.",
+            "BIOS written and fully verified. Backup retained."};
+        ma_status(messages[result], result != MF_DONE); ma_note(self.backup);
+    }
+    ma_progress(1, 1);
+done:
+    ma_busy(0);
+cleanup:
+    free(image); free(old);
 }
-
-void BiosFlasher_OnWritePressed(GUI_Widget *widget)
-{
-	self.m_CurrentOperation = eWriting;
-
-	BiosFlasher_EnableChoseFilePage();
+static void picked(int purpose, const char *path) {
+    snprintf(purpose ? self.folder : self.image, MA_PATH, "%s", path);
+    refresh(); ma_status(purpose ? "Backup folder selected." : "Image selected. Compare before writing if unsure.", 0); ma_note(path);
 }
-
-void BiosFlasher_OnReadPressed(GUI_Widget *widget)
-{
-	self.m_CurrentOperation = eReading;
-
-	BiosFlasher_EnableChoseFilePage();
+static void row(int index, int step) {
+    (void)step;
+    if(index == 2) ma_browse(0, 0, self.folder);
+    else if(index == 3) ma_browse(1, 1, self.folder);
+    else if(index == 5) detect();
 }
-
-void BiosFlasher_OnComparePressed(GUI_Widget *widget)
-{
-	self.m_CurrentOperation = eCompare;
-
-	BiosFlasher_EnableChoseFilePage();
+static void action(int index) {
+    if(index < 2) { run(index + 1); return; }
+    if(!self.writable || !*self.image || !ma_persistent(self.folder)) {
+        ma_status("Choose an image, a backup folder and a programmable chip.", 1); return;
+    }
+    char text[600];
+    snprintf(text, sizeof(text), "Chip: %s\nSelected hardware bank: %u KiB\nImage: %s\n\nA verified backup is required before erase.\nThe image will be read back and compared.\nKeep power on and the bank switch unchanged.\n\nWrite this BIOS bank?", self.chip->name,
+        (unsigned)(self.bank / 1024), ma_tail(self.image, 52));
+    ma_ask(3, "Write BIOS bank", text);
 }
-
-void BiosFlasher_OnDetectPressed(GUI_Widget *widget)
-{
-	ScreenFadeOutEx("Detecting...", 1);
-	BiosFlasher_EnableMainPage();	// Redetect bios again
-	ScreenFadeIn();
+void BiosFlasher_Init(App_t *app) {
+    memset(&self, 0, sizeof(self)); ma_init(app, "NextBiosInput");
+    snprintf(self.folder, sizeof(self.folder), "%s", ma_default_folder());
+    ui.row = row; ui.action = action; ui.confirm = run; ui.picked = picked; detect();
 }
-
-void BiosFlasher_OnBackPressed(GUI_Widget *widget)
-{
-	BiosFlasher_EnableMainPage();
-}
-
-void BiosFlasher_OnSettingsPressed(GUI_Widget *widget)
-{
-	BiosFlasher_EnableSettingsPage();
-}
-
-void BiosFlasher_OnConfirmPressed(GUI_Widget *widget)
-{
-	if (self.m_SelectedBiosFile == 0 && 
-		self.m_CurrentOperation != eReading)
-	{
-		ds_printf("Select bios file!\n");
-		return;
-	}
-
-	BiosFlasher_EnableProgressPage();
-
-	int result = eSuccess;
-	char* fileName = 0;
-	char filePath[NAME_MAX];
-	memset(filePath, 0, NAME_MAX);
-
-	switch(self.m_CurrentOperation)
-	{
-		case eWriting:
-			snprintf(filePath, NAME_MAX, "%s/%s", GUI_FileManagerGetPath(self.filebrowser), self.m_SelectedBiosFile);	// TODO
-			result = BiosFlasher_WriteBiosFileToFlash(filePath, &BiosFlasher_OnOperationProgress);
-		break;
-
-		case eReading:
-			fileName = BiosFlasher_GenerateBackupName();
-			snprintf(filePath, NAME_MAX, "%s/%s", GUI_FileManagerGetPath(self.filebrowser), fileName);	// TODO
-			result = BiosFlasher_ReadBiosToFile(filePath, &BiosFlasher_OnOperationProgress);
-		break;
-
-		case eCompare:
-			snprintf(filePath, NAME_MAX, "%s/%s", GUI_FileManagerGetPath(self.filebrowser), self.m_SelectedBiosFile);	// TODO
-			result = BiosFlasher_CompareBiosWithFile(filePath, &BiosFlasher_OnOperationProgress);
-		break;
-
-		case eNone:
-		case eErasing:
-		break;
-	};
-	
-	BiosFlasher_EnableResultPage(result, fileName);
-	free(fileName);
-}
-
-void BiosFlasher_OnSaveSettingsPressed(GUI_Widget *widget)
-{
-	const char* dataStart = GUI_TextEntryGetText(BiosFlasher_GetWidget("start_addresss"));
-	settings.m_DataStart = atol(dataStart);
-	const char* dataLength = GUI_TextEntryGetText(BiosFlasher_GetWidget("data_length"));
-	settings.m_DataLength = atol(dataLength);
-
-	// TODO: Validate start address and length here
-
-	BiosFlasher_EnableMainPage();
-}
-
-void BiosFlasher_OnSupportedPressed(GUI_Widget *widget) {
-	dsystem("bflash -l");
-	ShowConsole();
-}
-
-void BiosFlasher_OnExitPressed(GUI_Widget *widget) {
-	
-	(void)widget;
-	App_t *app = NULL;
-	
-	if(self.have_args == true) {
-		
-		app = GetAppByName("File Manager");
-		
-		if(!app || !(app->state & APP_STATE_LOADED)) {
-			app = NULL;
-		}
-	}
-	
-	if(!app) {
-		OpenMainApp();
-	}
-	else {
-		OpenApp(app, NULL);
-	}
-}
-
-void BiosFlasher_OnOperationProgress(OperationState_t state, float progress)
-{
-	char msg[64];	// TODO: Check overflow
-	memset(msg, 0, sizeof(msg));
-	switch(state)
-	{
-		case eErasing:
-			sprintf(msg, "Erasing: %d%%", (int)(progress * 100));
-		break;
-
-		case eWriting:
-			sprintf(msg, "Writing: %d%%", (int)(progress * 100));
-		break;
-
-		case eReading:
-			sprintf(msg, "Reading: %d%%", (int)(progress * 100));
-		break;
-
-		case eNone:
-		case eCompare:
-		break;
-	};
-
-	GUI_LabelSetText(self.m_LabelProgress, msg);
-	GUI_ProgressBarSetPosition(self.m_ProgressBar, progress);
-	thd_pass();
-}
-
-void BiosFlasher_EnableMainPage()
-{
-	
-	if (GUI_CardStackGetIndex(self.pages) != 0)
-	{
-		ScreenFadeOutEx(NULL, 1);
-		GUI_CardStackShowIndex(self.pages, 0);
-		ScreenFadeIn();
-	}
-
-	bflash_dev_t* dev = BiosFlasher_DetectFlashChip();
-
-	char info[64];
-	sprintf(info, "Model: %s", dev->name); 
-	GUI_LabelSetText(BiosFlasher_GetWidget("label_flash_name"), info);
-	sprintf(info, "Size: %dKb", dev->size); 
-	GUI_LabelSetText(BiosFlasher_GetWidget("label_flash_size"), info);
-	sprintf(info, "Voltage: %dV", (dev->flags & F_FLASH_LOGIC_3V) ? 3 : 5); 
-	GUI_LabelSetText(BiosFlasher_GetWidget("label_flash_voltage"), info);
-	sprintf(info, "Access: %s", (dev->flags & F_FLASH_PROGRAM) ? "Read/Write" : "Read only"); 
-	GUI_LabelSetText(BiosFlasher_GetWidget("label_flash_access"), info);
-}
-
-void BiosFlasher_EnableChoseFilePage()
-{
-	ScreenFadeOutEx(NULL, 1);
-	GUI_CardStackShowIndex(self.pages, 1);
-	ScreenFadeIn();
-}
-
-void BiosFlasher_EnableProgressPage()
-{
-	ScreenFadeOutEx(NULL, 1);
-	GUI_CardStackShowIndex(self.pages, 2);
-	ScreenFadeIn();
-}
-
-void BiosFlasher_EnableResultPage(int result, const char* fileName)
-{
-	ScreenFadeOutEx(NULL, 1);
-	GUI_CardStackShowIndex(self.pages, 3);
-	ScreenFadeIn();
-	
-	char title[32];
-	char msg[128];
-	memset(title, 0, sizeof(title));
-	memset(msg, 0, sizeof(msg));
-	switch(self.m_CurrentOperation)
-	{
-		case eWriting:
-			if (result == eSuccess)
-			{
-				sprintf(title, "Done");
-				snprintf(msg, sizeof(msg), "Writing successful");
-			}
-			else
-			{
-				sprintf(title, "Error");
-				snprintf(msg, sizeof(msg), "Writing fail. Status code: %d", result);
-			}
-		break;
-
-		case eReading:
-			if (result == eSuccess)
-			{
-				sprintf(title, "Done");
-				snprintf(msg, sizeof(msg), "Reading successful.");
-			}
-			else
-			{
-				sprintf(title, "Error");
-				snprintf(msg, sizeof(msg), "Reading fail. Status code: %d", result);
-			}
-		break;
-
-		case eCompare:
-			if (result == eSuccess)
-			{
-				sprintf(title, "Done");
-				snprintf(msg, sizeof(msg), "Comare successful. Flash data match");
-			}
-			else if (result == eDataMissmatch)
-			{
-				sprintf(title, "Done");
-				snprintf(msg, sizeof(msg), "Comare successful. Flash data missmatch");
-			}
-			else
-			{
-				sprintf(title, "Error");
-				snprintf(msg, sizeof(msg), "Comaring fail. Status code: %d", result);
-			}
-		break;
-
-		case eNone:
-		case eErasing:
-		break;
-	};
-
-	GUI_LabelSetText(BiosFlasher_GetWidget("result_title_text"), title);
-	GUI_LabelSetText(BiosFlasher_GetWidget("result_desc_text"), msg);
-}
-
-void BiosFlasher_EnableSettingsPage()
-{
-	ScreenFadeOutEx(NULL, 1);
-	GUI_CardStackShowIndex(self.pages, 4);
-	ScreenFadeIn();
-}
-
-void BiosFlasher_Init(App_t* app) 
-{
-
-	BiosFlasher_ResetSelf();
-	self.m_App = app;
-	
-	if (self.m_App != 0)
-	{
-		self.m_LabelProgress		= (GUI_Widget *) BiosFlasher_GetElement("progress_text", LIST_ITEM_GUI_WIDGET, 1);
-		self.m_LabelProgressDesc = (GUI_Widget *) BiosFlasher_GetElement("progress_desc", LIST_ITEM_GUI_WIDGET, 1);
-		self.m_ProgressBar		= (GUI_Widget *) BiosFlasher_GetElement("progressbar", LIST_ITEM_GUI_WIDGET, 1);
-		self.filebrowser			= (GUI_Widget *) BiosFlasher_GetElement("file_browser", LIST_ITEM_GUI_WIDGET, 1);
-		self.pages					= (GUI_Widget *) BiosFlasher_GetElement("pages", LIST_ITEM_GUI_WIDGET, 1);
-		
-		self.m_ItemNormal			= (GUI_Surface *) BiosFlasher_GetElement("item-normal", LIST_ITEM_GUI_SURFACE, 0);
-		self.m_ItemSelected		= (GUI_Surface *) BiosFlasher_GetElement("item-selected", LIST_ITEM_GUI_SURFACE, 0);
-		
-		/* Disabling scrollbar on filemanager */
-		GUI_FileManagerRemoveScrollbar(self.filebrowser);
-
-		if (app->args != 0)
-		{
-			char *name = getFilePath(app->args);
-			self.have_args = true;
-			
-			if(name) {
-				
-				GUI_FileManagerSetPath(self.filebrowser, name);
-				free(name);
-				name = strrchr(app->args, '/');
-				
-				if(name) {
-					name++;
-					self.m_SelectedBiosFile = strdup(name);
-				}
-			}
-			
-			BiosFlasher_OnWritePressed(NULL);
-		}
-		else
-		{
-			self.have_args = false;
-			BiosFlasher_EnableMainPage();
-		}
-	}
-	else 
-	{
-		ds_printf("DS_ERROR: Can't find app named: %s\n", "BiosFlasher");
-	}
-}
-
+MAINTENANCE_CALLBACKS(BiosFlasher)

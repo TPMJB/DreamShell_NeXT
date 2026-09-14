@@ -104,6 +104,11 @@ jobs:
           make -C applications/settings/modules module.o exports.o
           make -C applications/gdplay/modules module.o exec.o exports.o
           make -C applications/filemanager/modules module.o exports.o
+          make -C applications/bios_flasher/modules module.o exports.o
+          make -C applications/region_changer/modules module.o exports.o
+          make -C applications/speedtest/modules module.o exports.o
+          make -C applications/memtest/modules module.o exports.o
+          make -C applications/network/modules module.o exports.o
 
       - name: Check ISO Loader SH-4 builds
         run: bash .github/scripts/dev-build.sh loaders
@@ -132,11 +137,11 @@ jobs:
         run: bash .github/scripts/dev-build.sh release
 
       - name: Package utility apps update
-        run: python3 utils/package_utility_apps.py DreamShell-dev.zip DreamShell-NeXT-Utility-Apps-2.0.zip
+        run: python3 utils/package_utility_apps.py DreamShell-dev.zip DreamShell-NeXT-Utility-Apps-2.1.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-NeXT-Utility-Apps-2.0
-          path: DreamShell-NeXT-Utility-Apps-2.0.zip
+          name: DreamShell-NeXT-Utility-Apps-2.1
+          path: DreamShell-NeXT-Utility-Apps-2.1.zip
           if-no-files-found: error
           retention-days: 30

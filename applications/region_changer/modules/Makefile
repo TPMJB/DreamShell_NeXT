@@ -5,15 +5,14 @@
 #
 
 APP_NAME = region_changer
-LUA_MODULE_NAME = RC
 TARGET_NAME = app_$(APP_NAME)
-OBJS = module.o flashrom.o
-DBG_LIBS = -lds -ltolua
+OBJS = module.o
+DBG_LIBS = -lds
 EXPORTS_FILE = exports.txt
 
-VER_MAJOR = 1
-VER_MINOR = 8
-VER_MICRO = 5
+VER_MAJOR = 2
+VER_MINOR = 0
+VER_MICRO = 0
 
 KOS_CFLAGS += -I./
 
@@ -21,7 +20,6 @@ all: rm-elf
 
 include ../../../sdk/Makefile.loadable
 
-KOS_CFLAGS += -I$(DS_SDK)/include/lua
 
 rm-elf:
 	-rm -f $(TARGET)

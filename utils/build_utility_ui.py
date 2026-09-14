@@ -5,7 +5,6 @@ XML and SVG are the sources shipped with the project; CairoSVG rasterizes
 the SVG icons to native 64x64 PNGs for the Dreamcast launcher.
 """
 from pathlib import Path
-from cairosvg import svg2png
 import xml.etree.ElementTree as E
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -140,6 +139,7 @@ ICONS={
 }
 
 def icons():
+    from cairosvg import svg2png
     for folder,(color,glyph) in ICONS.items():
         path=ROOT/f'applications/{folder}/images'
         path.mkdir(exist_ok=True)

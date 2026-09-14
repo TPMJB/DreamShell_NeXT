@@ -1,485 +1,171 @@
-/* DreamShell ##version##
-
-   module.c - Memtest app module
-   Copyright (C) 2026 SWAT
-*/
-
-#include <ds.h>
-#include <dc/memory.h>
-#include <dc/pvr.h>
+/* DreamShell NeXT Memtest. Memory engine (C) 2026 SWAT, unchanged.
+ * Native interface and diagnostic reports (C) 2026 contributors. */
+#include "ds.h"
 #include <dc/spu.h>
-#include <stdio.h>
-#include "app_module.h"
 #include "memtest_core.h"
-
+#include "../../maintenance_ui.h"
 DEFAULT_MODULE_EXPORTS(app_memtest);
 
-#define RESULT_BODY_SIZE 2048
-
-typedef struct {
-    GUI_Widget *row;
-    GUI_Widget *chk;
-    GUI_Widget *name;
-    GUI_Widget *size;
-    GUI_Widget *addr;
-    GUI_Widget *result;
-} region_ui_t;
-
+static const unsigned cycles[] = {1, 3, 10};
+static const char *subnames[] = {"Data bus", "Address bus", "Device patterns"};
 static struct {
-    App_t *app;
-    GUI_Widget *sys_label;
-    GUI_Widget *pbar;
-    GUI_Widget *status;
-    GUI_Widget *start_btn;
-    GUI_Widget *stop_btn;
-    GUI_Widget *quick_chk;
-    GUI_Widget *dialog;
-    region_ui_t rows[MEMTEST_REGIONS_MAX];
     memtest_plan_t plan;
-    char result_body[RESULT_BODY_SIZE];
-    volatile int testing;
+    memtest_region_t results[MEMTEST_REGIONS_MAX];
+    int errors[MEMTEST_REGIONS_MAX], completed[MEMTEST_REGIONS_MAX];
+    int options, cycle, stop_first, ran, saved;
+    char folder[MA_PATH], report[24576];
 } self;
-
-static const char *sub_tag(int id) {
-    switch(id) {
-        case MEMTEST_SUB_DATABUS:
-            return "Data";
-        case MEMTEST_SUB_ADDRBUS:
-            return "Addr";
-        case MEMTEST_SUB_DEVICE:
-            return "Dev";
-        default:
-            return "Test";
-    }
-}
-
-static const char *status_text(int status) {
+static const char *state(int status) {
     switch(status) {
-        case MEMTEST_ST_PASS:
-            return "PASS";
-        case MEMTEST_ST_FAIL:
-            return "FAIL";
-        case MEMTEST_ST_SKIPPED:
-            return "Skip";
-        case MEMTEST_ST_RUNNING:
-            return "Running";
-        default:
-            return "--";
+        case MEMTEST_ST_PASS: return "PASS";
+        case MEMTEST_ST_FAIL: return "FAIL";
+        case MEMTEST_ST_SKIPPED: return "SKIPPED";
+        case MEMTEST_ST_RUNNING: return "RUNNING";
+        default: return "Not tested";
     }
 }
-
-static void format_size(size_t bytes, char *buf, size_t len) {
-    if(bytes >= 1024 * 1024) {
-        snprintf(buf, len, "%u MB", (unsigned)(bytes / (1024 * 1024)));
-        return;
-    }
-    if(bytes >= 1024) {
-        snprintf(buf, len, "%u KB", (unsigned)(bytes / 1024));
-        return;
-    }
-    snprintf(buf, len, "%u B", (unsigned)bytes);
-}
-
-static void format_addr(uintptr_t addr, char *buf, size_t len) {
-    snprintf(buf, len, "%08lX", (unsigned long)(addr & MEM_AREA_CACHE_MASK));
-}
-
-static void set_controls(int running) {
-    int i;
-
-    GUI_WidgetSetEnabled(self.start_btn, !running);
-    GUI_WidgetSetEnabled(self.stop_btn, running);
-    if(self.quick_chk) {
-        GUI_WidgetSetEnabled(self.quick_chk, !running);
-    }
-    for(i = 0; i < self.plan.region_count; i++) {
-        if(self.rows[i].chk) {
-            GUI_WidgetSetEnabled(self.rows[i].chk, !running);
+static void refresh(void) {
+    if(self.options) {
+        ma_row(0, "Mode:  %s", self.plan.quick ? "Quick / data + address bus" : "Full / all three subtests");
+        ma_row(1, "Passes:  %u", cycles[self.cycle]);
+        ma_row(2, "Stop on first failure:  %s", self.stop_first ? "On" : "Off");
+        ma_row(3, "Report folder:  %s", *self.folder ? ma_tail(self.folder, 50) : "Choose...");
+        ma_row(4, "Coverage:  A to read what the test covers");
+        ma_row(5, "Return to regions and results");
+    } else {
+        for(int i = 0; i < 5; i++) {
+            if(i < self.plan.region_count) {
+                memtest_region_t *r = &self.plan.regions[i], *result = &self.results[i];
+                ma_row(i, "%s  %-12s  %u MiB  /  %s%s", r->enabled ? "[x]" : "[ ]", r->name,
+                    (unsigned)(r->size / 1048576), self.errors[i] ? "ERROR" : state(result->status),
+                    self.completed[i] ? "  (details: X)" : "");
+            } else ma_row(i, "--");
         }
+        ma_row(5, "%s  /  %s  /  %u passes", self.plan.hw_name,
+            self.plan.quick ? "Quick" : "Full", cycles[self.cycle]);
     }
+    ma_text(ui.detail[0], "A toggles a region. Left / X shows its last subtests. Options sets the test mode.");
+    ma_text(ui.detail[1], "Screen / sound may pause. B stops between regions; wait for the current test.");
 }
-
-static void refresh_row(int index) {
-    memtest_region_t *reg;
-    char buf[64];
-
-    if(index < 0 || index >= self.plan.region_count) {
-        return;
+static void region_details(int index) {
+    if(index >= self.plan.region_count) return;
+    memtest_region_t *r = &self.results[index];
+    char body[900] = "";
+    ma_append(body, sizeof(body), "%s / %s / %d completed passes\n", self.plan.regions[index].name,
+        self.errors[index] ? "Engine / allocation error" : state(r->status), self.completed[index]);
+    for(int s = 0; s < 3; s++) {
+        memtest_sub_t *sub = &r->sub[s];
+        ma_append(body, sizeof(body), "\n%s: %s", subnames[s], state(sub->status));
+        if(sub->status == MEMTEST_ST_FAIL) ma_append(body, sizeof(body),
+            "\nAddress %08lX / expected %08lX / got %08lX",
+            (unsigned long)sub->fail_addr, (unsigned long)sub->expected, (unsigned long)sub->actual);
     }
-
-    reg = &self.plan.regions[index];
-    if(!self.rows[index].result) {
-        return;
-    }
-
-    if(reg->status == MEMTEST_ST_FAIL) {
-        snprintf(buf, sizeof(buf), "FAIL @%08lX",
-            (unsigned long)(reg->fail_addr & MEM_AREA_CACHE_MASK));
-        GUI_LabelSetText(self.rows[index].result, buf);
-        return;
-    }
-    if(reg->status == MEMTEST_ST_PASS) {
-        snprintf(buf, sizeof(buf), "PASS  %u ms", (unsigned)reg->msec);
-        GUI_LabelSetText(self.rows[index].result, buf);
-        return;
-    }
-    GUI_LabelSetText(self.rows[index].result, status_text(reg->status));
+    ma_append(body, sizeof(body), "\n\nFirst failure is retained across subsequent passes.");
+    ma_ask(99, "Memory region results", body);
 }
-
-static void format_mb(size_t bytes, char *buf, size_t len) {
-    snprintf(buf, len, "%u", (unsigned)(bytes / (1024 * 1024)));
-}
-
-static void update_sys_label(void) {
-    char buf[160];
-    char ram[8];
-    char vram[8];
-    char aica[8];
-
-    format_mb(self.plan.ram_size, ram, sizeof(ram));
-    format_mb(self.plan.aica_size, aica, sizeof(aica));
-    format_mb(self.plan.vram_size, vram, sizeof(vram));
-
-    if(self.plan.vram_b_size) {
-        char elan[8];
-        char vram_b[8];
-        format_mb(self.plan.elan_size, elan, sizeof(elan));
-        format_mb(self.plan.vram_b_size, vram_b, sizeof(vram_b));
-        snprintf(buf, sizeof(buf), "Memtest  %s  RAM %sMB  VRAM %s+%sMB  AICA %sMB  Elan %sMB",
-            self.plan.hw_name, ram, vram, vram_b, aica, elan);
-    }
-    else {
-        snprintf(buf, sizeof(buf), "Memtest  %s  RAM %sMB  VRAM %sMB  AICA %sMB",
-            self.plan.hw_name, ram, vram, aica);
-    }
-
-    if(self.sys_label) {
-        GUI_LabelSetText(self.sys_label, buf);
-        GUI_WidgetSetAlign(self.sys_label, WIDGET_HORIZ_CENTER | WIDGET_VERT_CENTER);
-    }
-}
-
-static void bind_rows(void) {
-    int i;
-    char name[32];
-    char buf[32];
-
-    for(i = 0; i < MEMTEST_REGIONS_MAX; i++) {
-        snprintf(name, sizeof(name), "row-%d", i);
-        self.rows[i].row = APP_GET_WIDGET(name);
-        snprintf(name, sizeof(name), "chk-%d", i);
-        self.rows[i].chk = APP_GET_WIDGET(name);
-        snprintf(name, sizeof(name), "name-%d", i);
-        self.rows[i].name = APP_GET_WIDGET(name);
-        snprintf(name, sizeof(name), "size-%d", i);
-        self.rows[i].size = APP_GET_WIDGET(name);
-        snprintf(name, sizeof(name), "addr-%d", i);
-        self.rows[i].addr = APP_GET_WIDGET(name);
-        snprintf(name, sizeof(name), "result-%d", i);
-        self.rows[i].result = APP_GET_WIDGET(name);
-
-        if(i >= self.plan.region_count) {
-            if(self.rows[i].row) {
-                GUI_WidgetSetFlags(self.rows[i].row, WIDGET_HIDDEN);
+static void run(void) {
+    int enabled = 0;
+    for(int i = 0; i < self.plan.region_count; i++) enabled += !!self.plan.regions[i].enabled;
+    if(!enabled) { ma_status("Select at least one memory region.", 1); return; }
+    ma_busy(1); self.plan.cancel = 0; self.ran = 1; self.saved = 0; self.options = 0;
+    memset(self.results, 0, sizeof(self.results));
+    memset(self.errors, 0, sizeof(self.errors)); memset(self.completed, 0, sizeof(self.completed));
+    snprintf(self.report, sizeof(self.report), "DreamShell NeXT Memtest\nHardware: %s\nMode: %s\nRequested passes: %u\nStop on failure: %s\nCoverage: detected memory regions; live RAM execution island excluded.\nEngine backs up/restores tested chunks. Quick omits device patterns.\nStopping takes effect between regions. No claim of exhaustive hardware coverage.\n",
+        self.plan.hw_name, self.plan.quick ? "Quick" : "Full", cycles[self.cycle], self.stop_first ? "yes" : "no");
+    int failures = 0, tested = 0, stop = 0;
+    for(unsigned pass = 0; pass < cycles[self.cycle] && !stop; pass++) {
+        for(int i = 0; i < self.plan.region_count; i++) {
+            memtest_region_t *r = &self.plan.regions[i];
+            if(!r->enabled) {
+                if(!self.completed[i]) self.results[i].status = MEMTEST_ST_SKIPPED;
+                continue;
             }
-            continue;
-        }
-
-        if(self.rows[i].row) {
-            GUI_WidgetClearFlags(self.rows[i].row, WIDGET_HIDDEN);
-        }
-        if(self.rows[i].name) {
-            GUI_LabelSetText(self.rows[i].name, self.plan.regions[i].name);
-        }
-        format_size(self.plan.regions[i].size, buf, sizeof(buf));
-        if(self.rows[i].size) {
-            GUI_LabelSetText(self.rows[i].size, buf);
-        }
-        format_addr(self.plan.regions[i].base, buf, sizeof(buf));
-        if(self.rows[i].addr) {
-            GUI_LabelSetText(self.rows[i].addr, buf);
-        }
-        if(self.rows[i].chk) {
-            GUI_WidgetSetState(self.rows[i].chk, self.plan.regions[i].enabled);
-        }
-        if(self.rows[i].result) {
-            GUI_LabelSetText(self.rows[i].result, "--");
+            if(!ma_pump()) { self.plan.cancel = 1; stop = 1; break; }
+            /* Reset this pass, while keeping the first failed result separately. */
+            memset(r->sub, 0, sizeof(r->sub)); r->status = MEMTEST_ST_IDLE;
+            r->fail_addr = 0; r->msec = 0;
+            char text[150]; snprintf(text, sizeof(text), "Pass %u/%u: testing %s. Please wait...", pass + 1, cycles[self.cycle], r->name);
+            ma_status(text, 0);
+            ma_note("The current memory test must finish before B can stop the remaining regions.");
+            ma_row(i, "[x]  %s  /  RUNNING", r->name);
+            thd_sleep(50);
+            int video = r->type == MEMTEST_REGION_RAM || r->type == MEMTEST_REGION_VRAM;
+            if(video) { ShutdownVideoThread(); pvr_wait_ready(); pvr_wait_render_done(); }
+            if(r->type == MEMTEST_REGION_AICA) spu_disable();
+            int rc = memtest_run_region(&self.plan, i);
+            if(r->type == MEMTEST_REGION_AICA) spu_enable();
+            if(video) {
+                InitVideoThread();
+                LockVideo(); GUI_ScreenDoUpdate(GUI_GetScreen(), 1); UnlockVideo();
+            }
+            int data_failure = 0;
+            for(int s = 0; s < 3; s++) data_failure |= r->sub[s].status == MEMTEST_ST_FAIL;
+            int error = rc < 0 && !data_failure;
+            int failed = rc < 0 || r->status == MEMTEST_ST_FAIL;
+            if(failed) failures++;
+            if(self.results[i].status != MEMTEST_ST_FAIL && !self.errors[i]) {
+                self.results[i] = *r; self.errors[i] = error;
+            }
+            self.completed[i]++; tested++;
+            ma_append(self.report, sizeof(self.report), "\nPass %u / %s / %s / %lu bytes at %08lX / %lu ms\n",
+                pass + 1, r->name, error ? "ENGINE ERROR" : state(r->status),
+                (unsigned long)r->size, (unsigned long)r->base, (unsigned long)r->msec);
+            for(int s = 0; s < 3; s++) ma_append(self.report, sizeof(self.report),
+                "%s: %s / address %08lX / expected %08lX / actual %08lX\n", subnames[s],
+                state(r->sub[s].status), (unsigned long)r->sub[s].fail_addr,
+                (unsigned long)r->sub[s].expected, (unsigned long)r->sub[s].actual);
+            refresh(); ma_progress(tested, enabled * cycles[self.cycle]);
+            if(failed && self.stop_first) { stop = 1; break; }
         }
     }
+    char status[150];
+    snprintf(status, sizeof(status), "%s: %d/%u region tests completed, %d failures / errors.",
+        failures ? "FAILED" : self.plan.cancel ? "STOPPED" : "PASS", tested,
+        enabled * cycles[self.cycle], failures);
+    ma_append(self.report, sizeof(self.report), "\n%s\n", status);
+    ma_status(status, failures != 0); ma_note("X shows subtests for the selected region. Save report keeps the full run history.");
+    ma_busy(0); refresh();
 }
-
-static void read_options(void) {
-    int i;
-
-    self.plan.quick = self.quick_chk && GUI_WidgetGetState(self.quick_chk);
-    for(i = 0; i < self.plan.region_count; i++) {
-        if(self.rows[i].chk) {
-            self.plan.regions[i].enabled = GUI_WidgetGetState(self.rows[i].chk);
-        }
-    }
+static void save_report(void) {
+    if(!self.ran) { ma_status("Run a test before saving a report.", 0); return; }
+    char path[MA_PATH] = "";
+    int rc = ma_save_verified(self.folder, "memtest", "txt", self.report, strlen(self.report), path, sizeof(path));
+    if(!rc) self.saved = 1;
+    ma_status(rc ? "Could not save and verify the report." : "Memory test report saved and verified.", rc != 0); ma_note(path);
 }
-
-static void append_body(const char *line) {
-    size_t used = strlen(self.result_body);
-
-    if(used >= sizeof(self.result_body) - 1) {
-        return;
-    }
-    strncat(self.result_body, line, sizeof(self.result_body) - used - 1);
+static void confirm(int action) { if(action == 1) run(); else if(action == 2) OpenMainApp(); }
+static void picked(int purpose, const char *path) {
+    (void)purpose; snprintf(self.folder, MA_PATH, "%s", path);
+    refresh(); ma_status("Report folder selected.", 0); ma_note(path);
 }
-
-static void append_sub(char *line, size_t len, const memtest_sub_t *sub, int id) {
-    char piece[128];
-    size_t used;
-
-    if(sub->status == MEMTEST_ST_IDLE) {
-        return;
-    }
-    if(sub->status == MEMTEST_ST_FAIL) {
-        snprintf(piece, sizeof(piece),
-            "%s%s [color=red]FAIL[/color] @%08lX exp %08lX got %08lX",
-            line[0] ? "  " : "",
-            sub_tag(id),
-            (unsigned long)(sub->fail_addr & MEM_AREA_CACHE_MASK),
-            (unsigned long)sub->expected,
-            (unsigned long)sub->actual);
-    }
-    else {
-        snprintf(piece, sizeof(piece),
-            "%s%s [color=green]%s[/color]",
-            line[0] ? "  " : "",
-            sub_tag(id), status_text(sub->status));
-    }
-    used = strlen(line);
-    if(used >= len - 1) {
-        return;
-    }
-    strncat(line, piece, len - used - 1);
+static void row(int index, int step) {
+    if(self.options) {
+        if(index == 0) self.plan.quick = !self.plan.quick;
+        else if(index == 1) self.cycle = (self.cycle + step + 3) % 3;
+        else if(index == 2) self.stop_first = !self.stop_first;
+        else if(index == 3) { ma_browse(0, 1, self.folder); return; }
+        else if(index == 4) { ma_ask(99, "Test coverage", "Quick: data bus and address bus tests.\nFull: also runs device data patterns.\n\nMemory chunks are backed up and restored.\nLive RAM code / workspace is excluded.\nThe screen can pause during RAM / video tests.\nB stops between regions, not inside a subtest."); return; }
+        else if(index == 5) self.options = 0;
+    } else if(index < self.plan.region_count) {
+        if(step < 0) { region_details(index); return; }
+        self.plan.regions[index].enabled = !self.plan.regions[index].enabled;
+    } else if(index == 5) self.options = 1;
+    refresh();
 }
-
-static void build_results(void) {
-    int i;
-    int s;
-    int max_sub;
-    char title[128];
-    char subs[384];
-    memtest_region_t *reg;
-    const char *color;
-
-    self.result_body[0] = '\0';
-    max_sub = self.plan.quick ? MEMTEST_SUB_ADDRBUS : (MEMTEST_SUBTESTS - 1);
-
-    for(i = 0; i < self.plan.region_count; i++) {
-        reg = &self.plan.regions[i];
-        if(!reg->enabled) {
-            continue;
-        }
-        color = (reg->status == MEMTEST_ST_FAIL) ? "red" :
-            (reg->status == MEMTEST_ST_PASS) ? "green" : "blue";
-        if(reg->status == MEMTEST_ST_FAIL && reg->fail_addr) {
-            snprintf(title, sizeof(title),
-                "[size=18][b]%s[/b][/size]  [color=%s][b]%s[/b][/color]  @%08lX  %u ms\n",
-                reg->name, color, status_text(reg->status),
-                (unsigned long)(reg->fail_addr & MEM_AREA_CACHE_MASK),
-                (unsigned)reg->msec);
-        }
-        else {
-            snprintf(title, sizeof(title),
-                "[size=18][b]%s[/b][/size]  [color=%s][b]%s[/b][/color]  %u ms\n",
-                reg->name, color, status_text(reg->status), (unsigned)reg->msec);
-        }
-        append_body(title);
-
-        subs[0] = '\0';
-        for(s = 0; s <= max_sub; s++) {
-            append_sub(subs, sizeof(subs), &reg->sub[s], s);
-        }
-        if(subs[0]) {
-            append_body(subs);
-            append_body("\n");
-        }
-        append_body("\n");
-    }
+static void action(int index) {
+    if(index == 0) ma_ask(1, "Start memory test?", "Screen and sound may pause during testing.\nMemory chunks are backed up and restored.\nB stops after the current region finishes.\n\nThis replaces the previous in-app report.\nSave it first if you want to keep it.\n\nStart the selected tests?");
+    else if(index == 1) save_report();
+    else { self.options = !self.options; refresh(); }
 }
-
-static void show_dialog(GUI_DialogMode mode, const char *title, const char *body) {
-    if(!self.dialog) {
-        return;
-    }
-    GUI_DialogShow(self.dialog, mode, title, body);
+static void back(void) {
+    if(self.ran && !self.saved) ma_ask(2, "Leave without saving results?", "The current test report has not been saved.\nReturn to the menu?");
+    else OpenMainApp();
 }
-
-static void hide_dialog(void) {
-    if(self.dialog) {
-        GUI_DialogHide(self.dialog);
-    }
+void Memtest_Init(App_t *app) {
+    memset(&self, 0, sizeof(self)); ma_init(app, "NextMemtestInput");
+    memtest_plan_init(&self.plan); self.stop_first = 1;
+    snprintf(self.folder, MA_PATH, "%s", ma_default_folder());
+    ui.row = row; ui.action = action; ui.confirm = confirm; ui.picked = picked; ui.back = back;
+    refresh(); ma_status("Select memory regions, review Options, then Run test.", 0);
 }
-
-static void *memtest_thread(void *arg) {
-    int i;
-    char status[96];
-    memtest_region_t *reg;
-
-    (void)arg;
-    self.testing = 1;
-    self.plan.cancel = 0;
-    self.result_body[0] = '\0';
-
-    for(i = 0; i < self.plan.region_count; i++) {
-        reg = &self.plan.regions[i];
-        if(!reg->enabled || self.plan.cancel) {
-            reg->status = MEMTEST_ST_SKIPPED;
-            refresh_row(i);
-            continue;
-        }
-
-        if(reg->type == MEMTEST_REGION_RAM) {
-            snprintf(status, sizeof(status), "Testing %s (screen may freeze)...", reg->name);
-        }
-        else if(reg->type == MEMTEST_REGION_VRAM) {
-            snprintf(status, sizeof(status),
-                "Testing %s (brief screen glitches possible)...", reg->name);
-        }
-        else {
-            snprintf(status, sizeof(status), "Testing %s...", reg->name);
-        }
-        GUI_LabelSetText(self.status, status);
-        GUI_ProgressBarSetPosition(self.pbar, (float)i / (float)self.plan.region_count);
-        ds_printf("DS_PROCESS: Memtest %s...\n", reg->name);
-        thd_sleep(80);
-
-        if(reg->type == MEMTEST_REGION_RAM || reg->type == MEMTEST_REGION_VRAM) {
-            ShutdownVideoThread();
-            pvr_wait_ready();
-            pvr_wait_render_done();
-        }
-        if(reg->type == MEMTEST_REGION_AICA) {
-            spu_disable();
-        }
-
-        memtest_run_region(&self.plan, i);
-
-        if(reg->type == MEMTEST_REGION_AICA) {
-            spu_enable();
-        }
-        if(reg->type == MEMTEST_REGION_RAM || reg->type == MEMTEST_REGION_VRAM) {
-            InitVideoThread();
-        }
-
-        ds_printf("DS_OK: Memtest %s: %s (%u ms)\n",
-            reg->name, status_text(reg->status), (unsigned)reg->msec);
-        refresh_row(i);
-        GUI_ProgressBarSetPosition(self.pbar,
-            (float)(i + 1) / (float)self.plan.region_count);
-    }
-
-    GUI_ProgressBarSetPosition(self.pbar, 1.0);
-    if(self.plan.cancel) {
-        GUI_LabelSetText(self.status, "Stopped");
-    }
-    else {
-        GUI_LabelSetText(self.status, "Done");
-    }
-
-    build_results();
-    show_dialog(DIALOG_MODE_ALERT, "Memtest results", self.result_body);
-
-    self.testing = 0;
-    set_controls(0);
-    if(self.app) {
-        self.app->thd = NULL;
-    }
-    return NULL;
-}
-
-void MemtestApp_Start(GUI_Widget *widget) {
-    int i;
-    int any;
-
-    (void)widget;
-
-    if(self.testing) {
-        return;
-    }
-
-    memtest_plan_init(&self.plan);
-    read_options();
-    bind_rows();
-    update_sys_label();
-
-    any = 0;
-    for(i = 0; i < self.plan.region_count; i++) {
-        if(self.plan.regions[i].enabled) {
-            any = 1;
-            break;
-        }
-    }
-    if(!any) {
-        GUI_LabelSetText(self.status, "Select at least one region");
-        return;
-    }
-    GUI_ProgressBarSetPosition(self.pbar, 0.0);
-    GUI_LabelSetText(self.status, "Starting...");
-    set_controls(1);
-
-    self.app->thd = thd_create(0, memtest_thread, NULL);
-}
-
-void MemtestApp_Stop(GUI_Widget *widget) {
-    (void)widget;
-    self.plan.cancel = 1;
-    GUI_LabelSetText(self.status, "Stopping...");
-}
-
-void MemtestApp_DialogConfirm(GUI_Widget *widget) {
-    (void)widget;
-    hide_dialog();
-}
-
-void MemtestApp_Init(App_t *app) {
-    memset(&self, 0, sizeof(self));
-
-    if(!app) {
-        ds_printf("DS_ERROR: %s: Attempting to call %s is not by the app initiate.\n",
-            lib_get_name(), __func__);
-        return;
-    }
-
-    self.app = app;
-    self.sys_label = APP_GET_WIDGET("sys-label");
-    self.pbar = APP_GET_WIDGET("progress-bar");
-    self.status = APP_GET_WIDGET("status-label");
-    self.start_btn = APP_GET_WIDGET("start_btn");
-    self.stop_btn = APP_GET_WIDGET("stop_btn");
-    self.quick_chk = APP_GET_WIDGET("quick-checkbox");
-    self.dialog = APP_GET_WIDGET("results-dialog");
-
-    memtest_plan_init(&self.plan);
-    bind_rows();
-    update_sys_label();
-    set_controls(0);
-    GUI_ProgressBarSetPosition(self.pbar, 0.0);
-    GUI_LabelSetText(self.status, "Ready");
-}
-
-void MemtestApp_Open(App_t *app) {
-    if(app) {
-        self.app = app;
-    }
-    if(!self.testing) {
-        memtest_plan_init(&self.plan);
-        bind_rows();
-        update_sys_label();
-        GUI_LabelSetText(self.status, "Ready");
-    }
-}
-
-void MemtestApp_Shutdown(App_t *app) {
-    (void)app;
-    self.plan.cancel = 1;
-    if(self.app && self.app->thd) {
-        thd_join(self.app->thd, NULL);
-        self.app->thd = NULL;
-    }
-    self.testing = 0;
-}
+MAINTENANCE_CALLBACKS(Memtest)
