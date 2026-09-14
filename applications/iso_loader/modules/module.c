@@ -63,8 +63,6 @@ static struct {
 	bool have_args;
 	volatile int loading;
 	int profile_mode;
-	int nav_preview;
-    int toolbar_index;
 	GUI_Widget *status, *summary, *verify_boot, *preview_media, *message;
 	GUI_Widget *btn_check;
 	Event_t *input_event;
@@ -281,8 +279,8 @@ void isoLoader_ShowPage(GUI_Widget *widget) {
         GUI_WidgetSetFlags(self.run_pane, WIDGET_HIDDEN);
         GUI_WidgetSetFlags(self.status, WIDGET_HIDDEN);
     }
-    GUI_ScreenSetJoySelectState(GUI_GetScreen(), games_page ? 0 : 1);
-    SDL_DC_EmulateMouse(games_page ? SDL_FALSE : SDL_TRUE);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    SDL_DC_EmulateMouse(SDL_TRUE);
 	next_refresh();
 	GUI_WidgetMarkChanged(self.run_pane);
 }
@@ -2044,7 +2042,7 @@ void isoLoader_ItemChange(dirent_fm_t *fm_ent, int change_dir) {
 }
 
 void isoLoader_ItemClick(dirent_fm_t *fm_ent) {
-	isoLoader_ItemChange(fm_ent, !self.nav_preview);
+	isoLoader_ItemChange(fm_ent, 1);
 }
 
 void isoLoader_ItemContextClick(dirent_fm_t *fm_ent) {
@@ -2542,7 +2540,6 @@ void isoLoader_Init(App_t *app) {
 
 		self.app = app;
 		self.current_dev = -1;
-        self.toolbar_index = -1;
 		self.current_item = -1;
 		self.current_item_dir = -1;
 		self.sector_size = 2048;

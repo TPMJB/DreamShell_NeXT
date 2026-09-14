@@ -18,7 +18,7 @@ def compile_run(source, flags=()):
                         "-fsanitize=undefined", "-fno-sanitize-recover=all",
                         "-I", str(ROOT / "include"), *flags, str(c), "-o", str(exe)],
                        check=True)
-        subprocess.run([str(exe)], check=True)
+        subprocess.run([str(exe)], check=True, cwd=tmp)
 
 class LoaderChecks(unittest.TestCase):
     def test_crc_memory_and_elf_bounds(self):
@@ -77,6 +77,70 @@ int main(void) {
     return 0;
 }
 ''')
+
+    def test_production_gdi_preflight(self):
+        module=(ROOT/"modules/isoldr/module.c").read_text()
+        check=module[module.index("static int isoldr_check_gdi("):module.index("static int get_image_info(")]
+        support=r'''
+#include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <strings.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <isofs/gdi_parse.h>
+#define NAME_MAX 256
+#define FILEHND_INVALID -1
+typedef int file_t;
+#define fs_open open
+#define fs_close close
+#define fs_read read
+static size_t fs_total(file_t fd) {
+    struct stat st;
+    assert(!fstat(fd,&st));
+    return st.st_size;
+}
+static char error[256];
+static void isoldr_error(const char *fmt,...) {
+    va_list args; va_start(args,fmt);
+    vsnprintf(error,sizeof(error),fmt,args); va_end(args);
+}
+static void descriptor(const char *text) {
+    FILE *f=fopen("disc.gdi","wb"); assert(f);
+    assert(fwrite(text,1,strlen(text),f)==strlen(text));
+    assert(!fclose(f)); error[0]=0;
+}
+'''
+        cases=r'''
+int main(void) {
+    /* GD Ripper's six-field output, through the production preflight rather
+     * than just the line parser. Tiny synthetic tracks suffice for this check. */
+    const char *tracks[]={"track01.bin","track02.raw","track03.bin"};
+    char sector[2352]={0};
+    for(int i=0;i<3;++i) {
+        FILE *f=fopen(tracks[i],"wb"); assert(f);
+        assert(fwrite(sector,1,sizeof(sector),f)==sizeof(sector));
+        assert(!fclose(f));
+    }
+    descriptor("3\n1 0 4 2352 track01.bin 0\n2 450 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n");
+    assert(isoldr_check_gdi("disc.gdi")==0);
+    descriptor("3\r\n1 0 4 2352 \"track01.bin\" 0\r\n2 450 0 2352 track02.raw 0\r\n3 45000 4 2352 track03.bin 0");
+    assert(isoldr_check_gdi("disc.gdi")==0);
+    descriptor("1\n1 0 4 invalid track01.bin 0\n");
+    assert(isoldr_check_gdi("disc.gdi")==-1);
+    assert(strstr(error,"Cannot parse GDI track 1") && strstr(error,"1 0 4 invalid"));
+    descriptor("1\n2 0 4 2352 track01.bin 0\n");
+    assert(isoldr_check_gdi("disc.gdi")==-1 && strstr(error,"entry 1 has track number 2"));
+    descriptor("2\n1 0 4 2352 track01.bin 0\n2 0 0 2352 track02.raw 0\n");
+    assert(isoldr_check_gdi("disc.gdi")==-1 && strstr(error,"must increase"));
+    return 0;
+}
+'''
+        compile_run(support+check+cases)
 
     def test_production_reader_faults_and_raw_tails(self):
         reader=(ROOT/"firmware/isoldr/loader/reader.c").read_text()
@@ -183,7 +247,7 @@ int main(void) {
                   "message-panel","check-game","baseline","restore-profile","details",
                   "file_browser","run_iso","pages","run-panel",*(f"message-{i}" for i in range(6))}
         self.assertFalse(required-names)
-        self.assertEqual(root.get("version"),"2.0.0")
+        self.assertEqual(root.get("version"),"2.0.1")
         exports=(ROOT/"applications/iso_loader/modules/exports.txt").read_text()
         for e in body.iter():
             for attr in ("onclick","onselect","oncontextclick","onload","onopen","onclose","onunload"):

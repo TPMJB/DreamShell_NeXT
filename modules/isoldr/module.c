@@ -247,9 +247,21 @@ static int isoldr_check_gdi(const char *filename) {
         if(!line) { isoldr_error("GDI descriptor has missing track entries.\n"); goto done; }
         next = strchr(line, '\n');
         if(next) *next++ = 0;
-        if(!ds_gdi_parse(line, &track) || track.number != (uint32_t)i ||
-           (i > 1 && track.lba <= last_lba)) {
-            isoldr_error("Invalid GDI entry for track %d.\n", i); goto done;
+        if(!ds_gdi_parse(line, &track)) {
+            isoldr_error("Cannot parse GDI track %d. Descriptor line:\n%.128s\n"
+                         "Please share the small .gdi file for diagnosis.\n", i, line);
+            goto done;
+        }
+        if(track.number != (uint32_t)i) {
+            isoldr_error("GDI entry %d has track number %lu.\nDescriptor line: %.128s\n",
+                         i, (unsigned long)track.number, line);
+            goto done;
+        }
+        if(i > 1 && track.lba <= last_lba) {
+            isoldr_error("GDI track %d starts at sector %lu, after track %d at %lu.\n"
+                         "Track start sectors must increase.\n",
+                         i, (unsigned long)track.lba, i - 1, (unsigned long)last_lba);
+            goto done;
         }
         last_lba = track.lba;
         char expected[32], path[NAME_MAX];

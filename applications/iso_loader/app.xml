@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app extensions=".iso .cso .zso .cdi .gdi .dni" icon="images/icon.png" name="ISO Loader" version="2.0.0">
+<app extensions=".iso .cso .zso .cdi .gdi .dni" icon="images/icon.png" name="ISO Loader" version="2.0.1">
   <resources>
     <module src="../../modules/minilzo.klf" />
     <module src="../../modules/isofs.klf" />
@@ -172,7 +172,7 @@
       <label text="ISO Loader" x="24" y="28" width="300" height="31" font="title-24" color="#EDF5FC" align="left" />
       <label text="TPMJB" x="486" y="9" width="128" height="23" font="arial-18" color="#53E1E3" align="right" />
       <label text="github.com/TPMJB" x="432" y="32" width="182" height="20" font="small-12" color="#9FB4C7" align="right" />
-      <label name="version" text="v2.0.0" x="542" y="51" width="72" height="18" font="small-12" color="#9FB4C7" align="right" />
+      <label name="version" text="v2.0.1" x="542" y="51" width="72" height="18" font="small-12" color="#9FB4C7" align="right" />
       <input name="btn_sd" type="button" x="24" y="68" width="48" height="30" normal="next-button" highlight="next-focus" pressed="next-focus" disabled="next-disabled" inactive="true">
         <label text="SD" x="0" y="0" width="100%" height="100%" font="arial" color="#EDF5FC" align="center" />
       </input>
@@ -668,7 +668,7 @@
         </panel>
       </panel>
     </cardstack>
-    <label name="launch-status" text="Choose a game. D-pad: browse   Start: play" x="24" y="420" width="592" height="20" font="small-12" color="#9FB4C7" align="left" />
+    <label name="launch-status" text="Stick: cursor   D-pad: focus   A: select   Start: play" x="24" y="420" width="592" height="20" font="small-12" color="#9FB4C7" align="left" />
     <panel name="run-panel" x="24" y="443" width="592" height="30">
       <input name="run_iso" type="button" x="0" y="0" width="96" height="30" normal="next-primary" highlight="next-focus" pressed="next-focus" disabled="next-disabled" onclick="export:isoLoader_Run()" inactive="true">
         <label text="Play" x="0" y="0" width="100%" height="100%" font="arial" color="#EDF5FC" align="center" />

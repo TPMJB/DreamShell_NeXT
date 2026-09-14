@@ -142,7 +142,7 @@ jobs:
           prefix='DS/apps/iso_loader/'
           with ZipFile('DreamShell-dev.zip') as full:
               assert full.testzip() is None
-              assert b'version="2.0.0"' in full.read(prefix+'app.xml')
+              assert b'version="2.0.1"' in full.read(prefix+'app.xml')
               for name in (prefix+'modules/app_iso_loader.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/firmware/isoldr/sd.elf'):
                   assert len(full.read(name)) > 1000, name
               import struct
@@ -162,7 +162,7 @@ jobs:
                   assert entry==vmin and vmax-vmin+1024<=2*1024*1024, (name,hex(entry),hex(vmin))
                   assert shsize==40 and shoff+shsize*shnum<=len(elf), name
                   print('Firmware layout:',name,'entry',hex(entry),'runtime bytes',vmax-vmin+1024)
-              with ZipFile('DreamShell-ISO-Loader-2.0.0.zip','w',ZIP_DEFLATED) as update:
+              with ZipFile('DreamShell-ISO-Loader-2.0.1.zip','w',ZIP_DEFLATED) as update:
                   sums=[]
                   for name in full.namelist():
                       include=(name.startswith(prefix) and not name.startswith(prefix+'presets/')) or name.startswith('DS/firmware/isoldr/') or name in ('DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/fonts/ttf/arial_lite.ttf','DS/fonts/ttf/m23.ttf')
@@ -181,6 +181,6 @@ jobs:
       - name: Upload update
         uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-ISO-Loader-2.0.0
-          path: DreamShell-ISO-Loader-2.0.0.zip
+          name: DreamShell-ISO-Loader-2.0.1
+          path: DreamShell-ISO-Loader-2.0.1.zip
           if-no-files-found: error

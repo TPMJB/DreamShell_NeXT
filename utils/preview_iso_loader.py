@@ -22,8 +22,8 @@ class Preview:
         self.modal=modal
         self.text={"game_title":"Evolution 2","game_title2":" ",
                    "launch-summary":"sd | Baseline (unsaved)",
-                   "launch-status":"Ready. Left/right: actions   Start: play   X: check   Y: settings",
-                   "version":"v2.0.0",
+                   "launch-status":"Stick: cursor   D-pad: focus   A: select   B: back   Start: play",
+                   "version":"v"+self.root.get("version"),
                    "message-0":"Executable read check passed.",
                    "message-1":"Play compares the standalone loader's read before launch.",
                    "message-2":"This checks executable data, not game compatibility."}
@@ -55,6 +55,7 @@ class Preview:
     def render(self,e,ox=0,oy=0,pw=640,ph=480):
         name=e.get("name","")
         if name=="message-panel" and not self.modal: return
+        if name=="pages" and self.modal: return
         x=ox+self.dim(e.get("x","0"),pw); y=oy+self.dim(e.get("y","0"),ph)
         w=self.dim(e.get("width",str(pw)),pw); h=self.dim(e.get("height",str(ph)),ph)
         if e.tag=="cardstack":

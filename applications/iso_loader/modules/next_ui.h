@@ -23,13 +23,15 @@ static void next_refresh(void) {
         !strncmp(self.preset_source, "Automatic", 9) ? "Automatic defaults" : "Saved game preset";
     snprintf(text, sizeof(text), "%s | %s", self.isoldr->fs_dev, profile);
     GUI_LabelSetText(self.summary, text);
-    next_status("Ready. Left/right: actions   Start: play   X: check   Y: settings");
+    next_status("Stick: cursor   D-pad: focus   A: select   B: back   Start: play");
 }
 
 void isoLoader_Dismiss(GUI_Widget *widget) {
     (void)widget;
     GUI_ScreenSetModalWidget(GUI_GetScreen(), NULL);
     GUI_WidgetSetFlags(self.message, WIDGET_HIDDEN);
+    GUI_WidgetClearFlags(self.pages, WIDGET_HIDDEN);
+    GUI_WidgetMarkChanged(self.app->body);
 }
 
 static void next_message(const char *text) {
@@ -52,14 +54,22 @@ static void next_message(const char *text) {
         snprintf(name, sizeof(name), "message-%d", i);
         GUI_LabelSetText(next_widget(name), line);
     }
+    /* Pause drawing the page behind the modal so asynchronous cover/list
+     * updates cannot paint over the error text. */
+    GUI_WidgetSetFlags(self.pages, WIDGET_HIDDEN);
+    GUI_WidgetClearFlags(self.filebrowser, WIDGET_PRESSED);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    SDL_DC_EmulateMouse(SDL_TRUE);
     GUI_WidgetClearFlags(self.message, WIDGET_HIDDEN);
+    GUI_WidgetMarkChanged(self.app->body);
+    GUI_WidgetMarkChanged(self.message);
     GUI_ScreenSetModalWidget(GUI_GetScreen(), self.message);
 }
 
 static void next_report(const char *path, const isoldr_info_t *info, uint32 addr, const char *stage) {
     char target[NAME_MAX], temp[NAME_MAX], previous[NAME_MAX];
     int n = snprintf(self.launch_report, sizeof(self.launch_report),
-        "DreamShell NeXT ISO Loader 2.0.0 / TPMJB\n"
+        "DreamShell NeXT ISO Loader 2.0.1 / TPMJB\n"
         "Stage: %s\nImage: %s\nProfile: %s\nPreset: %s\n"
         "Loader address: %08lx\n",
         stage, path, self.profile_mode ? "Baseline (unsaved)" : "Game settings",
@@ -207,33 +217,9 @@ void isoLoader_Up(GUI_Widget *widget) {
     next_refresh();
 }
 
-static void next_toolbar(int index) {
-    self.toolbar_index = index;
-    for(int i = 0; i < GUI_ContainerGetCount(self.run_pane); ++i) {
-        GUI_Widget *w = GUI_ContainerGetChild(self.run_pane, i);
-        if(i == index) GUI_WidgetSetFlags(w, WIDGET_INSIDE);
-        else GUI_WidgetClearFlags(w, WIDGET_INSIDE);
-    }
-}
-
-static void next_select_row(int delta, int activate) {
-    if(self.loading) return;
-    GUI_Widget *panel = GUI_FileManagerGetItemPanel(self.filebrowser);
-    int count = GUI_ContainerGetCount(panel);
-    int index = GUI_FileManagerGetSelectedItem(self.filebrowser);
-    if(index < 0) index = 0; else index += delta;
-    if(index < 0 || index >= count) return;
-    GUI_FileManagerSetSelectedItem(self.filebrowser, index);
-    SDL_Rect area = GUI_WidgetGetArea(panel);
-    int offset = GUI_PanelGetYOffset(panel), top = index * 30;
-    if(top < offset) offset = top;
-    else if(top + 30 > offset + area.h) offset = top + 30 - area.h;
-    GUI_PanelSetYOffset(panel, offset);
-    self.nav_preview = !activate;
-    GUI_WidgetClicked(GUI_FileManagerGetItem(self.filebrowser, index), 0, 0);
-    self.nav_preview = 0;
-}
-
+/* Keep the native pointer and focus traversal on every page. Dreamcast SDL
+ * emits both joystick A/B and mouse events, so activation must use the mouse
+ * events once, on release; handling joystick A as well would click twice. */
 static void next_input(void *event, void *param, int action) {
     (void)event;
     SDL_Event *e = param;
@@ -244,74 +230,54 @@ static void next_input(void *event, void *param, int action) {
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
         e->type = SDL_NOEVENT; return;
     }
-    int button = -1, vertical = 0, horizontal = 0;
-    if(e->type == SDL_JOYBUTTONDOWN) button = e->jbutton.button;
-    if(e->type == SDL_KEYDOWN) {
-        if(e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT)) return;
-        switch(e->key.keysym.sym) {
-            case SDLK_UP: vertical = -1; break;
-            case SDLK_DOWN: vertical = 1; break;
-            case SDLK_LEFT: horizontal = -1; break;
-            case SDLK_RIGHT: case SDLK_TAB: horizontal = 1; break;
-            case SDLK_RETURN: button = SDL_DC_A; break;
-            case SDLK_ESCAPE: case SDLK_BACKSPACE: button = SDL_DC_B; break;
-            case SDLK_x: button = SDL_DC_X; break;
-            case SDLK_y: button = SDL_DC_Y; break;
-            case SDLK_SPACE: button = SDL_DC_START; break;
-            default: break;
-        }
-    }
+    if((e->type == SDL_KEYDOWN || e->type == SDL_KEYUP) &&
+       (e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) return;
+    int key = (e->type == SDL_KEYDOWN || e->type == SDL_KEYUP) ? e->key.keysym.sym : SDLK_UNKNOWN;
+    int mouse = e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP;
+    int back = (mouse && e->button.button == SDL_BUTTON_RIGHT) ||
+        key == SDLK_ESCAPE || key == SDLK_BACKSPACE;
+    int accept = (mouse && e->button.button == SDL_BUTTON_LEFT) ||
+        key == SDLK_RETURN || key == SDLK_KP_ENTER;
+    int released = e->type == SDL_MOUSEBUTTONUP || e->type == SDL_KEYUP;
+
     if(!(GUI_WidgetGetFlags(self.message) & WIDGET_HIDDEN)) {
-        if(button == SDL_DC_A || button == SDL_DC_B) {
-            isoLoader_Dismiss(NULL); e->type = SDL_NOEVENT;
+        /* Consume the complete press/release pair inside the modal. Closing on
+         * joystick-down would leak its synthesized mouse click to the page. */
+        if(back || accept) {
+            if(released) isoLoader_Dismiss(NULL);
+        } else {
+            GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
         }
-        if(e->type != SDL_NOEVENT) GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
         e->type = SDL_NOEVENT; return;
     }
-    if(button == SDL_DC_START) { isoLoader_Run(NULL); e->type = SDL_NOEVENT; return; }
-    if(GUI_CardStackGetIndex(self.pages) != 0) {
-        if(button == SDL_DC_B) isoLoader_ShowGames(self.games);
-        else GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
-        e->type = SDL_NOEVENT; return;
-    }
-    if(e->type == SDL_JOYHATMOTION && !e->jhat.hat) {
-        vertical = e->jhat.value & SDL_HAT_UP ? -1 : e->jhat.value & SDL_HAT_DOWN ? 1 : 0;
-        horizontal = e->jhat.value & SDL_HAT_LEFT ? -1 : e->jhat.value & SDL_HAT_RIGHT ? 1 : 0;
-    }
-    if(vertical) { next_toolbar(-1); next_select_row(vertical, 0); }
-    else if(horizontal && !self.loading) {
-        int count = GUI_ContainerGetCount(self.run_pane), index = self.toolbar_index;
-        if(index < 0) index = horizontal > 0 ? -1 : 0;
-        for(int i = 0; i < count; ++i) {
-            index = (index + count + horizontal) % count;
-            GUI_Widget *w = GUI_ContainerGetChild(self.run_pane, index);
-            if(!(GUI_WidgetGetFlags(w) & WIDGET_DISABLED)) { next_toolbar(index); break; }
+    if(back) {
+        if(released) {
+            if(GUI_CardStackGetIndex(self.pages) != 0) isoLoader_ShowGames(self.games);
+            else isoLoader_Up(NULL);
         }
+    } else if((e->type == SDL_JOYBUTTONDOWN && e->jbutton.button == SDL_DC_START) ||
+              (e->type == SDL_KEYDOWN && key == SDLK_SPACE)) {
+        isoLoader_Run(NULL);
+    } else {
+        /* Native D-pad focus reaches the device bar, tabs, checkboxes, list
+         * and actions. X/Y + D-pad retain the file manager's row/page scrolling. */
+        GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
     }
-    else if(button == SDL_DC_A) {
-        if(self.toolbar_index >= 0)
-            GUI_WidgetClicked(GUI_ContainerGetChild(self.run_pane, self.toolbar_index), 0, 0);
-        else next_select_row(0, 1);
-    }
-    else if(button == SDL_DC_B) {
-        if(self.toolbar_index >= 0) next_toolbar(-1);
-        else isoLoader_Up(NULL);
-    }
-    else if(button == SDL_DC_X) isoLoader_Check(NULL);
-    else if(button == SDL_DC_Y && !self.loading) isoLoader_ShowSettings(self.settings);
-    else if(button == SDL_DC_START) isoLoader_Run(NULL);
-    else GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
     e->type = SDL_NOEVENT;
 }
 
 void isoLoader_Open(App_t *app) {
     (void)app;
-    if(!self.input_event) { next_status("Controller input unavailable. Reopen the app."); return; }
-    next_toolbar(-1);
-    GUI_DisableInput();
-    GUI_ScreenSetJoySelectState(GUI_GetScreen(), GUI_CardStackGetIndex(self.pages) == 0 ? 0 : 1);
-    SetEventActive(self.input_event, 1);
-    SDL_DC_EmulateMouse(GUI_CardStackGetIndex(self.pages) == 0 ? SDL_FALSE : SDL_TRUE);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    SDL_DC_EmulateMouse(SDL_TRUE);
+    if(self.input_event) {
+        GUI_DisableInput();
+        SetEventActive(self.input_event, 1);
+    } else {
+        GUI_EnableInput();
+        next_status("Use the cursor and Play button; shortcuts are unavailable.");
+        return;
+    }
     next_refresh();
 }
 void isoLoader_Close(void) {
