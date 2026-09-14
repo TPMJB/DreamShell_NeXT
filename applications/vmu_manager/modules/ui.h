@@ -1,6 +1,7 @@
 /* Controller-first presentation layer. The worker serializes VMU/storage IO;
  * the input thread remains available for modal confirmation and keyboard input. */
 #include "ui_logic.h"
+#include <dc/maple/keyboard.h>
 
 enum { UI_UP=1, UI_DOWN, UI_LEFT, UI_RIGHT, UI_ACTIVATE, UI_BACK, UI_COPY,
        UI_TOOLS, UI_WIDGET, UI_ENTRY, UI_PREVIEW, UI_DELETE };
@@ -9,11 +10,10 @@ typedef struct { GUI_Widget *w; int x, y; } ui_node_t;
 static struct {
     kthread_t *worker;
     Event_t *input;
-    volatile int job, busy, stop, modal, answer, armed, key_held;
+    volatile int job, busy, stop, modal, answer, armed;
     GUI_Widget *pending_widget, *focus;
     dirent_fm_t pending_entry, selected_entry;
     bool selected, preview_only, allow_browse, exit_pending;
-    uint32_t buttons;
     int analog[2], repeat_dir;
     uint64_t repeat_at, poll_at;
 } ui;
@@ -249,10 +249,19 @@ static int ui_confirm(void) {
     ui.answer=-100; ui.armed=0; ui.modal=1;
     GUI_ContainerAdd(self.vmu_page,self.confirm);
     while(!ui.stop && (self.m_App->state&APP_STATE_OPENED) && ui.answer==-100) {
-        maple_device_t *dev=maple_enum_type(0,MAPLE_FUNC_CONTROLLER);
-        cont_state_t *state=dev?maple_dev_status(dev):NULL;
-        unsigned held=state?(state->buttons&(CONT_A|CONT_B|CONT_X|CONT_Y)):0;
-        ui.armed=vmu_ui_confirm_ready(ui.armed,held,ui.key_held,SDL_GetMouseState(NULL,NULL)!=0);
+        /* Read physical state: a modal keyboard can consume release events
+         * before this app sees them. Do not latch those events locally. */
+        unsigned held=0, keys=0;
+        for(int i=0;i<4;++i) {
+            maple_device_t *dev=maple_enum_type(i,MAPLE_FUNC_CONTROLLER);
+            cont_state_t *state=dev?maple_dev_status(dev):NULL;
+            if(state) held|=state->buttons&(CONT_A|CONT_B|CONT_X|CONT_Y);
+            dev=maple_enum_type(i,MAPLE_FUNC_KEYBOARD);
+            kbd_state_t *kbd=dev?maple_dev_status(dev):NULL;
+            if(kbd) keys|=kbd->key_states[KBD_KEY_ENTER].is_down ||
+                kbd->key_states[KBD_KEY_SPACE].is_down || kbd->key_states[KBD_KEY_X].is_down;
+        }
+        ui.armed=vmu_ui_confirm_ready(ui.armed,held,keys,SDL_GetMouseState(NULL,NULL)!=0);
         thd_sleep(20);
     }
     GUI_ContainerRemove(self.vmu_page,self.confirm);
@@ -301,6 +310,9 @@ static void *ui_service(void *arg) {
             }
         }
         uint64_t now=timer_ms_gettime64();
+        if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
+            ui.repeat_dir=0; ui.analog[0]=ui.analog[1]=0;
+        }
         if(!ui.busy && !ConsoleIsVisible() && !GUI_ScreenGetFocusWidget(GUI_GetScreen()) && ui.repeat_dir && now>=ui.repeat_at) {
             ui_queue(ui.repeat_dir,NULL,NULL); ui.repeat_at=now+150;
         }
@@ -315,10 +327,6 @@ static void ui_input(void *event,void *param,int action) {
     (void)event; SDL_Event *e=param;
     if(action!=EVENT_ACTION_UPDATE || !e || !(self.m_App->state&APP_STATE_OPENED)) return;
     if(e->type==SDL_USEREVENT && e->user.code==UI_EXIT_EVENT) { e->type=SDL_NOEVENT; VMU_Manager_Exit(NULL); return; }
-    if(e->type==SDL_JOYBUTTONDOWN && e->jbutton.button<32) ui.buttons|=1u<<e->jbutton.button;
-    if(e->type==SDL_JOYBUTTONUP && e->jbutton.button<32) ui.buttons&=~(1u<<e->jbutton.button);
-    if((e->type==SDL_KEYDOWN || e->type==SDL_KEYUP) && (e->key.keysym.sym==SDLK_RETURN || e->key.keysym.sym==SDLK_SPACE || e->key.keysym.sym==SDLK_x))
-        ui.key_held=e->type==SDL_KEYDOWN;
     if(ConsoleIsVisible() || (e->type==SDL_KEYDOWN && (e->key.keysym.sym==SDLK_F1 || e->key.keysym.sym==SDLK_PRINT || (e->key.keysym.mod&(KMOD_CTRL|KMOD_ALT))))) return;
     if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         ui.repeat_dir=0; GUI_ScreenEvent(GUI_GetScreen(),e,0,0); e->type=SDL_NOEVENT; return;
@@ -355,7 +363,10 @@ static void ui_input(void *event,void *param,int action) {
     else if(button==SDL_DC_B) job=UI_BACK;
     else if(button==SDL_DC_X && GUI_CardStackGetIndex(self.pages)==1) job=UI_COPY;
     else if(button==SDL_DC_Y && GUI_CardStackGetIndex(self.pages)==1) job=UI_TOOLS;
-    if(job) ui_queue(job,NULL,NULL);
+    if(job) {
+        if(job>UI_RIGHT) ui.repeat_dir=0;
+        ui_queue(job,NULL,NULL);
+    }
     else if(!ui.busy && (e->type==SDL_MOUSEMOTION || e->type==SDL_MOUSEBUTTONDOWN || e->type==SDL_MOUSEBUTTONUP || e->type>=SDL_USEREVENT)) GUI_ScreenEvent(GUI_GetScreen(),e,0,0);
     e->type=SDL_NOEVENT;
 }
@@ -371,7 +382,7 @@ void VMU_Manager_Open(App_t *app) {
     if(!ui.input || !ui.worker) { ui_status("Unable to start the VMU manager."); return; }
     GUI_DisableInput(); SDL_DC_EmulateMouse(SDL_FALSE);
     GUI_ScreenSetJoySelectState(GUI_GetScreen(),0); SetEventActive(ui.input,1);
-    ui.repeat_dir=0; ui.buttons=0; ui.key_held=0; ui.poll_at=0;
+    ui.repeat_dir=0; ui.poll_at=0;
     ui_refresh();
 }
 void VMU_Manager_Close(void) {
