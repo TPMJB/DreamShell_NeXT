@@ -76,7 +76,9 @@ def build():
     label(manage,'right-title','OTHER LOCATION',352,0,264,20)
     label(manage,'right-path','Choose where to copy saves.',352,21,264,18,'small','#AFC2D4')
     for name,x,suffix in [('file_browser',24,''),('file_browser2',352,'2')]:
-        E.SubElement(manage,'filemanager',path='/',name=name,x=str(x),y='44',width='264',height='182',
+        # SDL_gui reserves 20 pixels even with its scrollbar removed. The
+        # visible list panel and row surfaces remain 264 pixels wide.
+        E.SubElement(manage,'filemanager',path='/',name=name,x=str(x),y='44',width='284',height='182',
                      item_normal='item-normal'+suffix,item_highlight='item-focus'+suffix,item_pressed='item-focus'+suffix,
                      item_disabled='item-normal'+suffix,item_font='small',item_font_color='#EDF5FC',
                      onclick='export:VMU_Manager_BrowseClick()',onselect='export:VMU_Manager_BrowseSelect()')

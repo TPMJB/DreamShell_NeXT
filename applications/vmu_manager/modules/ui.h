@@ -81,7 +81,9 @@ static void ui_refresh(void) {
     const char *left=GUI_FileManagerGetPath(self.filebrowser);
     const char *right=GUI_FileManagerGetPath(self.filebrowser2);
     char line[100];
-    GUI_WidgetSetEnabled(ui_widget("copy-button"),ui.selected && self.m_SelectedFile && other);
+    bool from_vmu=ui.selected && ui.selected_entry.obj==(GUI_Object *)self.filebrowser;
+    GUI_WidgetSetEnabled(ui_widget("copy-button"),ui.selected && self.m_SelectedFile && other &&
+        (!from_vmu || !vmu_ui_read_only(right)));
     GUI_WidgetSetEnabled(self.button_dump,other && !vmu_ui_read_only(right) && strncmp(right,"/vmu/",5));
     GUI_WidgetSetEnabled(ui_widget("delete-button"),ui.selected && !vmu_ui_read_only(GUI_FileManagerGetPath((GUI_Widget *)ui.selected_entry.obj)) && strcmp(ui.selected_entry.ent.name,".."));
     GUI_WidgetSetEnabled(ui_widget("new-folder"),other && !vmu_ui_read_only(right) && strncmp(right,"/vmu/",5));
@@ -178,7 +180,7 @@ static void ui_move(int direction) {
 }
 static void ui_back(void) {
     int page=GUI_CardStackGetIndex(self.pages);
-    if(page==2 || page==3) { GUI_CardStackShowIndex(self.pages,1); ui.focus=self.filebrowser; }
+    if(page==2 || page==3) { GUI_CardStackShowIndex(self.pages,1); ui.focus=ui.selected?(GUI_Widget *)ui.selected_entry.obj:self.filebrowser; }
     else if(page==0 && self.direction_flag) {
         GUI_CardStackShowIndex(self.pages,1); self.direction_flag=0; ui.focus=ui_widget("location-button");
     } else if(page==1 && ui.focus==self.filebrowser2 && ui_other_open()) {
@@ -188,6 +190,7 @@ static void ui_back(void) {
     else { ui.exit_pending=true; }
 }
 static void ui_do_widget(GUI_Widget *widget) {
+    if(!widget || (GUI_WidgetGetFlags(widget)&WIDGET_DISABLED)) return;
     const char *name=GUI_ObjectGetName(widget);
     if(strlen(name)==2 && name[0]>='A' && name[0]<='D' && name[1]>='1' && name[1]<='2') {
         VMU_Manager_vmu(widget); ui.selected=false; ui.focus=self.direction_flag?self.filebrowser2:self.filebrowser;
@@ -197,7 +200,7 @@ static void ui_do_widget(GUI_Widget *widget) {
     else if(!strcmp(name,"dst-vmu")) { VMU_Manager_sel_dst_vmu(widget); ui.focus=NULL; }
     else if(!strcmp(name,"location-button")) { addbutton(); ui.selected=false; ui.focus=self.sd_c; }
     else if(!strcmp(name,"tools-button")) { GUI_CardStackShowIndex(self.pages,3); ui.focus=NULL; }
-    else if(!strcmp(name,"tools-back")) { GUI_CardStackShowIndex(self.pages,1); ui.focus=self.filebrowser; }
+    else if(!strcmp(name,"tools-back")) { GUI_CardStackShowIndex(self.pages,1); ui.focus=ui.selected?(GUI_Widget *)ui.selected_entry.obj:self.filebrowser; }
     else if(!strcmp(name,"new-folder")) { GUI_CardStackShowIndex(self.pages,2); ui.focus=self.folder_name; }
     else if(!strcmp(name,"confirm-yes") || !strcmp(name,"confirm-no")) { VMU_Manager_make_folder(widget); ui.focus=self.filebrowser2; }
     else if(!strcmp(name,"copy-button")) {
@@ -257,6 +260,7 @@ static int ui_confirm(void) {
     return ui.answer==-100?CMD_ERROR:ui.answer;
 }
 static void ui_scan_slots(void) {
+    GUI_Widget *old_focus=ui.focus;
     for(int p=0;p<4;++p) for(int s=0;s<2;++s) {
         maple_device_t *dev=maple_enum_dev(p,s+1);
         bool ready=dev && (dev->info.functions&MAPLE_FUNC_MEMCARD);
@@ -269,6 +273,8 @@ static void ui_scan_slots(void) {
     }
     if(!ui.poll_at) ui.focus=NULL;
     ui_highlight();
+    if(ui.focus && ui.focus!=old_focus && ui.focus!=self.button_home && ui.focus!=ui_widget("exit-button"))
+        VMU_Manager_info_bar(ui.focus);
 }
 static void *ui_service(void *arg) {
     (void)arg;
@@ -287,6 +293,7 @@ static void *ui_service(void *arg) {
             else if(job==UI_TOOLS) ui_do_widget(ui_widget("tools-button"));
             else if(job==UI_WIDGET) ui_do_widget(ui.pending_widget);
             else if(job==UI_ENTRY || job==UI_PREVIEW) ui_browse(&ui.pending_entry,job==UI_PREVIEW);
+            if(GUI_CardStackGetIndex(self.pages)==0) ui_scan_slots();
             ui_refresh(); ui.busy=0;
             if(ui.exit_pending) {
                 SDL_Event e; memset(&e,0,sizeof(e)); e.type=SDL_USEREVENT; e.user.code=UI_EXIT_EVENT;

@@ -43,6 +43,8 @@ and close failures, DCI conversion, protected paths, folder cancellation, and
 confirmation input release. CI compiles and links the SH-4 module against the
 current pinned DreamShell/KallistiOS build. The layout preview is rendered from
 the native XML with illustrative save names; it is not a hardware screenshot.
+Regenerate the six preview screens with
+`python utils/preview_vmu.py --output /tmp/vmu-preview` (requires Pillow).
 
 On a console, check navigation and scrolling, a VMU-to-SD backup, copying a
 nonessential save back, canceling overwrite/delete/format, and selecting a

@@ -252,8 +252,8 @@
         <label name="left-path" text="" x="24" y="21" width="264" height="18" font="small" color="#AFC2D4" />
         <label name="right-title" text="OTHER LOCATION" x="352" y="0" width="264" height="20" font="body" color="#E7EEF4" />
         <label name="right-path" text="Choose where to copy saves." x="352" y="21" width="264" height="18" font="small" color="#AFC2D4" />
-        <filemanager path="/" name="file_browser" x="24" y="44" width="264" height="182" item_normal="item-normal" item_highlight="item-focus" item_pressed="item-focus" item_disabled="item-normal" item_font="small" item_font_color="#EDF5FC" onclick="export:VMU_Manager_BrowseClick()" onselect="export:VMU_Manager_BrowseSelect()" />
-        <filemanager path="/" name="file_browser2" x="352" y="44" width="264" height="182" item_normal="item-normal2" item_highlight="item-focus2" item_pressed="item-focus2" item_disabled="item-normal2" item_font="small" item_font_color="#EDF5FC" onclick="export:VMU_Manager_BrowseClick()" onselect="export:VMU_Manager_BrowseSelect()" />
+        <filemanager path="/" name="file_browser" x="24" y="44" width="284" height="182" item_normal="item-normal" item_highlight="item-focus" item_pressed="item-focus" item_disabled="item-normal" item_font="small" item_font_color="#EDF5FC" onclick="export:VMU_Manager_BrowseClick()" onselect="export:VMU_Manager_BrowseSelect()" />
+        <filemanager path="/" name="file_browser2" x="352" y="44" width="284" height="182" item_normal="item-normal2" item_highlight="item-focus2" item_pressed="item-focus2" item_disabled="item-normal2" item_font="small" item_font_color="#EDF5FC" onclick="export:VMU_Manager_BrowseClick()" onselect="export:VMU_Manager_BrowseSelect()" />
         <input type="button" name="/sd" x="352" y="48" width="124" height="42" normal="b124-42-normal" highlight="b124-42-highlight" pressed="b124-42-pressed" disabled="b124-42-disabled" onclick="export:VMU_Manager_Action()">
           <label font="body" color="#EDF5FC" text="SD card" align="center" valign="center" />
         </input>

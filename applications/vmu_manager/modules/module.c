@@ -201,31 +201,36 @@ static void* vmu_dev(const char* path) {
 	return dev && (dev->info.functions & MAPLE_FUNC_MEMCARD) ? dev : NULL;
 }
 
-static void rmdir_recursive(const char* folder) {
+static int rmdir_recursive(const char* folder) {
 
 	file_t d;
 	const dirent_t *de;
 	char dst[NAME_MAX];
 
 	d = fs_open(folder, O_DIR);
+    if(d == FILEHND_INVALID) return CMD_ERROR;
+    int result = CMD_OK;
 
 	while ((de = fs_readdir(d))) {
 		if (strcmp(de->name ,".") == 0 || strcmp(de->name ,"..") == 0) {
 			continue;
 		}
 
-		snprintf(dst, sizeof(dst), "%s/%s", folder, de->name);
+        if(snprintf(dst, sizeof(dst), "%s/%s", folder, de->name) >= (int)sizeof(dst)) {
+            result=CMD_ERROR; break;
+        }
 
 		if (de->attr == O_DIR) {
-			rmdir_recursive(dst);
+			if(rmdir_recursive(dst)!=CMD_OK) { result=CMD_ERROR; break; }
 		}
 		else {
-			fs_unlink(dst);
+			if(fs_unlink(dst)) { result=CMD_ERROR; break; }
 		}
 	}
 
-	fs_close(d);
-	fs_rmdir(folder);
+    if(fs_close(d)) result=CMD_ERROR;
+    if(result==CMD_OK && fs_rmdir(folder)) result=CMD_ERROR;
+    return result;
 }
 
 static void free_blocks(const char *path , int n) {
@@ -494,6 +499,7 @@ void VMU_Manager_vmu(GUI_Widget *widget) {
 
 	if(self.direction_flag == 0) {
 		GUI_FileManagerSetPath(self.filebrowser, vpath);
+        GUI_FileManagerScan(self.filebrowser);
 		/* Source stays visible; destination selection disables this same slot. */
 		addbutton();
 	}
@@ -619,6 +625,7 @@ void VMU_Manager_ItemClick(dirent_fm_t *fm_ent) {
 		reset_selected();
 		clr_statusbar();
 		GUI_FileManagerChangeDir(fmw, ent->name, ent->size);
+        GUI_FileManagerScan(fmw);
 		return;
 	}
 
@@ -772,6 +779,7 @@ void VMU_Manager_ItemClick(dirent_fm_t *fm_ent) {
 						if(!FileExists(dst)) break;
 						sprintf(dst, "%s/%12.12s.%02d.vms", GUI_FileManagerGetPath(self.filebrowser2), ent->name, i);
 					}
+                    if(FileExists(dst)) { ui_status("Too many backups with this name. Choose another folder."); return; }
 				}
 
 				GUI_ProgressBarSetImage1(self.progressbar, self.progres_img_b);
@@ -843,6 +851,10 @@ void VMU_Manager_ItemSelect(dirent_fm_t *fm_ent) {
 	int i;
 	GUI_Widget *panel, *w;
 	int name_len = strlen(ent->name);
+
+    if(strlen(GUI_FileManagerGetPath(fmw))+(size_t)name_len+2>=NAME_MAX) {
+        VMU_ShowFileError("This path is too long to open."); return;
+    }
 	save_type_t type = VMU_GetSaveType(ent->name);
 
 	if(strcmp(GUI_ObjectGetName(fmw), "file_browser2") == 0) {
@@ -1094,6 +1106,7 @@ void VMU_Manager_addfileman(GUI_Widget *widget) {
 	GUI_ContainerRemove(self.vmu_page, self.format_c);
 	GUI_ContainerRemove(self.vmu_page, self.dst_vmu);
 	GUI_FileManagerSetPath(self.filebrowser2, self.home_path);
+    GUI_FileManagerScan(self.filebrowser2);
 	GUI_ContainerAdd(self.vmu_page, self.filebrowser2);
 	GUI_WidgetMarkChanged(self.vmu_page);
 }
@@ -1103,6 +1116,9 @@ void VMU_Manager_ItemContextClick(dirent_fm_t *fm_ent) {
 	GUI_Widget *fmw = (GUI_Widget*)fm_ent->obj;
 	char text[1024];
 	char path[NAME_MAX];
+    if(strlen(GUI_FileManagerGetPath(fmw))+strlen(ent->name)+2>=sizeof(path)) {
+        ui_status("This path is too long to delete safely."); return;
+    }
 
 	if(ent->attr == O_DIR) {
 		if (strcmp(GUI_ObjectGetName(fmw), "file_browser") == 0) {
@@ -1130,8 +1146,8 @@ void VMU_Manager_ItemContextClick(dirent_fm_t *fm_ent) {
 				sprintf(path, "%s/%s",GUI_FileManagerGetPath(self.filebrowser2), ent->name);
 				GUI_LabelSetText(self.confirm_text, text);
 				if(Confirm_Window() == CMD_OK){
-					rmdir_recursive(path);
-					//fs_rmdir(path);
+                    if(rmdir_recursive(path)!=CMD_OK) ui_status("Folder deletion failed. Some contents may remain.");
+                    else ui_status("Folder deleted.");
 					GUI_FileManagerScan(fmw);
 				}
 			}
