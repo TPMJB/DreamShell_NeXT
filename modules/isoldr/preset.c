@@ -389,7 +389,8 @@ uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 	}
 
 	if(boot_mode < BOOT_MODE_DIRECT || boot_mode > BOOT_MODE_IPBIN_TRUNC ||
-       bin_type < BIN_TYPE_AUTO || bin_type > BIN_TYPE_WINCE ||
+       bin_type < BIN_TYPE_AUTO || bin_type > BIN_TYPE_NAOMI ||
+       (bin_type == BIN_TYPE_NAOMI && isoldr->image_type != IMAGE_TYPE_ROM_NAOMI) ||
        emu_async < 0 || emu_async > 16 || emu_vmu < 0 || emu_vmu > 999 ||
        region < -1 || region > ISOLDR_REGION_AUSTRALIA) {
         isoldr_error("Preset contains invalid boot, read, VMU, or region values.\n");

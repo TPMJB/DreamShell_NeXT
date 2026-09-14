@@ -1876,6 +1876,7 @@ static void *selectFile_worker(void *p) {
         mutex_lock(&self.select_mutex);
         if(last_id == self.select_id) {
             self.loading = 0;
+            GUI_WidgetSetEnabled(self.filebrowser, 1);
             GUI_WidgetSetEnabled(self.btn_run, self.isoldr && self.isoldr->exec.size);
             GUI_WidgetSetEnabled(self.btn_check, self.isoldr && self.isoldr->exec.size);
             next_refresh();
@@ -1888,7 +1889,9 @@ static void *selectFile_worker(void *p) {
 
 static void selectFile(char *name, int index) {
     if(!self.select_thd) { next_message("Cannot start the game browser worker. Reopen the app."); return; }
+    if(self.loading) return;
     self.loading = 1;
+    GUI_WidgetSetEnabled(self.filebrowser, 0);
     self.profile_mode = 0;
     GUI_WidgetSetEnabled(self.btn_run, 0);
     GUI_WidgetSetEnabled(self.btn_check, 0);
@@ -2007,37 +2010,33 @@ static int scanDirectoryForImage(const char *dir_path, const char *dir_name, cha
 }
 
 void isoLoader_ItemChange(dirent_fm_t *fm_ent, int change_dir) {
-	if(!fm_ent) {
-		return;
-	}
-
-	dirent_t *ent = &fm_ent->ent;
-
-	if(ent->attr == O_DIR && self.current_item_dir != fm_ent->index) {
-		char filepath[NAME_MAX];
-		char found_image[NAME_MAX];
-
-		snprintf(filepath, NAME_MAX, "%s/%s",
-			GUI_FileManagerGetPath(self.filebrowser), ent->name);
-
-		if(scanDirectoryForImage(filepath, ent->name, found_image)) {
-			selectFile(found_image, fm_ent->index);
-			self.current_item_dir = fm_ent->index;
-			return;
-		}
-
-		if(change_dir) {
-			changeDir(ent);
-		}
-	}
-	else if(self.current_item == fm_ent->index) {
-        /* Selection callbacks must never launch a game. Play is explicit. */
+    if(!fm_ent || self.loading) return;
+    dirent_t *ent = &fm_ent->ent;
+    if(ent->attr == O_DIR) {
+        if(change_dir) { changeDir(ent); return; }
+        if(self.current_item_dir != fm_ent->index) {
+            char filepath[NAME_MAX], found_image[NAME_MAX];
+            if(snprintf(filepath, sizeof(filepath), "%s/%s",
+                        GUI_FileManagerGetPath(self.filebrowser), ent->name) >= sizeof(filepath)) return;
+            if(strcmp(ent->name, "..") && scanDirectoryForImage(filepath, ent->name, found_image)) {
+                selectFile(found_image, fm_ent->index);
+                self.current_item_dir = fm_ent->index;
+            } else {
+                self.current_item = self.current_item_dir = -1;
+                self.filename[0] = '\0';
+                if(self.isoldr) { free(self.isoldr); self.isoldr = NULL; }
+                GUI_WidgetSetEnabled(self.btn_run, 0);
+                GUI_WidgetSetEnabled(self.btn_check, 0);
+                setTitle("Open folder");
+                next_refresh();
+            }
+        }
+    } else if(self.current_item == fm_ent->index) {
         if(change_dir) next_status("Selected. Press Start or Play to launch.");
+    } else if(IsFileSupportedByApp(self.app, ent->name)) {
+        selectFile(ent->name, fm_ent->index);
+        self.current_item_dir = -1;
     }
-	else if(IsFileSupportedByApp(self.app, ent->name)) {
-		selectFile(ent->name, fm_ent->index);
-		self.current_item_dir = -1;
-	}
 }
 
 void isoLoader_ItemClick(dirent_fm_t *fm_ent) {
@@ -2152,13 +2151,13 @@ void isoLoader_RemovePreset(GUI_Widget *widget) {
 
 int isoLoader_SavePreset(GUI_Widget *widget) {
 
-	if(!self.filename[0] || (widget == NULL && !GUI_WidgetGetState(self.preset))) {
+	if(self.loading || !self.filename[0] || (widget == NULL && !GUI_WidgetGetState(self.preset))) {
 		return 0;
 	}
 
 	ipbin_meta_t *ipbin = (ipbin_meta_t *)self.boot_sector;
 	char tmpbuf[24];
-	char title[32];
+	char title[129];
 	uintptr_t loader_addr = ISOLDR_DEFAULT_ADDR_LOW;
 	isoldr_info_t info;
 	int ffplay_paused = 0;
@@ -2206,8 +2205,8 @@ int isoLoader_SavePreset(GUI_Widget *widget) {
 				char *tmpval = (char *)GUI_ObjectGetName((GUI_Object *)self.heap[i]);
 
 				if(strlen(tmpval) < 8) {
-					strncpy(tmpbuf, tmpval, 10);
-					tmpval = strncat(tmpbuf, GUI_TextEntryGetText(self.heap_memory_text), 10);
+					snprintf(tmpbuf, sizeof(tmpbuf), "%s%s", tmpval, GUI_TextEntryGetText(self.heap_memory_text));
+                    tmpval = tmpbuf;
 				}
 				info.heap = strtoul(tmpval, NULL, 16);
 			}
@@ -2222,11 +2221,8 @@ int isoLoader_SavePreset(GUI_Widget *widget) {
 	for(int i = 0; self.memory_chk[i]; i++) {
 		if(GUI_WidgetGetState(self.memory_chk[i])) {
 			char *tmpval = (char *)GUI_ObjectGetName((GUI_Object *)self.memory_chk[i]);
-			strncpy(tmpbuf, tmpval, 10);
-
-			if(strlen(tmpval) < 8) {
-				strncat(tmpbuf, GUI_TextEntryGetText(self.memory_text), 10);
-			}
+			snprintf(tmpbuf, sizeof(tmpbuf), "%s%s", tmpval,
+                     strlen(tmpval) < 8 ? GUI_TextEntryGetText(self.memory_text) : "");
 			loader_addr = strtoul(tmpbuf, NULL, 16);
 			break;
 		}
@@ -2451,6 +2447,8 @@ int isoLoader_LoadPreset(GUI_Widget *widget) {
 		else {
 			self.pa[j] = 0;
 			self.pv[j] = 0;
+            GUI_TextEntrySetText(self.wpa[j], "");
+            GUI_TextEntrySetText(self.wpv[j], "");
 		}
 	}
 

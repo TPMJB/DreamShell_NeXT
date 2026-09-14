@@ -197,6 +197,7 @@ void isoLoader_Up(GUI_Widget *widget) {
 }
 
 static void next_select_row(int delta, int activate) {
+    if(self.loading) return;
     GUI_Widget *panel = GUI_FileManagerGetItemPanel(self.filebrowser);
     int count = GUI_ContainerGetCount(panel);
     int index = GUI_FileManagerGetSelectedItem(self.filebrowser);

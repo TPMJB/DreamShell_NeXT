@@ -67,8 +67,8 @@
       <fill color="#EDF5FC" />
       <fill width="1" color="#192A39" />
     </surface>
-    <surface name="fm_background" width="314" height="276">
-      <fill color="#304657" width="314" height="276" />
+    <surface name="fm_background" width="314" height="246">
+      <fill color="#304657" width="314" height="246" />
     </surface>
     <surface width="226" height="200" name="fw_browser_bg">
       <fill color="#304657" />
@@ -150,17 +150,17 @@
     </surface>
     <font name="title-24" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <font name="small-12" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
-    <surface name="next-button" width="104" height="30">
-      <fill color="#233C50" width="104" height="30" />
+    <surface name="next-button" width="250" height="36">
+      <fill color="#233C50" width="250" height="36" />
     </surface>
-    <surface name="next-focus" width="104" height="30">
-      <fill color="#367086" width="104" height="30" />
+    <surface name="next-focus" width="250" height="36">
+      <fill color="#367086" width="250" height="36" />
     </surface>
-    <surface name="next-disabled" width="104" height="30">
-      <fill color="#192A39" width="104" height="30" />
+    <surface name="next-disabled" width="250" height="36">
+      <fill color="#192A39" width="250" height="36" />
     </surface>
-    <surface name="next-primary" width="104" height="30">
-      <fill color="#245964" width="104" height="30" />
+    <surface name="next-primary" width="250" height="36">
+      <fill color="#245964" width="250" height="36" />
     </surface>
     <surface name="next-message-bg" width="592" height="246">
       <fill color="#192A39" width="592" height="246" />
@@ -204,14 +204,14 @@
     <cardstack height="380" name="pages" y="100">
       <panel background="games_bg" height="380">
         <label name="launch-summary" text="Select a game to inspect it" x="24" y="0" width="314" height="20" font="small-12" color="#9FB4C7" align="left" />
-        <panel background="fm_background" x="20" y="24" width="314" height="276">
-          <filemanager height="270" item_disabled="item-normal" item_font="arial" item_font_color="#EDF5FC" item_highlight="item-focus" item_normal="item-normal" item_pressed="item-focus" item_selected_normal="item-selected" sb_knob="sb-knob" sb_back="sb-back" sbbup_normal="sbb-normal" sbbup_highlight="sbb-focus" sbbup_pressed="sbb-pressed" sbbup_disabled="sbb-disabled" sbbdown_normal="sbb-normal" sbbdown_highlight="sbb-focus" sbbdown_pressed="sbb-pressed" sbbdown_disabled="sbb-disabled" name="file_browser" onclick="export:isoLoader_ItemClick()" oncontextclick="export:isoLoader_ItemContextClick()" onselect="export:isoLoader_ItemSelect()" path="/" width="308" x="3" y="3" />
+        <panel background="fm_background" x="20" y="24" width="314" height="246">
+          <filemanager height="240" item_disabled="item-normal" item_font="arial" item_font_color="#EDF5FC" item_highlight="item-focus" item_normal="item-normal" item_pressed="item-focus" item_selected_normal="item-selected" sb_knob="sb-knob" sb_back="sb-back" sbbup_normal="sbb-normal" sbbup_highlight="sbb-focus" sbbup_pressed="sbb-pressed" sbbup_disabled="sbb-disabled" sbbdown_normal="sbb-normal" sbbdown_highlight="sbb-focus" sbbdown_pressed="sbb-pressed" sbbdown_disabled="sbb-disabled" name="file_browser" onclick="export:isoLoader_ItemClick()" oncontextclick="export:isoLoader_ItemContextClick()" onselect="export:isoLoader_ItemSelect()" path="/" width="308" x="3" y="3" />
         </panel>
         <panel height="46" width="256" x="354" y="6" name="title_panel">
-          <panel height="23">
+          <panel height="23" x="0" y="0">
             <label align="center" color="#EDF5FC" font="arial-18" name="game_title" text="Select a game" />
           </panel>
-          <panel height="23">
+          <panel height="23" x="0" y="23">
             <label align="center" color="#EDF5FC" font="arial-18" name="game_title2" text=" " />
           </panel>
         </panel>
@@ -224,7 +224,7 @@
             </panel>
           </panel>
         </panel>
-        <input name="verify-boot" type="checkbox" checked="true" x="24" y="308" width="308" height="25">
+        <input name="verify-boot" type="checkbox" checked="true" x="24" y="285" width="308" height="25">
           <label text="Verify executable before play" x="25" y="0" width="283" height="23" font="arial" color="#EDF5FC" align="left" />
         </input>
       </panel>

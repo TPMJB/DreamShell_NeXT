@@ -562,7 +562,8 @@ int isoldr_check_boot(isoldr_info_t *info, const char *image_file) {
         isoldr_error("Executable CRC is available for Dreamcast disc images.\n");
         return -1;
     }
-    if(!isoldr_boot_extent(info->exec.addr, info->exec.size, 2048, &extent)) {
+    if(!isoldr_boot_extent_limit(info->exec.addr, info->exec.size, 2048,
+        hardware_sys_mode(NULL) == HW_TYPE_RETAIL ? 0x0cfff000U : 0x0dfff000U, &extent)) {
         isoldr_error("Executable has an invalid size or RAM address.\n");
         return -1;
     }
@@ -771,8 +772,9 @@ void isoldr_exec(isoldr_info_t *info, uintptr_t addr) {
     uint32_t boot_bytes;
     if(info->image_type != IMAGE_TYPE_ROM_NAOMI &&
        info->syscalls != 1 && info->bleem != 1 &&
-       (!isoldr_boot_extent(info->exec.addr, info->exec.size, 2048, &boot_bytes) ||
-        loader_phys < 0x0c000100 || (uint64_t)loader_phys + len + 32 > 0x0cfff000 ||
+       (!isoldr_boot_extent_limit(info->exec.addr, info->exec.size, 2048,
+        hardware_sys_mode(NULL) == HW_TYPE_RETAIL ? 0x0cfff000U : 0x0dfff000U, &boot_bytes) ||
+        loader_phys < 0x0c000100 || (uint64_t)loader_phys + len + 32 > (hardware_sys_mode(NULL) == HW_TYPE_RETAIL ? 0x0cfff000U : 0x0dfff000U) ||
         isoldr_ranges_overlap(loader_phys, len + 32, boot_phys, boot_bytes))) {
         isoldr_error("Loader and executable do not fit at this address.\n"
                     "Try the baseline profile or adjust the loader address.\n");

@@ -22,17 +22,21 @@ static inline int isoldr_ranges_overlap(uint32_t a, uint32_t an,
            (uint64_t)b < (uint64_t)a + an;
 }
 
-static inline int isoldr_boot_extent(uint32_t addr, uint32_t size,
-                                     uint32_t sector, uint32_t *rounded) {
+static inline int isoldr_boot_extent_limit(uint32_t addr, uint32_t size,
+                                     uint32_t sector, uint32_t limit, uint32_t *rounded) {
     uint64_t n;
     addr &= 0x1fffffffU;
     if (!size || sector != 2048 || addr < 0x0c010000U)
         return 0;
     n = ((uint64_t)size + sector - 1) / sector * sector;
     /* Keep the loader's temporary stack at the top of retail RAM. */
-    if ((uint64_t)addr + n > 0x0cfff000U)
+    if ((uint64_t)addr + n > limit)
         return 0;
     *rounded = (uint32_t)n;
     return 1;
+}
+static inline int isoldr_boot_extent(uint32_t addr, uint32_t size,
+                                     uint32_t sector, uint32_t *rounded) {
+    return isoldr_boot_extent_limit(addr, size, sector, 0x0cfff000U, rounded);
 }
 #endif

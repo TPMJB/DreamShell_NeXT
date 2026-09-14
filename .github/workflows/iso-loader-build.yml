@@ -40,7 +40,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             gawk patch bzip2 tar make cmake pkg-config \
             gettext wget bison flex sed meson ninja-build \
-            build-essential diffutils curl python3 rake zlib1g-dev exfatprogs dosfstools \
+            build-essential diffutils curl python3 python3-pil rake zlib1g-dev exfatprogs dosfstools \
             genisoimage squashfs-tools texinfo git zip \
             libgmp-dev libmpfr-dev libmpc-dev libelf-dev libisofs-dev \
             libpng-dev libjpeg-dev liblzo2-dev liblua5.2-dev lua5.2
@@ -58,6 +58,9 @@ jobs:
 
       - name: Test storage, ripper and ISO Loader
         run: python3 -m unittest discover -s utils/tests -v
+
+      - name: Render native interface preview and check text bounds
+        run: python3 utils/preview_iso_loader.py --output /tmp/iso-loader-preview --emit
 
       - name: Prepare directories
         run: |
@@ -142,6 +145,23 @@ jobs:
               assert b'version="2.0.0"' in full.read(prefix+'app.xml')
               for name in (prefix+'modules/app_iso_loader.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/firmware/isoldr/sd.elf'):
                   assert len(full.read(name)) > 1000, name
+              import struct
+              firmware=[n for n in full.namelist() if n.startswith('DS/firmware/isoldr/') and n.endswith('.elf')]
+              assert firmware
+              for name in firmware:
+                  elf=full.read(name)
+                  assert elf[:7]==b'\x7fELF\x01\x01\x01', name
+                  hdr=struct.unpack_from('<HHIIIIIHHHHHH',elf,16)
+                  entry,phoff,shoff=hdr[3:6]
+                  phsize,phnum,shsize,shnum=hdr[8:12]
+                  assert phsize==32 and phoff+phnum*phsize<=len(elf), name
+                  segments=[struct.unpack_from('<IIIIIIII',elf,phoff+i*phsize) for i in range(phnum)]
+                  loads=[p for p in segments if p[0]==1]
+                  assert loads and all(p[4]<=p[5] and p[1]+p[4]<=len(elf) for p in loads), name
+                  vmin=min(p[2] for p in loads); vmax=max(p[2]+p[5] for p in loads)
+                  assert entry==vmin and vmax-vmin+1024<=2*1024*1024, (name,hex(entry),hex(vmin))
+                  assert shsize==40 and shoff+shsize*shnum<=len(elf), name
+                  print('Firmware layout:',name,'entry',hex(entry),'runtime bytes',vmax-vmin+1024)
               with ZipFile('DreamShell-ISO-Loader-2.0.0.zip','w',ZIP_DEFLATED) as update:
                   sums=[]
                   for name in full.namelist():
@@ -152,6 +172,8 @@ jobs:
                           if not name.endswith('/'):
                               sums.append(sha256(data).hexdigest()+'  '+name)
                   update.write('utils/README.iso-loader-next.md','ISO-Loader-Guide.md')
+                  update.write('/tmp/iso-loader-preview/ISO-Loader-Preview.png','ISO-Loader-Preview.png')
+                  update.write('/tmp/iso-loader-preview/ISO-Loader-Check-Preview.png','ISO-Loader-Check-Preview.png')
                   update.writestr('SOURCE-REVISION.txt',os.environ['GITHUB_SHA']+'\n')
                   update.writestr('SHA256SUMS.txt','\n'.join(sums)+'\n')
           PY_PACKAGE

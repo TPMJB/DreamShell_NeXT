@@ -103,7 +103,8 @@ uint Load_BootBin() {
     uint32 exec_addr = CACHED_ADDR(IsoInfo->exec.addr);
     uint8 *buff = (uint8 *)NONCACHED_ADDR(IsoInfo->exec.addr);
 
-    if(!isoldr_boot_extent(exec_addr, IsoInfo->exec.size, 2048, &bytes) ||
+    if(!isoldr_boot_extent_limit(exec_addr, IsoInfo->exec.size, 2048,
+        is_dreamcast() ? 0x0cfff000U : 0x0dfff000U, &bytes) ||
        isoldr_ranges_overlap(PHYS_ADDR(exec_addr), bytes,
                              PHYS_ADDR(loader_addr), loader_end - loader_addr)) {
         printf("Executable overlaps loader or exceeds RAM.\n");
@@ -137,7 +138,7 @@ uint Load_BootBin() {
 #ifndef HAVE_LIMIT
     if(IsoInfo->exec.type == BIN_TYPE_KOS && buff[1] != 0xD0) {
         uint64_t temp = (uint64_t)PHYS_ADDR(exec_addr) + (uint64_t)IsoInfo->exec.size * 3;
-        if(temp + IsoInfo->exec.size > 0x0cfff000U ||
+        if(temp + IsoInfo->exec.size > (is_dreamcast() ? 0x0cfff000U : 0x0dfff000U) ||
            isoldr_ranges_overlap((uint32)temp, IsoInfo->exec.size,
                                   PHYS_ADDR(loader_addr), loader_end - loader_addr)) {
             printf("No safe space to descramble executable.\n");
@@ -295,8 +296,15 @@ int Load_DS() {
 			LOGFF("FAILED\n");
 			return -1;
 		}
-		sz = read(fd, dst, total(fd));
-		close(fd);
+		sz = total(fd);
+        if(!sz || sz > 0x0cfff000U - PHYS_ADDR(APP_BIN_ADDR) ||
+           isoldr_ranges_overlap(PHYS_ADDR(APP_BIN_ADDR), sz,
+                                 PHYS_ADDR(loader_addr), loader_end - loader_addr) ||
+           read(fd, dst, sz) != (int)sz) {
+            close(fd);
+            return -1;
+        }
+        close(fd);
 	}
 	restore_syscalls();
 	icache_flush_range(CACHED_ADDR(APP_BIN_ADDR), sz);
