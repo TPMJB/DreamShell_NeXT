@@ -1,5 +1,5 @@
-/* D-pad focus uses screen geometry. It never activates a widget: A's
- * synthesized mouse click remains the single activation path. */
+/* D-pad focus uses screen geometry. A activates the resolved widget once;
+ * analog movement and physical mice share the same pointer position. */
 typedef struct { GUI_Widget *widget; SDL_Rect area; } next_target_t;
 
 static SDL_Rect next_area(GUI_Widget *widget) {
@@ -202,6 +202,13 @@ static void next_controller_click(int pressed) {
                 GUI_WidgetClicked(held,r.w/2,r.h/2);
             }
             GUI_ObjectDecRef((GUI_Object *)held);
+            /* ChangeDir queues a scan, which FileManager normally applies at
+             * the end of Event(). Direct activation bypasses that traversal.
+             * Flush it after releasing the old row, without another click. */
+            SDL_Event flush;
+            memset(&flush, 0, sizeof(flush));
+            flush.type = SDL_NOEVENT;
+            GUI_ScreenEvent(GUI_GetScreen(), &flush, 0, 0);
         }
     }
 }

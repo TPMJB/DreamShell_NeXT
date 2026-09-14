@@ -169,8 +169,8 @@ jobs:
               utility_guide=utilities.read('Utility-Apps-README.md')
           with ZipFile('DreamShell-dev.zip') as full:
               assert full.testzip() is None
-              assert b'version="2.0.5"' in full.read(prefix+'app.xml')
-              assert b'version="1.0.1"' in full.read('DS/apps/games_menu/app.xml')
+              assert b'version="2.0.6"' in full.read(prefix+'app.xml')
+              assert b'version="1.0.2"' in full.read('DS/apps/games_menu/app.xml')
               for name in (prefix+'modules/app_iso_loader.klf','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/firmware/isoldr/sd.elf'):
                   assert len(full.read(name)) > 1000, name
               import struct
@@ -191,7 +191,7 @@ jobs:
                   assert entry==vmin and vmax-vmin+1024<=2*1024*1024, (name,hex(entry),hex(vmin))
                   assert shsize==40 and shoff+shsize*shnum<=len(elf), name
                   print('Firmware layout:',name,'entry',hex(entry),'runtime bytes',vmax-vmin+1024)
-              with ZipFile('DreamShell-ISO-Loader-2.0.5.zip','w',ZIP_DEFLATED) as update:
+              with ZipFile('DreamShell-ISO-Loader-2.0.6.zip','w',ZIP_DEFLATED) as update:
                   sums=[]
                   for name in full.namelist():
                       include=name in utility_files or (name.startswith(prefix) and not name.startswith(prefix+'presets/')) or name.startswith('DS/firmware/isoldr/') or name.startswith('DS/apps/games_menu/images/') or name=='DS/apps/games_menu/fonts/default.txf' or name in ('DS/apps/games_menu/app.xml','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/fonts/ttf/arial_lite.ttf','DS/fonts/ttf/m23.ttf')
@@ -212,7 +212,7 @@ jobs:
                   assert len(update.namelist())==len(set(update.namelist()))
                   assert 'DS/DS_CORE.BIN' not in update.namelist()
           # GitHub supplies the download ZIP. Upload the contents, not our ZIP.
-          with ZipFile('DreamShell-ISO-Loader-2.0.5.zip') as update:
+          with ZipFile('DreamShell-ISO-Loader-2.0.6.zip') as update:
               assert update.testzip() is None
               update.extractall('iso-loader-update')
           PY_PACKAGE

@@ -1,13 +1,23 @@
 # DreamShell NeXT combined apps preview
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
-This update combines ISO Loader 2.0.5, Games Menu 1.0.1, File Manager/GD Play/Settings 2.0.0, the new launcher icons, ISOFS and ISO Loader modules, and standalone 0.9.2 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together. This is a test update, not a full release.
+This update combines ISO Loader 2.0.6, Games Menu 1.0.2, File Manager/GD Play/Settings 2.0.0, the new launcher icons, ISOFS and ISO Loader modules, and standalone 0.9.2 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together. This is a test update, not a full release.
 
 ## Install
 1. Back up the existing DS/apps, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
-3. Restart DreamShell. ISO Loader should show v2.0.5; Games is v1.0.1; the standalone loader should show v0.9.2.
+3. Restart DreamShell. ISO Loader should show v2.0.6; Games is v1.0.2; the standalone loader should show v0.9.2.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
+
+## ISO Loader 2.0.6 / Games 1.0.2: controls and preview audio
+
+ISO Loader keeps analog pointer emulation enabled after installing its custom D-pad handler. Controller A now applies queued directory contents immediately, instead of waiting for the next mouse/D-pad event. B/Up also refreshes immediately and uses File Manager's parent-directory operation. Pointer clicks and controller A remain separate, with synthesized duplicate clicks consumed once.
+
+Games now reads audio filenames from the GDI descriptor, including short tracks and tracks beyond the old 4/6 detection and random 4–18 playback range. It checks the selected game again even when an older cache marked audio absent. Playback uses its own path so cover loading cannot change it, and the outgoing worker is cancelled/joined before the audio stream is shut down. Missing tracks finish a bounded search.
+
+Previews play separate RAW/WAV CD audio from the game session (track 4 onward); track 2 is excluded because it is the low-density audio/warning track. Music encoded inside the game's data files is not extracted or decoded by the menu. Artwork extraction only reads the embedded thumbnail, so a game can have a cover without preview music. Wait roughly three seconds on a selection to hear an available track. No cache rebuild or artwork rescan is needed for this fix.
+
+Hardware check: alternate D-pad and analog navigation, open nested folders with A without pressing another direction, go back with B, and try the toolbar. In Games, select several titles with separate audio tracks and pause on each. Games without those tracks should remain silent. Firmware remains 0.9.2; the Bust-A-Move 4 investigation remains parked.
 
 ## Utility apps merge and console status
 
@@ -15,7 +25,7 @@ The approved `codex/utility-apps` commit `f7fab643c3727a90a739a4d8249a6c184aee1c
 
 The latest console test with firmware **0.9.2** still black-screens on **Bust-A-Move 4**; **Resident Evil: Code Veronica boots**. The WinCE DMA address fix did not resolve Bust-A-Move 4, whose runtime compatibility remains an open issue. This merge adds the approved utility apps and icons and does not claim another game compatibility fix.
 
-## Firmware 0.9.2: WinCE SD physical DMA destinations
+## Earlier firmware 0.9.2: WinCE SD physical DMA destinations
 
 The Bust-A-Move 4 console video reaches **Executable CRC matched**, **Preparing game hardware**, and **Executing** before going black. Its Baseline report confirms loader address `8c000100`, CDDA/IRQ/VMU off, and executable CRC `f6902800`. Initial executable reading and verification succeeded; the failure occurs at or after handoff.
 

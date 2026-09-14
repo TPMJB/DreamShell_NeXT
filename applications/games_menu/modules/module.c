@@ -1678,7 +1678,7 @@ static void WriteLaunchReport(const char *stage)
     char report[1536], path[NAME_MAX];
     const isoldr_info_t *info = self.isoldr;
     int length = snprintf(report, sizeof(report),
-        "Games Menu 1.0.1 / TPMJB\nGame: %s\nStage: %s\n",
+        "Games Menu 1.0.2 / TPMJB\nGame: %s\nStage: %s\n",
         self.item_value_selected, stage);
     if(info && length > 0 && length < (int)sizeof(report)) {
         int extra = snprintf(report + length, sizeof(report) - length,

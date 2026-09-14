@@ -69,7 +69,7 @@ static void next_message(const char *text) {
 static void next_report(const char *path, const isoldr_info_t *info, uint32 addr, const char *stage) {
     char target[NAME_MAX], temp[NAME_MAX], previous[NAME_MAX];
     int n = snprintf(self.launch_report, sizeof(self.launch_report),
-        "DreamShell NeXT ISO Loader 2.0.5 / TPMJB\n"
+        "DreamShell NeXT ISO Loader 2.0.6 / TPMJB\n"
         "Stage: %s\nImage: %s\nProfile: %s\nPreset: %s\n"
         "Loader address: %08lx\n",
         stage, path, self.profile_mode ? "Baseline (unsaved)" : "Game settings",
@@ -217,7 +217,7 @@ void isoLoader_Up(GUI_Widget *widget) {
     if(self.loading) { next_status("Wait for game information before changing folders."); return; }
     const char *current = GUI_FileManagerGetPath(self.filebrowser);
     if(!strcmp(current, "/")) { isoLoader_Exit(NULL); return; }
-    GUI_FileManagerChangeDir(self.filebrowser, "..", -1);
+    GUI_FileManagerChangeDir(self.filebrowser, "..", -2);
     self.filename[0] = '\0';
     self.current_item = self.current_item_dir = -1;
     if(self.isoldr) { free(self.isoldr); self.isoldr = NULL; }
@@ -295,6 +295,8 @@ static void next_input(void *event, void *param, int action) {
         if(released) {
             if(GUI_CardStackGetIndex(self.pages) != 0) isoLoader_ShowGames(self.games);
             else isoLoader_Up(NULL);
+            e->type = SDL_NOEVENT;
+            GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
         }
     } else if((e->type == SDL_JOYBUTTONDOWN && e->jbutton.button == SDL_DC_START) ||
               (e->type == SDL_KEYDOWN && key == SDLK_SPACE)) {
@@ -311,9 +313,11 @@ static void next_input(void *event, void *param, int action) {
 void isoLoader_Open(App_t *app) {
     (void)app;
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
-    SDL_DC_EmulateMouse(SDL_TRUE);
     if(self.input_event) {
         GUI_DisableInput();
+        /* GUI_DisableInput also disables analog mouse emulation. Keep only
+         * the default event handler disabled; our handler forwards the mouse. */
+        SDL_DC_EmulateMouse(SDL_TRUE);
         SetEventActive(self.input_event, 1);
     } else {
         GUI_EnableInput();

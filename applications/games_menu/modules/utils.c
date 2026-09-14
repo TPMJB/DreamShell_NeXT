@@ -728,6 +728,7 @@ void PlayCDDATrack(const char *file, int loop)
 		if (wav_hnd == SND_STREAM_INVALID)
 		{
 			ds_printf("DS_ERROR: Can't play file: %s\n", file);
+			StopCDDATrack();
 			return;
 		}
 		// ds_printf("DS_OK: Start playing: %s\n", file);

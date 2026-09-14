@@ -104,11 +104,11 @@ typedef struct Widget {
 typedef GUI_Widget GUI_Object;
 enum { WIDGET_TYPE_OTHER, WIDGET_TYPE_BUTTON, WIDGET_TYPE_SCROLLBAR,
        WIDGET_TYPE_CONTAINER, WIDGET_TYPE_CARDSTACK, WIDGET_TYPE_TEXTENTRY };
-enum { WIDGET_HIDDEN=1, WIDGET_DISABLED=2, WIDGET_PRESSED=4, SDL_MOUSEMOTION=3 };
+enum { WIDGET_HIDDEN=1, WIDGET_DISABLED=2, WIDGET_PRESSED=4, SDL_NOEVENT=0, SDL_MOUSEMOTION=3 };
 typedef struct { int type; struct { int x,y; } motion; } SDL_Event;
 static struct { GUI_Widget *body; } app;
 static struct { __typeof__(app) *app; GUI_Widget *filebrowser,*fw_browser,*controller_target; } self;
-static int mouse_x,mouse_y,hover_count;
+static int mouse_x,mouse_y,hover_count,pending_scan,applied_scan;
 #define GUI_WidgetGetArea(w) ((w)->area)
 #define GUI_WidgetGetParent(w) ((w)->parent)
 #define GUI_WidgetGetType(w) ((w)->type)
@@ -117,7 +117,7 @@ static int mouse_x,mouse_y,hover_count;
 #define GUI_WidgetClearFlags(w,f) ((w)->flags&=~(f))
 #define GUI_ObjectIncRef(w) (++(w)->refs)
 #define GUI_ObjectDecRef(w) (--(w)->refs)
-static void GUI_WidgetClicked(GUI_Widget *w,int x,int y) {assert(x>=0 && y>=0);++w->clicks;}
+static void GUI_WidgetClicked(GUI_Widget *w,int x,int y) {assert(x>=0 && y>=0);++w->clicks;pending_scan=1;}
 #define GUI_PanelGetXOffset(w) ((w)->xoff)
 #define GUI_PanelGetYOffset(w) ((w)->yoff)
 #define GUI_PanelSetYOffset(w,n) ((w)->yoff=(n))
@@ -134,7 +134,9 @@ static void GUI_WidgetClicked(GUI_Widget *w,int x,int y) {assert(x>=0 && y>=0);+
 static void SDL_GetMouseState(int *x,int *y) { *x=mouse_x; *y=mouse_y; }
 static void SDL_WarpMouse(int x,int y) { mouse_x=x; mouse_y=y; }
 static void GUI_ScreenEvent(int s,SDL_Event *e,int x,int y) {
-    (void)s;(void)x;(void)y; assert(e->type==SDL_MOUSEMOTION); ++hover_count;
+    (void)s;(void)x;(void)y;
+    if(e->type==SDL_NOEVENT) {applied_scan+=pending_scan;pending_scan=0;}
+    else {assert(e->type==SDL_MOUSEMOTION);++hover_count;}
 }
 static void add(GUI_Widget *p,GUI_Widget *w,int type,int x,int y,int width,int height) {
     memset(w,0,sizeof(*w));w->type=type;w->area=(SDL_Rect){x,y,width,height};
@@ -186,6 +188,7 @@ int main(void) {
     /* A activates a directory row even without WIDGET_INSIDE/hover state. */
     next_controller_click(1);assert(rows[5].refs==1 && (rows[5].flags&WIDGET_PRESSED));
     next_controller_click(0);assert(rows[5].refs==0 && rows[5].clicks==1);
+    assert(!pending_scan && applied_scan==1); /* no extra directional input */
     /* Moving to another row while held cancels the old click. */
     next_controller_click(1);next_navigate(0,1,0);next_controller_click(0);
     assert(rows[5].clicks==1 && rows[6].clicks==0 && !rows[5].refs);

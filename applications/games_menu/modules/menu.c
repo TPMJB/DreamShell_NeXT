@@ -19,6 +19,7 @@
 #include <img/copy.h>
 #include <img/utils.h>
 #include <time.h>
+#include "next_audio.h"
 
 struct MenuStructure menu_data;
 
@@ -450,31 +451,37 @@ const char *GetDefaultCoverName(int menu_type)
 	}
 }
 
-const char *GetFullGamePathByIndex(int game_index)
+static void FormatGamePath(int game_index, char *path, size_t capacity)
 {
-	static char full_path_game[NAME_MAX];
-	memset(full_path_game, 0, sizeof(full_path_game));
-	if (game_index >= 0)
+	path[0] = 0;
+	if (game_index >= 0 && game_index < menu_data.games_array_count)
 	{
 		if (menu_data.games_array[game_index].folder)
 		{
-			snprintf(full_path_game, NAME_MAX, "%s/%s/%s", GetGamesPath(menu_data.games_array[game_index].device), menu_data.games_array[game_index].folder, menu_data.games_array[game_index].game);
+			snprintf(path, capacity, "%s/%s/%s", GetGamesPath(menu_data.games_array[game_index].device), menu_data.games_array[game_index].folder, menu_data.games_array[game_index].game);
 		}
 		else
 		{
-			snprintf(full_path_game, NAME_MAX, "%s/%s", GetGamesPath(menu_data.games_array[game_index].device), menu_data.games_array[game_index].game);
+			snprintf(path, capacity, "%s/%s", GetGamesPath(menu_data.games_array[game_index].device), menu_data.games_array[game_index].game);
 		}
 	}
+}
 
+const char *GetFullGamePathByIndex(int game_index)
+{
+	static char full_path_game[NAME_MAX];
+	FormatGamePath(game_index, full_path_game, sizeof(full_path_game));
 	return full_path_game;
 }
 
 void *PlayCDDAThread(void *params)
 {
 	int game_index = (int)params;
-	if (game_index >= 0)
+	if (game_index >= 0 && game_index < menu_data.games_array_count)
 	{
-		const char *full_path_game = GetFullGamePathByIndex(game_index);
+		/* A cover worker also asks for game paths; own this path across waits. */
+		char full_path_game[NAME_MAX];
+		FormatGamePath(game_index, full_path_game, sizeof(full_path_game));
 		uint32_t max_time = 2;
 		uint32_t start_time = 0;
 		uint32_t end_time = 0;
@@ -506,6 +513,7 @@ void *PlayCDDAThread(void *params)
 					timer_ms_gettime(&end_time, NULL);
 				}
 				
+				if(menu_data.cdda_game_changed) return NULL;
 				LoadFFmpegModules();
 
 				if(menu_data.ffplay)
@@ -533,7 +541,7 @@ void *PlayCDDAThread(void *params)
 						}
 					}
 					
-					if (TSU_InputEventStateGetGlobalWindowState() != SA_GAMES_MENU)
+					if (menu_data.cdda_game_changed || TSU_InputEventStateGetGlobalWindowState() != SA_GAMES_MENU)
 					{
 						menu_data.ffplay_shutdown();
 					}
@@ -544,41 +552,15 @@ void *PlayCDDAThread(void *params)
 
 				}
 			}
-			else if (CheckCDDA(game_index))
-			{
-				menu_data.games_array[game_index].contains_trailer = false;
-				if (!menu_data.cdda_game_changed)
-				{
-					size_t track_size = 0;
-					char *track_file_path = (char *)malloc(NAME_MAX);
-					srand(time(NULL));
-					timer_ms_gettime(&start_time, NULL);
-
-					do
-					{
-						track_size = GetCDDATrackFilename((random() % 15) + 4, full_path_game, &track_file_path);
-
-						// AVOID POSSIBLE CACHE STAGNATION
-						if (menu_data.started_with_cache)
-						{
-							timer_ms_gettime(&end_time, NULL);
-							if ((end_time - start_time) >= 5)
-							{
-								menu_data.games_array[game_index].is_cdda = CCGE_NOT_CDDA;
-								break;
-							}
-						}
-
-					} while (track_size == 0);
-
-					if (menu_data.games_array[game_index].is_cdda == CCGE_CDDA)
-					{
-						PlayCDDATrack(track_file_path, 3);
-					}
-
-					free(track_file_path);
-				}
-			}
+            else if (!menu_data.cdda_game_changed)
+            {
+                char track_file_path[NAME_MAX];
+                int found = NextFindPreviewTrack(full_path_game, track_file_path, sizeof(track_file_path));
+                if(!menu_data.cdda_game_changed) {
+                    menu_data.games_array[game_index].is_cdda = found ? CCGE_CDDA : CCGE_NOT_CDDA;
+                    if(found) PlayCDDATrack(track_file_path, 3);
+                }
+            }
 		}
 	}
 
@@ -587,73 +569,39 @@ void *PlayCDDAThread(void *params)
 
 bool CheckCDDA(int game_index)
 {
-	bool isCDDA = false;
-	if (game_index >= 0)
-	{
-		if (menu_data.games_array[game_index].is_cdda == CCGE_CDDA)
-		{
-			isCDDA = true;
-		}
-		else
-		{
-			if (menu_data.games_array[game_index].is_cdda == CCGE_NOT_CHECKED)
-			{
-				const char *full_path_game = GetFullGamePathByIndex(game_index);
-				size_t track_size = 0;
-
-				char *track_file_path = (char *)malloc(NAME_MAX);
-				track_size = GetCDDATrackFilename(4, full_path_game, &track_file_path);
-
-				if (track_size > 0 && track_size < 30 * 1024 * 1024)
-				{
-					track_size = GetCDDATrackFilename(6, full_path_game, &track_file_path);
-				}
-
-				if (track_size > 0 && (MAX_SIZE_CDDA == 0 || track_size <= MAX_SIZE_CDDA))
-				{
-					isCDDA = true;
-					menu_data.games_array[game_index].is_cdda = CCGE_CDDA;
-				}
-				else
-				{
-					isCDDA = false;
-					menu_data.games_array[game_index].is_cdda = CCGE_NOT_CDDA;
-				}
-
-				free(track_file_path);
-			}
-		}
-	}
-
-	return isCDDA;
+    if(game_index < 0 || game_index >= menu_data.games_array_count) return false;
+    char game[NAME_MAX], track[NAME_MAX];
+    FormatGamePath(game_index, game, sizeof(game));
+    bool found = NextFindPreviewTrack(game, track, sizeof(track));
+    menu_data.games_array[game_index].is_cdda = found ? CCGE_CDDA : CCGE_NOT_CDDA;
+    return found;
 }
 
 void StopCDDA()
 {
-	StopCDDATrack();
-	if(menu_data.ffplay && menu_data.ffplay_is_playing())
-	{
-		menu_data.ffplay_shutdown();
-	}
-
-	if (menu_data.play_cdda_thread != NULL)
-	{
-		menu_data.cdda_game_changed = true;
-		thd_join(menu_data.play_cdda_thread, NULL);
-		menu_data.play_cdda_thread = NULL;
-		menu_data.cdda_game_changed = false;
-	}
+    /* Cancel first, then join before shutting down the stream. Otherwise the
+     * outgoing worker can start playback after StopCDDATrack has returned. */
+    menu_data.cdda_game_changed = true;
+    if(menu_data.ffplay && menu_data.ffplay_is_playing())
+        menu_data.ffplay_shutdown();
+    if(menu_data.play_cdda_thread != NULL) {
+        thd_join(menu_data.play_cdda_thread, NULL);
+        menu_data.play_cdda_thread = NULL;
+    }
+    StopCDDATrack();
+    menu_data.cdda_game_changed = false;
 }
 
 void PlayCDDA(int game_index)
 {
-	StopCDDA();
-
-	if ((menu_data.games_array[game_index].contains_trailer || menu_data.games_array[game_index].is_cdda == CCGE_NOT_CHECKED || menu_data.games_array[game_index].is_cdda == CCGE_CDDA) 
-		&& (menu_data.current_dev == APP_DEVICE_SD || menu_data.current_dev == APP_DEVICE_IDE))
-	{
-		menu_data.play_cdda_thread = thd_create(0, PlayCDDAThread, (void *)game_index);
-	}
+    StopCDDA();
+    if(game_index < 0 || game_index >= menu_data.games_array_count) return;
+    int device = menu_data.games_array[game_index].device;
+    if(device == APP_DEVICE_SD || device == APP_DEVICE_IDE) {
+        /* Old caches recorded short or differently named tracks as absent.
+         * Recheck the selected image, including those cached as NOT_CDDA. */
+        menu_data.play_cdda_thread = thd_create(0, PlayCDDAThread, (void *)game_index);
+    }
 }
 
 ImageDimensionStruct *GetImageDimension(const char *image_file)

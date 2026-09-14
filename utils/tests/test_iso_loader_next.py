@@ -362,7 +362,7 @@ int main(void) {
                   "message-panel","check-game","baseline","restore-profile","details",
                   "file_browser","run_iso","pages","run-panel",*(f"message-{i}" for i in range(6))}
         self.assertFalse(required-names)
-        self.assertEqual(root.get("version"),"2.0.5")
+        self.assertEqual(root.get("version"),"2.0.6")
         exports=(ROOT/"applications/iso_loader/modules/exports.txt").read_text()
         for e in body.iter():
             for attr in ("onclick","onselect","oncontextclick","onload","onopen","onclose","onunload"):

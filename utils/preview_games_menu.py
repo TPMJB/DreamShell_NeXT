@@ -63,7 +63,7 @@ if __name__=='__main__':
     for i,p in enumerate(previews):sheet.paste(p,(i%2*640,i//2*510))
     d=ImageDraw.Draw(sheet);f=ImageFont.truetype(str(ROOT/'resources/fonts/ttf/arial_lite.ttf'),19)
     for i,name in enumerate(['List + preview','Compact covers','Gallery']):d.text((24+i%2*640,481+i//2*510),name,font=f,fill=MUTED)
-    d.text((664,590),'Games 1.0.1  /  TPMJB NeXT',font=f,fill=CYAN)
+    d.text((664,590),'Games 1.0.2  /  TPMJB NeXT',font=f,fill=CYAN)
     d.text((664,635),'Illustrative layout preview\nBundled placeholders shown\nScan artwork stays visible in every view',font=f,fill=WHITE,spacing=12)
     sheet.save(args.output/'Games-Preview.png')
     print('Games layout preview:',args.output/'Games-Preview.png')
