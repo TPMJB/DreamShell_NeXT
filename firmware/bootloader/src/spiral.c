@@ -131,16 +131,17 @@ static int load_txr(const char *fn, pvr_ptr_t *txr) {
 		path, (int)img.w, (int)img.h, (int)img.fmt);
 
 	if((img.fmt & KOS_IMG_FMT_MASK) != KOS_IMG_FMT_ARGB4444) {
-		kos_img_free(&img, 0);
+		free(img.data);
 		return -1;
 	}
 	*txr = pvr_mem_malloc(img.w * img.h * 2);
 	if(!*txr) {
-		kos_img_free(&img, 0);
+		free(img.data);
 		return -1;
 	}
 	pvr_txr_load_kimg(&img, *txr, 0);
-	kos_img_free(&img, 0);
+	/* gzip_kmg_to_img owns this malloc buffer; flags=0 uploads synchronously. */
+	free(img.data);
 	return 0;
 }
 
