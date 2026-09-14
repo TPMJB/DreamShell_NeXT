@@ -10,8 +10,8 @@ OBJS = vmdfs.o fs_vmd.o module.o
 DBG_LIBS = -lds
 EXPORTS_FILE = exports.txt
 
-VER_MAJOR = 1
-VER_MINOR = 2
+VER_MAJOR = 2
+VER_MINOR = 0
 VER_MICRO = 0
 
 KOS_CFLAGS += -I./

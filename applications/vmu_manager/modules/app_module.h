@@ -44,3 +44,10 @@ void VMU_Manager_make_folder(GUI_Widget *widget);
 void VMU_Manager_clr_name(GUI_Widget *widget);
 
 void VMU_Manager_ItemSelect(dirent_fm_t *fm_ent);
+
+void VMU_Manager_Action(GUI_Widget *widget);
+void VMU_Manager_BrowseClick(dirent_fm_t *entry);
+void VMU_Manager_BrowseSelect(dirent_fm_t *entry);
+void VMU_Manager_Confirm(GUI_Widget *widget);
+void VMU_Manager_Close(void);
+void VMU_Manager_Shutdown(void);
