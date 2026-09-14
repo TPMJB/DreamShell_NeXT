@@ -12,22 +12,28 @@ class ConsoleFeedbackChecks(unittest.TestCase):
 typedef struct { int x,y,w,h; } SDL_Rect;
 typedef struct { int height; } GUI_Surface;
 typedef struct Widget {
-    int type,flags,xoff,yoff,index,count;
+    int type,flags,xoff,yoff,index,count,refs,clicks;
     SDL_Rect area;
     struct Widget *parent,*children[160],*panel;
     GUI_Surface knob;
 } GUI_Widget;
+typedef GUI_Widget GUI_Object;
 enum { WIDGET_TYPE_OTHER, WIDGET_TYPE_BUTTON, WIDGET_TYPE_SCROLLBAR,
        WIDGET_TYPE_CONTAINER, WIDGET_TYPE_CARDSTACK, WIDGET_TYPE_TEXTENTRY };
-enum { WIDGET_HIDDEN=1, WIDGET_DISABLED=2, SDL_MOUSEMOTION=3 };
+enum { WIDGET_HIDDEN=1, WIDGET_DISABLED=2, WIDGET_PRESSED=4, SDL_MOUSEMOTION=3 };
 typedef struct { int type; struct { int x,y; } motion; } SDL_Event;
 static struct { GUI_Widget *body; } app;
-static struct { __typeof__(app) *app; GUI_Widget *filebrowser,*fw_browser; } self;
+static struct { __typeof__(app) *app; GUI_Widget *filebrowser,*fw_browser,*controller_target; } self;
 static int mouse_x,mouse_y,hover_count;
 #define GUI_WidgetGetArea(w) ((w)->area)
 #define GUI_WidgetGetParent(w) ((w)->parent)
 #define GUI_WidgetGetType(w) ((w)->type)
 #define GUI_WidgetGetFlags(w) ((w)->flags)
+#define GUI_WidgetSetFlags(w,f) ((w)->flags|=(f))
+#define GUI_WidgetClearFlags(w,f) ((w)->flags&=~(f))
+#define GUI_ObjectIncRef(w) (++(w)->refs)
+#define GUI_ObjectDecRef(w) (--(w)->refs)
+static void GUI_WidgetClicked(GUI_Widget *w,int x,int y) {assert(x>=0 && y>=0);++w->clicks;}
 #define GUI_PanelGetXOffset(w) ((w)->xoff)
 #define GUI_PanelGetYOffset(w) ((w)->yoff)
 #define GUI_PanelSetYOffset(w,n) ((w)->yoff=(n))
@@ -93,6 +99,14 @@ int main(void) {
     /* Analog movement followed by D-pad uses the actual pointer position. */
     SDL_WarpMouse(40,127+4*30+3);next_navigate(0,1,0);
     assert(next_contains(next_area(&rows[5]),mouse_x,mouse_y));
+    /* A activates a directory row even without WIDGET_INSIDE/hover state. */
+    next_controller_click(1);assert(rows[5].refs==1 && (rows[5].flags&WIDGET_PRESSED));
+    next_controller_click(0);assert(rows[5].refs==0 && rows[5].clicks==1);
+    /* Moving to another row while held cancels the old click. */
+    next_controller_click(1);next_navigate(0,1,0);next_controller_click(0);
+    assert(rows[5].clicks==1 && rows[6].clicks==0 && !rows[5].refs);
+    next_controller_click(1);next_cancel_click();next_controller_click(0);
+    assert(rows[6].clicks==0 && !rows[6].refs);
     pages.index=1;
     next_target_t targets[128];int count=0;SDL_Rect clip={0,0,640,480};
     next_targets(&root,clip,targets,&count);
@@ -264,8 +278,10 @@ typedef struct {
  struct {int value,hat;} jhat;
 } SDL_Event;
 static struct {int state;} app={APP_STATE_OPENED};
-static struct {__typeof__(app)*app;void *message,*pages,*games;} self={&app,0,0,0};
-static int modal,nav,region,lastdy,forwarded,launches,dismissed,back;
+static struct {__typeof__(app)*app;void *message,*pages,*games;int controller_mouse_event;} self={.app=&app};
+static int modal,nav,region,lastdy,forwarded,launches,dismissed,back,presses,clicks;
+static void next_controller_click(int pressed) {if(pressed) ++presses; else ++clicks;}
+static void next_cancel_click(void) {}
 static int ConsoleIsVisible(void) {return 0;}
 static void *GUI_GetScreen(void) {return NULL;}
 static void *GUI_ScreenGetFocusWidget(void *s) {(void)s;return NULL;}
@@ -297,10 +313,23 @@ int main(void) {
  e.type=SDL_JOYBUTTONDOWN;e.jbutton.button=SDL_DC_A;send(&e);
  assert(!forwarded && !launches);
  e.type=SDL_MOUSEBUTTONDOWN;e.button.button=SDL_BUTTON_LEFT;send(&e);
- e.type=SDL_MOUSEBUTTONUP;send(&e);assert(forwarded==2);
+ assert(presses==1 && !clicks && !forwarded);
+ e.type=SDL_JOYBUTTONUP;e.jbutton.button=SDL_DC_A;send(&e);
+ e.type=SDL_MOUSEBUTTONUP;send(&e);assert(clicks==1 && !forwarded);
+ /* A works on a core with no emulated mouse events, too. */
+ e.type=SDL_JOYBUTTONDOWN;e.jbutton.button=SDL_DC_A;send(&e);
+ e.type=SDL_JOYBUTTONUP;send(&e);assert(clicks==2);
+ /* A later physical mouse still reaches the GUI. */
+ e.type=SDL_JOYHATMOTION;e.jhat.value=0;send(&e);
+ e.type=SDL_MOUSEBUTTONDOWN;send(&e);e.type=SDL_MOUSEBUTTONUP;send(&e);
+ assert(forwarded==2);
  e.type=SDL_JOYBUTTONDOWN;e.jbutton.button=SDL_DC_START;send(&e);assert(launches==1);
  modal=1;e.type=SDL_MOUSEBUTTONDOWN;e.button.button=SDL_BUTTON_LEFT;send(&e);assert(!dismissed);
  e.type=SDL_MOUSEBUTTONUP;send(&e);assert(dismissed==1 && forwarded==2);
+ modal=1;e.type=SDL_JOYBUTTONDOWN;e.jbutton.button=SDL_DC_A;send(&e);
+ e.type=SDL_MOUSEBUTTONDOWN;send(&e);assert(dismissed==1);
+ e.type=SDL_JOYBUTTONUP;send(&e);e.type=SDL_MOUSEBUTTONUP;send(&e);
+ assert(dismissed==2 && clicks==2 && forwarded==2);
  return 0;
 }
 '''

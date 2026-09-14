@@ -51,6 +51,7 @@ static struct
 	Label *note_cover_scan;
 	Label *message_cover_scan;
 	Rectangle *modal_cover_scan;
+    Rectangle *artwork_button;
 
 	CheckBox *save_preset_option;
 	CheckBox *cover_background_option;
@@ -778,32 +779,29 @@ void CacheTabClick(Drawable *drawable)
 
 void ScanMissingCoversClick(Drawable *drawable)
 {
-	HideSystemMenu();
-
-	if (menu_data.current_dev == APP_DEVICE_SD || menu_data.current_dev == APP_DEVICE_IDE)
-	{
-		if (menu_data.load_pvr_cover_thread == NULL && menu_data.optimize_game_cover_thread == NULL)
-		{
-			menu_data.stop_load_pvr_cover = false;
-
-			if (!self.first_scan_cover)
-			{
-				menu_data.rescan_covers = true;
-			}
-
-			self.first_scan_cover = true;
-            ShowCoverScan();
-            menu_data.load_pvr_cover_thread = thd_create(0, LoadPVRCoverThread, NULL);
-            if(!menu_data.load_pvr_cover_thread) {
-                HideCoverScan();
-                TSU_InputEventStateSetGlobalWindowState(SA_GAMES_MENU);
-            }			
-		}
-	}
-	else
-	{
-		TSU_InputEventStateSetGlobalWindowState(SA_GAMES_MENU);
-	}
+    (void)drawable;
+    if(menu_data.load_pvr_cover_thread || menu_data.optimize_game_cover_thread) return;
+    HideSystemMenu();
+    menu_data.stop_load_pvr_cover=false;
+    menu_data.artwork_done=false;
+    menu_data.artwork_total=menu_data.games_array_count;
+    menu_data.artwork_checked=menu_data.artwork_extracted=0;
+    menu_data.artwork_existing=menu_data.artwork_unavailable=0;
+    ShowCoverScan();
+    if(menu_data.current_dev!=APP_DEVICE_SD && menu_data.current_dev!=APP_DEVICE_IDE) {
+        FinishCoverScan();
+        menu_data.artwork_done=true;
+        SetMessageScan("%s","Artwork needs a writable SD or IDE device.");
+        menu_data.artwork_done=true;
+        return;
+    }
+    menu_data.load_pvr_cover_thread=thd_create(0,LoadPVRCoverThread,NULL);
+    if(!menu_data.load_pvr_cover_thread) {
+        FinishCoverScan();
+        menu_data.artwork_done=true;
+        SetMessageScan("%s","Unable to start the artwork scanner.");
+        menu_data.artwork_done=true;
+    }
 }
 
 void OptimizeCoversClick(Drawable *drawable)
@@ -1274,35 +1272,56 @@ int StopOptimizeCovers()
 	return (menu_data.optimize_game_cover_thread == NULL ? 0 : -1);
 }
 
-void ShowCoverScan()
+void ShowCoverScan(void)
 {
-	TSU_InputEventStateSetGlobalWindowState(SA_SCAN_COVER);
+    TSU_InputEventStateSetGlobalWindowState(SA_SCAN_COVER);
+    StopCDDA();
+    HideCoverScan();
+    Color navy={1,.047f,.078f,.122f}, cyan={1,.18f,.83f,.94f};
+    Color white={1,.93f,.96f,.99f};
+    self.modal_cover_scan=TSU_RectangleCreateWithBorder(PVR_LIST_OP_POLY,48,360,544,244,
+        &navy,ML_CURSOR+5,2,&cyan,0);
+    TSU_AppSubAddRectangle(self.dsapp_ptr,self.modal_cover_scan);
+    Vector v={80,159,ML_CURSOR+7,1};
+    self.title_cover_scan=TSU_LabelCreate(self.menu_font,"Scan artwork",25,false,false,false);
+    TSU_LabelSetTint(self.title_cover_scan,&cyan);
+    TSU_LabelSetTranslate(self.title_cover_scan,&v);
+    TSU_AppSubAddLabel(self.dsapp_ptr,self.title_cover_scan);
+    self.artwork_button=TSU_RectangleCreate(PVR_LIST_OP_POLY,80,344,480,40,&cyan,ML_CURSOR+6,0);
+    TSU_AppSubAddRectangle(self.dsapp_ptr,self.artwork_button);
+    v.x=320;v.y=331;
+    self.note_cover_scan=TSU_LabelCreate(self.menu_font,"B Cancel scan",17,true,false,false);
+    TSU_LabelSetTint(self.note_cover_scan,&navy);
+    TSU_LabelSetTranslate(self.note_cover_scan,&v);
+    TSU_AppSubAddLabel(self.dsapp_ptr,self.note_cover_scan);
+    v.x=80;v.y=199;
+    self.message_cover_scan=TSU_LabelCreate(self.message_font,
+        "Checking every game in your library...\nExisting artwork is kept.\nExtracting embedded disc thumbnails.",16,false,false,true);
+    TSU_LabelSetTint(self.message_cover_scan,&white);
+    TSU_DrawableSetSize((Drawable *)self.message_cover_scan,480,80);
+    TSU_LabelSetTranslate(self.message_cover_scan,&v);
+    TSU_AppSubAddLabel(self.dsapp_ptr,self.message_cover_scan);
+}
 
-	StopCDDA();
-	HideCoverScan();
-
-	Vector vector_init_title = {640 / 2, 400 / 2 - 50, ML_CURSOR + 6, 1};
-	Color modal_color = {1, 0.0f, 0.0f, 0.0f};
-
-	self.modal_cover_scan = TSU_RectangleCreateWithBorder(PVR_LIST_OP_POLY, 40, 350, 560, 230, &modal_color, ML_CURSOR + 5, 3, &menu_data.border_color, DEFAULT_RADIUS);
-	TSU_AppSubAddRectangle(self.dsapp_ptr, self.modal_cover_scan);
-
-	static Color color = {1, 1.0f, 1.0f, 1.0f};
-	self.title_cover_scan = TSU_LabelCreate(self.menu_font, "EXTRACTING DISC THUMBNAILS", 26, true, true, false);
-	TSU_LabelSetTint(self.title_cover_scan, &color);
-	TSU_AppSubAddLabel(self.dsapp_ptr, self.title_cover_scan);
-	TSU_LabelSetTranslate(self.title_cover_scan, &vector_init_title);
-
-	vector_init_title.x = 640 / 2;
-	vector_init_title.y = 400 / 2 + 100;
-	self.note_cover_scan = TSU_LabelCreate(self.menu_font, "\n\nPress any key to exit", 14, true, true, false);
-	TSU_LabelSetTint(self.note_cover_scan, &color);
-	TSU_AppSubAddLabel(self.dsapp_ptr, self.note_cover_scan);
-	TSU_LabelSetTranslate(self.note_cover_scan, &vector_init_title);
+void FinishCoverScan(void)
+{
+    if(!self.title_cover_scan) return;
+    TSU_LabelSetText(self.title_cover_scan,menu_data.stop_load_pvr_cover?"Scan stopped":"Scan complete");
+    char result[256];
+    snprintf(result,sizeof(result),"%d / %d games checked\n%d extracted    %d already present\n%d unavailable (no thumbnail or read/write error)",
+        menu_data.artwork_checked,menu_data.artwork_total,menu_data.artwork_extracted,
+        menu_data.artwork_existing,menu_data.artwork_unavailable);
+    TSU_LabelSetText(self.message_cover_scan,result);
+    TSU_DrawableSetSize((Drawable *)self.message_cover_scan,480,80);
+    TSU_LabelSetText(self.note_cover_scan,"A / B Done");
 }
 
 void HideCoverScan()
 {
+    if(self.artwork_button) {
+        TSU_AppSubRemoveRectangle(self.dsapp_ptr,self.artwork_button);
+        TSU_RectangleDestroy(&self.artwork_button);
+    }
 	if (self.modal_cover_scan != NULL)
 	{
 		TSU_AppSubRemoveRectangle(self.dsapp_ptr, self.modal_cover_scan);
@@ -1334,27 +1353,16 @@ void HideCoverScan()
 
 void SetMessageScan(const char *fmt, const char *message)
 {
-	char message_scan[NAME_MAX];
-	memset(message_scan, 0, sizeof(message_scan));
-	snprintf(message_scan, sizeof(message_scan), fmt, message);
-	message_scan[49] = '\0';
-		
-	if (self.message_cover_scan != NULL)
-	{
-		TSU_LabelSetText(self.message_cover_scan, message_scan);
-	}
-	else
-	{
-		Color color = {1, 1.0f, 1.0f, 1.0f};
-		Vector vector_init_title = {640/2, 400/2, ML_CURSOR + 6, 1};
-		vector_init_title.x = 50;
-		vector_init_title.y += 40;
-		
-		self.message_cover_scan = TSU_LabelCreate(self.message_font, message_scan, 16, false, true, false);
-		TSU_LabelSetTint(self.message_cover_scan, &color);
-		TSU_AppSubAddLabel(self.dsapp_ptr, self.message_cover_scan);
-		TSU_LabelSetTranslate(self.message_cover_scan, &vector_init_title);
-	}
+    if(!self.message_cover_scan) return;
+    char detail[NAME_MAX], text[NAME_MAX+128];
+    snprintf(detail,sizeof(detail),fmt,message);
+    if(menu_data.artwork_done) snprintf(text,sizeof(text),"%s",detail);
+    else snprintf(text,sizeof(text),"%d / %d games  |  %d extracted  |  %d kept\n%.54s\n%s",
+        menu_data.artwork_checked<menu_data.artwork_total?menu_data.artwork_checked+1:menu_data.artwork_total,
+        menu_data.artwork_total,menu_data.artwork_extracted,menu_data.artwork_existing,detail,
+        menu_data.stop_load_pvr_cover?"Finishing this disc before stopping...":"Reading embedded disc thumbnails");
+    TSU_LabelSetText(self.message_cover_scan,text);
+    TSU_DrawableSetSize((Drawable *)self.message_cover_scan,480,80);
 }
 
 int StopScanCovers()

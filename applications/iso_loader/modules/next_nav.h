@@ -147,3 +147,61 @@ static void next_navigate(int dx, int dy, int region) {
     }
     if(best >= 0) next_focus(targets[best],dy);
 }
+
+/* Resolve the actual row, rather than the FileManager container. Controller
+ * activation must not depend on a previous mouse-motion hover flag. */
+static GUI_Widget *next_hit_widget(void) {
+    next_target_t targets[128];
+    SDL_Rect screen={0,0,640,480};
+    int count=0, x, y;
+    next_targets(self.app->body,screen,targets,&count);
+    SDL_GetMouseState(&x,&y);
+    for(int i=0;i<count;++i) {
+        GUI_Widget *w=targets[i].widget;
+        if(!next_contains(targets[i].area,x,y)) continue;
+        if(w == self.filebrowser || w == self.fw_browser) {
+            GUI_Widget *panel=GUI_FileManagerGetItemPanel(w);
+            SDL_Rect frame=next_area(panel);
+            if(!next_contains(frame,x,y)) return NULL;
+            for(int row=0;row<GUI_ContainerGetCount(panel);++row) {
+                GUI_Widget *item=GUI_FileManagerGetItem(w,row);
+                if(next_contains(next_clip(next_area(item),frame),x,y)) return item;
+            }
+            return NULL;
+        }
+        return w;
+    }
+    return NULL;
+}
+
+static void next_cancel_click(void) {
+    GUI_Widget *w=self.controller_target;
+    self.controller_target=NULL;
+    if(w) {
+        GUI_WidgetClearFlags(w,WIDGET_PRESSED);
+        GUI_ObjectDecRef((GUI_Object *)w);
+    }
+}
+
+static void next_controller_click(int pressed) {
+    GUI_Widget *w=next_hit_widget();
+    if(pressed) {
+        next_cancel_click();
+        if(w) {
+            GUI_ObjectIncRef((GUI_Object *)w);
+            self.controller_target=w;
+            GUI_WidgetSetFlags(w,WIDGET_PRESSED);
+        }
+    } else {
+        GUI_Widget *held=self.controller_target;
+        self.controller_target=NULL;
+        if(held) {
+            GUI_WidgetClearFlags(held,WIDGET_PRESSED);
+            if(held == w) {
+                SDL_Rect r=GUI_WidgetGetArea(held);
+                GUI_WidgetClicked(held,r.w/2,r.h/2);
+            }
+            GUI_ObjectDecRef((GUI_Object *)held);
+        }
+    }
+}

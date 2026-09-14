@@ -51,7 +51,10 @@ typedef void PostOptimizerCoverCallBack();
 
 struct MenuStructure
 {
-	bool rebuild_cache;
+    volatile bool artwork_done;
+    volatile int artwork_total, artwork_checked, artwork_extracted;
+    volatile int artwork_existing, artwork_unavailable;
+    bool rebuild_cache;
 	bool started_with_cache;
 	bool enable_cache;
 

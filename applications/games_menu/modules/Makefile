@@ -12,9 +12,9 @@ EXPORTS_FILE = exports.txt
 
 KOS_CFLAGS += -I./
 
-VER_MAJOR = 0
-VER_MINOR = 9
-VER_MICRO = 3
+VER_MAJOR = 1
+VER_MINOR = 0
+VER_MICRO = 0
 
 all: rm-elf
 
@@ -27,3 +27,7 @@ install: $(TARGET)
 	-rm $(DS_BUILD)/apps/$(APP_NAME)/modules/$(TARGET)
 	cp $(TARGET) $(DS_BUILD)/apps/$(APP_NAME)/modules/$(TARGET)
 
+
+module.o: next_library.h next_layout.h app_menu.h
+menu.o: next_layout.h app_menu.h
+system_menu.o preset.o: app_menu.h

@@ -66,6 +66,8 @@ static struct {
 	GUI_Widget *status, *summary, *verify_boot, *preview_media, *message;
 	GUI_Widget *btn_check;
 	Event_t *input_event;
+	GUI_Widget *controller_target;
+	int controller_mouse_event;
 	char preset_source[NAME_MAX];
 	char launch_report[2048];
 

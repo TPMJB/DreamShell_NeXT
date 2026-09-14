@@ -1,4 +1,4 @@
-# DreamShell NeXT ISO Loader 2.0.3
+# DreamShell NeXT ISO Loader 2.0.4 + Games 1.0.0
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
 This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
@@ -6,10 +6,23 @@ This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, 
 ## Install
 1. Back up the existing DS/apps/iso_loader, DS/apps/games_menu/app.xml, DS/apps/games_menu/modules/app_games_menu.klf, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
-3. Restart DreamShell. The app should show v2.0.3; the standalone loader should show v0.9.1.
+3. Restart DreamShell. ISO Loader should show v2.0.4; Games has the new TPMJB header; the standalone loader should show v0.9.1.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
 
-## 2.0.3 console feedback
+## 2.0.4 / Games 1.0.0: controller and library update
+
+Games opens with a new TPMJB layout immediately. It has an eight-row list with a large artwork preview, a compact two-column view, and a six-game gallery with titles. The action bar stays visible in every view. Existing Games launch defaults, paths and saved presets are retained.
+
+- **Games:** D-pad browses; A plays; X cycles views; Y opens game setup; L/R changes pages. **Start** focuses the action bar. Left/Right chooses an action; A activates it; B or Up/Down returns to the games. The analog pointer and a mouse can select the full visible buttons and game cells.
+- **Scan artwork:** click the button, or press Start, Right, Right, A. Every scan visits all discovered games across categories. Existing artwork is kept; missing artwork is extracted from the embedded `0GDTEX.PVR` and resized for the menu. Progress and a completion report stay visible. B requests cancellation after the current disc; A/B dismisses the result. A later scan retries unavailable games. “Unavailable” includes absent thumbnails and read/write failures; this is not a box-art download service.
+- **ISO Loader:** A directly activates the visible folder/item or button on release, including rows reached through D-pad scrolling. It no longer relies on mouse-click emulation. Adjacent duplicate mouse events are discarded; physical mouse input is retained. X jumps to the top bar; Y jumps to the bottom actions; Start launches.
+
+Versions: ISO Loader app **2.0.4**, Games **1.0.0**, shared ISO Loader module **0.9.3**, ISOFS **1.8.1**, standalone firmware **0.9.1**. Merge the supplied DS folder and reboot. Existing game paths, covers, configuration, presets and saves are not replaced. The ZIP includes Games' UI module, font and bundled images. No new boot disc or sd.bin is required.
+
+The included previews illustrate the production layout; they are not console screenshots. Host tests and SH-4 builds cannot confirm behavior on real hardware. The main checks after installing are A opening folders in ISO Loader, Start/A accessing Games actions, scan results showing new artwork, and launching the same known-working game.
+
+## Earlier 2.0.3 launch fixes (retained)
+
 Code Veronica has been confirmed to launch through ISO Loader on the user's console. This update addresses the remaining D-pad and Games Menu differences; Games Menu booting still needs a console check.
 
 ISO Loader now uses spatial D-pad navigation. Up/Down browse rows, Left/Right move between controls, X jumps to the top bar and Y jumps to the action bar. A selects or opens the highlighted item; moving focus alone does not inspect or launch it. The analog cursor remains enabled. Hidden pages and off-screen controls are excluded. Error dialogs continue to consume the full click.
@@ -18,7 +31,7 @@ Games Menu automatic defaults now use the same 8ce00000 loader address as ISO Lo
 
 In Games settings, choose **Extract disc thumbnails** (formerly “Scan missing covers”). This reads 0GDTEX.PVR from inside each game image, creates the covers directory if necessary, and generates the menu-size copies. Missing/failed thumbnails can be retried. The ripper preserves the embedded disc files in the tracks; it does not export retail box art. Games without an embedded thumbnail need an external cover. Cover files live under DS/apps/games_menu/covers, with names derived from the game/folder name.
 
-The **TPMJB NeXT** theme adds navy panels and lighter text. Select it in Games' theme settings; existing saved colors are preserved.
+Games now uses the new branded layout by default. Theme settings continue to control the settings dialogs.
 
 Versions: ISO Loader app 2.0.3; ISO Loader module 0.9.3; ISOFS 1.8.1; Games Menu 0.9.3; standalone firmware 0.9.1. The ZIP includes Games Menu's XML/module, preserving its configuration, covers and presets.
 

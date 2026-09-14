@@ -219,18 +219,35 @@ void isoLoader_Up(GUI_Widget *widget) {
 
 #include "next_nav.h"
 
-/* Keep the native pointer on every page. Dreamcast SDL
- * emits both joystick A/B and mouse events, so activation must use the mouse
- * events once, on release; handling joystick A as well would click twice. */
+/* Activate the resolved controller target directly, without relying on the
+ * emulated mouse click and parent hover flags. SDL posts the duplicate after
+ * the joystick event: consume that one event, while retaining real mice. */
 static void next_input(void *event, void *param, int action) {
     (void)event;
     SDL_Event *e = param;
     if(action != EVENT_ACTION_UPDATE || !e || !(self.app->state & APP_STATE_OPENED) ||
        ConsoleIsVisible()) return;
+    int duplicate=self.controller_mouse_event;
+    self.controller_mouse_event=0;
+    if(duplicate && e->type == duplicate && e->button.button == SDL_BUTTON_LEFT) {
+        e->type=SDL_NOEVENT; return;
+    }
     if(e->type == SDL_KEYDOWN && (e->key.keysym.sym == SDLK_F1 || e->key.keysym.sym == SDLK_PRINT)) return;
     if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
         e->type = SDL_NOEVENT; return;
+    }
+    if((e->type == SDL_JOYBUTTONDOWN || e->type == SDL_JOYBUTTONUP) &&
+       e->jbutton.button == SDL_DC_A) {
+        int pressed=e->type == SDL_JOYBUTTONDOWN;
+        self.controller_mouse_event=pressed ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+        if(!(GUI_WidgetGetFlags(self.message) & WIDGET_HIDDEN)) {
+            next_cancel_click();
+            if(!pressed) isoLoader_Dismiss(NULL);
+        } else {
+            next_controller_click(pressed);
+        }
+        e->type=SDL_NOEVENT; return;
     }
     if((e->type == SDL_KEYDOWN || e->type == SDL_KEYUP) &&
        (e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) return;
@@ -295,6 +312,8 @@ void isoLoader_Open(App_t *app) {
     next_refresh();
 }
 void isoLoader_Close(void) {
+    next_cancel_click();
+    self.controller_mouse_event=0;
     if(self.input_event) SetEventActive(self.input_event, 0);
     GUI_ScreenSetModalWidget(GUI_GetScreen(), NULL);
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);

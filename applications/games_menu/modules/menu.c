@@ -6,6 +6,8 @@
 */
 
 #include "app_menu.h"
+#include <tsunami/genmenu.h>
+#include "next_layout.h"
 #include <tsunami/inputeventstate.h>
 #include <jpeg/jpeg.h>
 #include <png/png.h>
@@ -1111,75 +1113,16 @@ bool GetGameCoverPath(int game_index, char **game_cover_path, int menu_type)
 
 void SetMenuType(int menu_type)
 {
-	menu_data.menu_type = menu_type;
-
-	switch (menu_type)
-	{
-	case MT_IMAGE_TEXT_64_5X2:
-	{
-		menu_data.menu_option.max_page_size = 10;
-		menu_data.menu_option.max_columns = 2;
-		menu_data.menu_option.size_items_column = menu_data.menu_option.max_page_size / menu_data.menu_option.max_columns;
-		menu_data.menu_option.init_position_x = 29;
-		menu_data.menu_option.init_position_y = -16;
-		menu_data.menu_option.padding_x = 306;
-		menu_data.menu_option.padding_y = 20;
-		menu_data.menu_option.image_size = 64.0f;
-	}
-	break;
-
-	case MT_IMAGE_128_4X3:
-	{
-		menu_data.menu_option.max_page_size = 12;
-		menu_data.menu_option.max_columns = 4;
-		menu_data.menu_option.size_items_column = menu_data.menu_option.max_page_size / menu_data.menu_option.max_columns;
-		menu_data.menu_option.init_position_x = 62;
-		menu_data.menu_option.init_position_y = -37;
-		menu_data.menu_option.padding_x = 156;
-		menu_data.menu_option.padding_y = 8;
-		menu_data.menu_option.image_size = 128.0f;
-	}
-	break;
-
-	case MT_IMAGE_256_3X2:
-	{
-		menu_data.menu_option.max_page_size = 6;
-		menu_data.menu_option.max_columns = 3;
-		menu_data.menu_option.size_items_column = menu_data.menu_option.max_page_size / menu_data.menu_option.max_columns;
-		menu_data.menu_option.init_position_x = 90;
-		menu_data.menu_option.init_position_y = -82;
-		menu_data.menu_option.padding_x = 212.0f;
-		menu_data.menu_option.padding_y = 12;
-		menu_data.menu_option.image_size = 200.0f;
-	}
-	break;
-
-	case MT_PLANE_TEXT:
-	{
-		menu_data.menu_option.max_page_size = 14;
-		menu_data.menu_option.max_columns = 1;
-		menu_data.menu_option.size_items_column = menu_data.menu_option.max_page_size / menu_data.menu_option.max_columns;
-		menu_data.menu_option.init_position_x = 2;
-		menu_data.menu_option.init_position_y = 29;
-		menu_data.menu_option.padding_x = 2;
-		menu_data.menu_option.padding_y = 27;
-		menu_data.menu_option.image_size = 0.0f;
-	}
-	break;
-
-	default:
-	{
-		menu_data.menu_option.max_page_size = 10;
-		menu_data.menu_option.max_columns = 2;
-		menu_data.menu_option.size_items_column = menu_data.menu_option.max_page_size / menu_data.menu_option.max_columns;
-		menu_data.menu_option.init_position_x = 20;
-		menu_data.menu_option.init_position_y = 5;
-		menu_data.menu_option.padding_x = 320;
-		menu_data.menu_option.padding_y = 12;
-		menu_data.menu_option.image_size = 64.0f;
-	}
-	break;
-	}
+    if(menu_type<MT_PLANE_TEXT || menu_type>MT_IMAGE_128_4X3) menu_type=MT_PLANE_TEXT;
+    menu_data.menu_type=menu_type;
+    menu_data.menu_option.size_items_column=NextRows(menu_type);
+    menu_data.menu_option.max_columns=NextColumns(menu_type);
+    menu_data.menu_option.max_page_size=NextRows(menu_type)*NextColumns(menu_type);
+    menu_data.menu_option.image_size=menu_type==MT_PLANE_TEXT?0:menu_type==MT_IMAGE_TEXT_64_5X2?64:128;
+    menu_data.menu_option.padding_x=menu_type==MT_PLANE_TEXT?0:menu_type==MT_IMAGE_TEXT_64_5X2?300:200;
+    menu_data.menu_option.padding_y=menu_type==MT_PLANE_TEXT?36:menu_type==MT_IMAGE_TEXT_64_5X2?10:22;
+    menu_data.menu_option.init_position_x=24;
+    menu_data.menu_option.init_position_y=96;
 }
 
 void FreeGames()
@@ -2653,67 +2596,37 @@ void *OptimizeCoverThread(void *param)
 
 void *LoadPVRCoverThread(void *params)
 {
-	menu_data.cover_scanned_app.scan_count++;
-
-	bool new_cover = false;
-	if (menu_data.rescan_covers)
-	{
-		menu_data.rescan_covers = false;
-		menu_data.cover_scanned_app.last_game_index = 1;
-	}
-
-	if (menu_data.cover_scanned_app.last_game_index == 0)
-	{
-		menu_data.cover_scanned_app.last_game_index = 1;
-	}
-
-	char *game_without_extension = NULL;
-	for (int icount = menu_data.cover_scanned_app.last_game_index - 1; icount < menu_data.games_array_count; icount++)
-	{
-		if (menu_data.stop_load_pvr_cover || menu_data.finished_menu)
-			break;
-
-		GetCoverName(icount, &game_without_extension);
-
-		memset(menu_data.cover_scanned_app.last_game_scanned, 0, sizeof(menu_data.cover_scanned_app.last_game_scanned));
-		strncpy(menu_data.cover_scanned_app.last_game_scanned, game_without_extension, strlen(game_without_extension));
-
-		menu_data.send_message_scan("Check game: %s", game_without_extension);
-
-		if (CheckCover(icount, MT_PLANE_TEXT) == SC_DEFAULT)
-		{
-			// CHECK AGAIN TO SEE IF IT WAS NOT DOWNLOADED IN PVR
-			menu_data.games_array[icount].exists_cover[MT_PLANE_TEXT - 1] = SC_WITHOUT_SEARCHING;
-			if (CheckCover(icount, MT_PLANE_TEXT) == SC_DEFAULT)
-			{
-				menu_data.games_array[icount].check_pvr = true;
-                if(ExtractPVRCover(icount)) new_cover = true;
-			}
-			else
-			{
-				menu_data.games_array[icount].is_pvr_cover = true;
-                new_cover = true;
-				menu_data.cover_scanned_app.last_game_status = CSE_EXISTS;
-			}
-		}
-		else
-		{
-			menu_data.cover_scanned_app.last_game_status = CSE_EXISTS;
-		}
-
-		menu_data.cover_scanned_app.last_game_index = (uint32)icount + 1;
-		SaveScannedCover();
-	}
-
-	if (game_without_extension != NULL)
-	{
-		free(game_without_extension);
-		game_without_extension = NULL;
-	}
-
-	menu_data.post_pvr_cover(new_cover);
-
-	return NULL;
+    (void)params;
+    menu_data.cover_scanned_app.scan_count++;
+    menu_data.rescan_covers=false;
+    menu_data.artwork_total=menu_data.games_array_count;
+    menu_data.artwork_checked=menu_data.artwork_extracted=0;
+    menu_data.artwork_existing=menu_data.artwork_unavailable=0;
+    /* Explicit scans always visit the whole library, including other categories. */
+    for(int m=1;m<=MAX_MENU;++m) RetrieveCovers(menu_data.current_dev,m);
+    char *name=NULL;
+    for(int i=0;i<menu_data.games_array_count;++i) {
+        if(menu_data.stop_load_pvr_cover || menu_data.finished_menu) break;
+        GetCoverName(i,&name);
+        snprintf(menu_data.cover_scanned_app.last_game_scanned,
+            sizeof(menu_data.cover_scanned_app.last_game_scanned),"%s",name?name:"");
+        menu_data.cover_scanned_app.last_game_index=i+1;
+        for(int m=0;m<MAX_MENU;++m) menu_data.games_array[i].exists_cover[m]=SC_WITHOUT_SEARCHING;
+        menu_data.send_message_scan("Checking: %s",name?name:"");
+        if(CheckCover(i,MT_PLANE_TEXT)==SC_EXISTS) {
+            ++menu_data.artwork_existing;
+            menu_data.cover_scanned_app.last_game_status=CSE_EXISTS;
+        } else {
+            menu_data.games_array[i].check_pvr=true;
+            if(ExtractPVRCover(i)) ++menu_data.artwork_extracted;
+            else ++menu_data.artwork_unavailable;
+        }
+        ++menu_data.artwork_checked;
+        SaveScannedCover();
+    }
+    free(name);
+    menu_data.post_pvr_cover(menu_data.artwork_extracted>0);
+    return NULL;
 }
 
 static int AppCompareGames(const void *a, const void *b)
