@@ -263,7 +263,7 @@ void CreateSystemMenuView(Form *form_ptr)
 	// THE ALIGN SHOULD BE IN FORM CLASS
 	{
 		// SCAN MISSING COVERS
-		Label *missing_covers_label = TSU_LabelCreate(form_font, "Scan missing covers", font_size, false, false, false);
+		Label *missing_covers_label = TSU_LabelCreate(form_font, "Extract disc thumbnails", font_size, false, false, false);
 		TSU_FormAddBodyLabel(form_ptr, missing_covers_label, 2, 1);
 		TSU_DrawableEventSetClick((Drawable *)missing_covers_label, &ScanMissingCoversClick);
 		TSU_DrawableEventSetOnMouseOver((Drawable *)missing_covers_label, SystemMenu_OnMouseOverEvent);
@@ -467,6 +467,7 @@ void CreateStyleView(Form *form_ptr)
 		TSU_OptionGroupAdd(self.theme_option, 1, PSYCHEDELIC_THEME);
 		TSU_OptionGroupAdd(self.theme_option, 2, MINT_THEME);
 		TSU_OptionGroupAdd(self.theme_option, 3, CUSTOM_THEME);
+        TSU_OptionGroupAdd(self.theme_option, 4, NEXT_THEME);
 		TSU_OptionGroupSetStates(self.theme_option, SA_CONTROL + THEME_CONTROL_ID, SA_SYSTEM_MENU);
 		TSU_FormAddBodyOptionGroup(form_ptr, self.theme_option, 2, 1);
 		TSU_DrawableEventSetClick((Drawable *)self.theme_option, &ThemeOptionClick);
@@ -791,8 +792,12 @@ void ScanMissingCoversClick(Drawable *drawable)
 			}
 
 			self.first_scan_cover = true;
-			menu_data.load_pvr_cover_thread = thd_create(0, LoadPVRCoverThread, NULL);
-			ShowCoverScan();			
+            ShowCoverScan();
+            menu_data.load_pvr_cover_thread = thd_create(0, LoadPVRCoverThread, NULL);
+            if(!menu_data.load_pvr_cover_thread) {
+                HideCoverScan();
+                TSU_InputEventStateSetGlobalWindowState(SA_GAMES_MENU);
+            }			
 		}
 	}
 	else
@@ -1283,7 +1288,7 @@ void ShowCoverScan()
 	TSU_AppSubAddRectangle(self.dsapp_ptr, self.modal_cover_scan);
 
 	static Color color = {1, 1.0f, 1.0f, 1.0f};
-	self.title_cover_scan = TSU_LabelCreate(self.menu_font, "SCANNING MISSING COVER", 26, true, true, false);
+	self.title_cover_scan = TSU_LabelCreate(self.menu_font, "EXTRACTING DISC THUMBNAILS", 26, true, true, false);
 	TSU_LabelSetTint(self.title_cover_scan, &color);
 	TSU_AppSubAddLabel(self.dsapp_ptr, self.title_cover_scan);
 	TSU_LabelSetTranslate(self.title_cover_scan, &vector_init_title);

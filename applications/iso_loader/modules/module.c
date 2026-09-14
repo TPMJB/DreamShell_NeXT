@@ -279,7 +279,7 @@ void isoLoader_ShowPage(GUI_Widget *widget) {
         GUI_WidgetSetFlags(self.run_pane, WIDGET_HIDDEN);
         GUI_WidgetSetFlags(self.status, WIDGET_HIDDEN);
     }
-    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SDL_DC_EmulateMouse(SDL_TRUE);
 	next_refresh();
 	GUI_WidgetMarkChanged(self.run_pane);

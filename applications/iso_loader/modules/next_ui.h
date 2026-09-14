@@ -23,7 +23,7 @@ static void next_refresh(void) {
         !strncmp(self.preset_source, "Automatic", 9) ? "Automatic defaults" : "Saved game preset";
     snprintf(text, sizeof(text), "%s | %s", self.isoldr->fs_dev, profile);
     GUI_LabelSetText(self.summary, text);
-    next_status("Stick: cursor   D-pad: focus   A: select   B: back   Start: play");
+    next_status("D-pad: move   A: select   X: top   Y: actions   Start: play");
 }
 
 void isoLoader_Dismiss(GUI_Widget *widget) {
@@ -58,7 +58,7 @@ static void next_message(const char *text) {
      * updates cannot paint over the error text. */
     GUI_WidgetSetFlags(self.pages, WIDGET_HIDDEN);
     GUI_WidgetClearFlags(self.filebrowser, WIDGET_PRESSED);
-    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SDL_DC_EmulateMouse(SDL_TRUE);
     GUI_WidgetClearFlags(self.message, WIDGET_HIDDEN);
     GUI_WidgetMarkChanged(self.app->body);
@@ -217,7 +217,9 @@ void isoLoader_Up(GUI_Widget *widget) {
     next_refresh();
 }
 
-/* Keep the native pointer and focus traversal on every page. Dreamcast SDL
+#include "next_nav.h"
+
+/* Keep the native pointer on every page. Dreamcast SDL
  * emits both joystick A/B and mouse events, so activation must use the mouse
  * events once, on release; handling joystick A as well would click twice. */
 static void next_input(void *event, void *param, int action) {
@@ -250,7 +252,18 @@ static void next_input(void *event, void *param, int action) {
         }
         e->type = SDL_NOEVENT; return;
     }
-    if(back) {
+    int dx = key == SDLK_LEFT ? -1 : key == SDLK_RIGHT ? 1 : 0;
+    int dy = key == SDLK_UP ? -1 : key == SDLK_DOWN ? 1 : 0;
+    if(e->type == SDL_JOYHATMOTION && !e->jhat.hat) {
+        dx = (e->jhat.value & SDL_HAT_LEFT) ? -1 : (e->jhat.value & SDL_HAT_RIGHT) ? 1 : 0;
+        dy = (e->jhat.value & SDL_HAT_UP) ? -1 : (e->jhat.value & SDL_HAT_DOWN) ? 1 : 0;
+    }
+    if(dx || dy) {
+        if(e->type != SDL_KEYUP) next_navigate(dx, dx ? 0 : dy, 0);
+    } else if(e->type == SDL_JOYBUTTONDOWN &&
+              (e->jbutton.button == SDL_DC_X || e->jbutton.button == SDL_DC_Y)) {
+        next_navigate(0,0,e->jbutton.button == SDL_DC_X ? 1 : 2);
+    } else if(back) {
         if(released) {
             if(GUI_CardStackGetIndex(self.pages) != 0) isoLoader_ShowGames(self.games);
             else isoLoader_Up(NULL);
@@ -258,9 +271,10 @@ static void next_input(void *event, void *param, int action) {
     } else if((e->type == SDL_JOYBUTTONDOWN && e->jbutton.button == SDL_DC_START) ||
               (e->type == SDL_KEYDOWN && key == SDLK_SPACE)) {
         isoLoader_Run(NULL);
-    } else {
-        /* Native D-pad focus reaches the device bar, tabs, checkboxes, list
-         * and actions. X/Y + D-pad retain the file manager's row/page scrolling. */
+    } else if(e->type != SDL_JOYBUTTONDOWN && e->type != SDL_JOYBUTTONUP &&
+              e->type != SDL_JOYAXISMOTION && e->type != SDL_JOYHATMOTION) {
+        /* Do not send controller modifiers into FileManager: X/Y there turn
+         * mouse emulation off and can miss the release after focus moves. */
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
     }
     e->type = SDL_NOEVENT;
@@ -268,7 +282,7 @@ static void next_input(void *event, void *param, int action) {
 
 void isoLoader_Open(App_t *app) {
     (void)app;
-    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
+    GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SDL_DC_EmulateMouse(SDL_TRUE);
     if(self.input_event) {
         GUI_DisableInput();

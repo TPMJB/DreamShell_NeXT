@@ -188,6 +188,7 @@ int ConfigParse(isoldr_conf *cfg, const char *filename)
 	file_t fd;
 	int i;
 
+	if(!filename) return -1;
 	fd = fs_open(filename, O_RDONLY);
 
 	if (fd == FILEHND_INVALID)
@@ -198,7 +199,12 @@ int ConfigParse(isoldr_conf *cfg, const char *filename)
 
 	size_t size = fs_total(fd);
 
-	char buf[1024];
+	char buf[4096];
+	if(size == 0 || size >= sizeof(buf)) {
+		fs_close(fd);
+		ds_printf("DS_ERROR: Invalid configuration size\n");
+		return -1;
+	}
 	char *optname = NULL, *value = NULL;
 
 	if (fs_read(fd, buf, size) != size)
@@ -209,6 +215,7 @@ int ConfigParse(isoldr_conf *cfg, const char *filename)
 	}
 
 	fs_close(fd);
+	buf[size] = '\0';
 
 	while (1)
 	{
@@ -234,7 +241,12 @@ int ConfigParse(isoldr_conf *cfg, const char *filename)
 				break;
 
 			case CONF_STR:
-				strcpy((char *)cfg[i].pointer, TrimSpaces2(value));
+                value = TrimSpaces2(value);
+                if(!cfg[i].capacity || strlen(value) >= cfg[i].capacity) {
+                    ds_printf("DS_ERROR: Configuration value too long: %s\n", cfg[i].name);
+                    return -1;
+                }
+                strcpy((char *)cfg[i].pointer, value);
 				break;
 
 			case CONF_ULONG:

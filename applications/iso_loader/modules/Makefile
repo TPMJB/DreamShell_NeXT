@@ -14,7 +14,7 @@ KOS_CFLAGS += -I./
 
 VER_MAJOR = 2
 VER_MINOR = 0
-VER_MICRO = 2
+VER_MICRO = 3
 
 all: rm-elf
 
@@ -27,4 +27,4 @@ install: $(TARGET)
 	-rm $(DS_BUILD)/apps/$(APP_NAME)/modules/$(TARGET)
 	cp $(TARGET) $(DS_BUILD)/apps/$(APP_NAME)/modules/$(TARGET)
 
-module.o: next_ui.h app_module.h
+module.o: next_ui.h next_nav.h app_module.h

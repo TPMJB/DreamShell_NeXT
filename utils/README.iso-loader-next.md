@@ -1,22 +1,28 @@
-# DreamShell NeXT ISO Loader 2.0.2
+# DreamShell NeXT ISO Loader 2.0.3
 TPMJB · https://github.com/TPMJB/DreamShell_NeXT
 
-This update contains the ISO Loader app, a Games Menu launch-error fix, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
+This update contains the ISO Loader app, Games Menu launch and thumbnail fixes, ISOFS and ISO Loader modules, and standalone 0.9.1 firmware. It is intended for the current DreamShell NeXT build. Keep the modules and firmware together.
 
 ## Install
 1. Back up the existing DS/apps/iso_loader, DS/apps/games_menu/app.xml, DS/apps/games_menu/modules/app_games_menu.klf, DS/modules/isoldr.klf, DS/modules/isofs.klf and DS/firmware/isoldr directories/files.
 2. Extract this update and merge its DS folder into the DS folder on your card or drive. Replace the supplied files. Your presets and VMU saves are not included in the update.
-3. Restart DreamShell. The app should show v2.0.2; the standalone loader should show v0.9.1.
+3. Restart DreamShell. The app should show v2.0.3; the standalone loader should show v0.9.1.
 4. No new boot disc is required for this app/module update. The firmware package uses ELF files; sd.bin is not required.
 
-## 2.0.2 follow-up
-The supplied Evolution 2 descriptor is valid and is now a regression fixture. The GDI parser uses explicit ASCII character checks and bounded 32-bit number parsing instead of imported newlib character tables. Both ISO Loader preflight and ISOFS mounting use it. This removes a possible source of console-only parsing differences; the original on-console rejection has not been conclusively reproduced.
+## 2.0.3 console feedback
+Code Veronica has been confirmed to launch through ISO Loader on the user's console. This update addresses the remaining D-pad and Games Menu differences; Games Menu booting still needs a console check.
 
-Games Menu uses the same ISO Loader module. If image inspection or launch preparation fails, it now displays the loader's error after returning to the main menu. A returned isoldr_exec call is a failure, not a successful handoff: the app keeps DreamShell running and frees its menu resources exactly once.
+ISO Loader now uses spatial D-pad navigation. Up/Down browse rows, Left/Right move between controls, X jumps to the top bar and Y jumps to the action bar. A selects or opens the highlighted item; moving focus alone does not inspect or launch it. The analog cursor remains enabled. Hidden pages and off-screen controls are excluded. Error dialogs continue to consume the full click.
 
-Versions: ISO Loader app 2.0.2; ISO Loader module 0.9.3; ISOFS 1.8.1; Games Menu 0.9.2; standalone firmware 0.9.1. This ZIP includes Games Menu's XML/module only, preserving its images, configuration and presets.
+Games Menu automatic defaults now use the same 8ce00000 loader address as ISO Loader (WinCE retains its minimum-address requirement). The title buffer, configuration read bounds/terminator, patch values, eight-digit address normalization, Auto device selection and alternate executable path are fixed. SD DMA/alternate reads are disabled. Games now checks the executable before handoff and writes DS/apps/games_menu/last-launch.txt with the game, settings and executable CRC. A Games-specific saved preset still takes priority over an ISO Loader preset; existing preset files are kept.
 
-The 2.0.1 cursor fix is retained: analog cursor and native D-pad focus work on every page, including the top bars. Error dialogs consume the full click and hide the page behind them to prevent asynchronous redraws covering their text. GDI errors show the rejected descriptor line and distinguish parsing, numbering and sector-order problems.
+In Games settings, choose **Extract disc thumbnails** (formerly “Scan missing covers”). This reads 0GDTEX.PVR from inside each game image, creates the covers directory if necessary, and generates the menu-size copies. Missing/failed thumbnails can be retried. The ripper preserves the embedded disc files in the tracks; it does not export retail box art. Games without an embedded thumbnail need an external cover. Cover files live under DS/apps/games_menu/covers, with names derived from the game/folder name.
+
+The **TPMJB NeXT** theme adds navy panels and lighter text. Select it in Games' theme settings; existing saved colors are preserved.
+
+Versions: ISO Loader app 2.0.3; ISO Loader module 0.9.3; ISOFS 1.8.1; Games Menu 0.9.3; standalone firmware 0.9.1. The ZIP includes Games Menu's XML/module, preserving its configuration, covers and presets.
+
+The 2.0.2 GDI parser change is retained, with the supplied Evolution 2 descriptor as a regression fixture.
 
 ## Evolution 2: first console test
 Select the CRC-verified dump, choose **Baseline**, then **Check**. Baseline is an unsaved diagnostic profile: Direct boot, loader at 8ce00000, async 8, DMA off, CDDA and VMU emulation off, visible loader messages and executable verification on. It bypasses the saved game preset without deleting it.
@@ -34,8 +40,8 @@ Use **Game preset** to restore the saved or bundled game settings. You can enabl
 
 ## Controls and browsing
 - Analog stick: move the cursor on every page. A/Enter: click the control under it. Start/Space: play.
-- D-pad up/down: move focus through all visible controls, including the device bar and top tabs. Left/right: first/last control.
-- With the cursor over the game list, hold X or Y and use D-pad up/down to select rows, left/right to move a page, or the analog stick to scroll. Release X/Y to resume the cursor.
+- D-pad: move focus in the pressed direction. Up/down over a file list browse and scroll its rows. A selects/opens the highlighted row.
+- X: focus the top bar. Y: focus the bottom action bar on the Games page. Left/right traverse either bar. The stick remains available throughout.
 - B/right-click/Escape: go up a folder, or return from Settings to Games.
 - A/B/Enter/Escape: dismiss an error dialog. Other controls are blocked while the dialog is open.
 - Mouse and keyboard remain available. Use the Check and Settings buttons for those actions.
