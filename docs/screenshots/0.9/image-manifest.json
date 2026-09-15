@@ -1,0 +1,170 @@
+[
+  {
+    "file": "01-launcher.png",
+    "title": "Launcher",
+    "caption": "Controller navigation, app previews and the coordinated NeXT icon family.",
+    "provenance": "Recorded host rendering of the production launcher scene; sample app selection.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "02-gd-ripper.png",
+    "title": "GD Ripper",
+    "caption": "The ripper defaults to Games on IDE/CF, then SD, with PC output as a fallback.",
+    "provenance": "Shipped GD Ripper XML in its idle state; host-rendered input field.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "03-games.png",
+    "title": "Games",
+    "caption": "List view with an artwork panel and persistent actions; titles and counts are examples.",
+    "provenance": "Production Games geometry and bundled placeholder artwork; illustrative list and focus.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "04-settings.png",
+    "title": "Settings / Display",
+    "caption": "The filled cyan tab shows the current page; the outline shows the selected setting.",
+    "provenance": "Settings 2.0.2 XML and active-tab styling with sample settings.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "05-gd-play.png",
+    "title": "GD Play",
+    "caption": "Disc information and a visible Menu action. Example metadata; no runtime behavior is demonstrated.",
+    "provenance": "GD Play 2.0.2 XML, corrected disc texture and illustrative metadata.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "06-file-manager.png",
+    "title": "File Manager",
+    "caption": "Two panes, visible paths and explicit file actions; folder names are examples.",
+    "provenance": "Production XML with sample directory listings and focus.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "07-vmu-manager.png",
+    "title": "VMU Manager",
+    "caption": "Save transfers, Copy all saves and full-card image actions; example VMUs and save entries.",
+    "provenance": "Production VMU Manager XML with illustrative VMU contents.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "08-iso-loader.png",
+    "title": "ISO Loader",
+    "caption": "Game browsing, executable checks, presets and launch details; example selection.",
+    "provenance": "Production ISO Loader XML with illustrative browser and status data.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "09-bios-flasher.png",
+    "title": "BIOS Flasher",
+    "caption": "Chip and image information, backup and compare actions. Chip identification is illustrative.",
+    "provenance": "Production XML with sample hardware identity; no physical write performed.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "10-region-changer.png",
+    "title": "Region Changer",
+    "caption": "Stored versus proposed factory settings, with backup and review controls; example values.",
+    "provenance": "Production XML with illustrative current and draft factory settings.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "11-speedtest.png",
+    "title": "Speedtest",
+    "caption": "Selectable modes, test sizes, repeated passes and saved reports; no benchmark result shown.",
+    "provenance": "Production XML with illustrative configuration in an idle state.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "12-memtest.png",
+    "title": "Memtest",
+    "caption": "Selectable memory regions, test options and reports; no test result shown.",
+    "provenance": "Production XML with illustrative configuration in an idle state.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "13-network.png",
+    "title": "Network",
+    "caption": "Interface information and server controls; addresses and service states are examples.",
+    "provenance": "Production XML with illustrative private-network information.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  },
+  {
+    "file": "14-ripper-advanced.png",
+    "title": "GD Ripper / Advanced",
+    "caption": "Recovery, saved-dump checks and retry options from the shipped advanced page.",
+    "provenance": "Shipped GD Ripper XML and default advanced options; no rip or recovery result shown.",
+    "dimensions": [
+      1280,
+      1072
+    ],
+    "console_capture": false,
+    "source_commit": "74f82fc98918249f3a08aec56e43ee90d8e340bb"
+  }
+]

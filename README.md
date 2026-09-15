@@ -15,7 +15,13 @@ Read [installation and release notes](https://github.com/TPMJB/DreamShell_NeXT/b
 [Browse the released 0.9 source](https://github.com/TPMJB/DreamShell_NeXT/tree/0.9).
 Copy the whole DS folder together; a working NeXT bootloader 3.0 CD can be reused.
 
-![DreamShell NeXT boot splash](resources/boot-preview.png)
+[![DreamShell NeXT 0.9 overview: Launcher, GD Ripper, Games, Settings, VMU Manager and File Manager](docs/screenshots/0.9/00-release-overview.png)](docs/screenshots/README.md)
+
+**[Explore all 14 app screens →](docs/screenshots/README.md)**
+— click any image in the gallery to open it at full size.
+These are layout previews from the released 0.9 source, with sample data.
+
+## Guides
 
 - [exFAT compatibility and installation](utils/README.exfat.md)
 - [Keyboard, directory picker and FAT32 regression check](utils/README.input-ui.md)
