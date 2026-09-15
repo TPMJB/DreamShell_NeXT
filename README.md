@@ -9,10 +9,10 @@ and KallistiOS. NeXT adds exFAT boot/storage support, a controller-friendly app
 launcher, a QWERTY keyboard and directory browser, and reliable GD ripping with
 checkpoints, catalog verification and targeted recovery.
 
-**[Download the full NeXT 0.9 release](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/0.9)**
+**[Download the full NeXT 0.9.1 release](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/0.9.1)**
 — includes the complete DS folder, boot CDs, firmware and desktop tools.
-Read [installation and release notes](https://github.com/TPMJB/DreamShell_NeXT/blob/0.9/RELEASE-NOTES.md) before updating.
-[Browse the released 0.9 source](https://github.com/TPMJB/DreamShell_NeXT/tree/0.9).
+Read [installation and release notes](https://github.com/TPMJB/DreamShell_NeXT/blob/0.9.1/RELEASE-NOTES.md) before updating.
+[Browse the released 0.9.1 source](https://github.com/TPMJB/DreamShell_NeXT/tree/0.9.1).
 Copy the whole DS folder together; a working NeXT bootloader 3.0 CD can be reused.
 
 [![DreamShell NeXT 0.9 overview: Launcher, GD Ripper, Games, Settings, VMU Manager and File Manager](docs/screenshots/0.9/00-release-overview.png)](docs/screenshots/README.md)
@@ -29,7 +29,7 @@ These are layout previews from the released 0.9 source, with sample data.
 - [CRC read-back diagnostics](utils/README.readback-diagnostic.md)
 - [Upstream changes reviewed for this release](docs/upstream-review.md)
 
-NeXT's 0.9 release number is independent of the DreamShell 4.0.5 Beta 3 core/API
+NeXT's 0.9.1 release number is independent of the DreamShell 4.0.5 Beta 3 core/API
 version. Original DreamShell, KallistiOS and third-party credits remain in the
 source and distributed notices. Other apps and hardware combinations are built
 but are not all validated on a physical console.
@@ -60,7 +60,7 @@ git clone https://github.com/KallistiOS/kos-ports.git
 git clone https://github.com/DC-SWAT/KallistiOS.git kos
 cd /usr/local/dc/kos/kos
 git clone https://github.com/TPMJB/DreamShell_NeXT.git ds
-git -C ds checkout 0.9
+git -C ds checkout 0.9.1
 git checkout `cat ds/sdk/doc/KallistiOS.txt`
 cp ds/sdk/toolchain/environ.sh environ.sh
 cp ds/sdk/toolchain/patches/*.diff utils/kos-chain/patches
