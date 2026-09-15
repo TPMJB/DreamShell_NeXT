@@ -1,6 +1,10 @@
 Required Notice: Copyright (C) 2004-present Ruslan Rostovtsev (SWAT) (http://www.dc-swat.ru)
 Required Notice: Commercial licensing: contact Ruslan Rostovtsev (SWAT) via http://www.dc-swat.ru
 
+Required Notice: DreamShell NeXT enhancements and branding by TPMJB (https://github.com/TPMJB/DreamShell_NeXT).
+This NeXT attribution covers the NeXT contributions and branding; the original
+DreamShell and third-party copyright and licensing notices remain applicable.
+
 The bundled GD Ripper redump.db is adapted from libretro/libretro-database,
 licensed CC BY-SA 4.0. Full attribution is in
 applications/gd_ripper/redump-db.README.

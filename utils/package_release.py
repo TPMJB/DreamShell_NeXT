@@ -10,6 +10,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
 from package_boot_branding import VERSION as BOOT_VERSION, verify_cdi
+from build_provenance import validate_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,6 +45,7 @@ def main():
         missing = required - names
         if missing:
             raise ValueError(f'Incomplete full release: {sorted(missing)}')
+        info['provenance'] = validate_archive(source, ROOT, commit, version)
         verify_cdi(source.read(f'DreamShell_bootloader_v{BOOT_VERSION}.cdi'))
         for path in names:
             if path.startswith('/') or '..' in Path(path).parts:
