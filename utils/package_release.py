@@ -9,7 +9,7 @@ import struct
 import subprocess
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
-from package_boot_branding import VERSION as BOOT_VERSION
+from package_boot_branding import VERSION as BOOT_VERSION, verify_cdi
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,6 +44,7 @@ def main():
         missing = required - names
         if missing:
             raise ValueError(f'Incomplete full release: {sorted(missing)}')
+        verify_cdi(source.read(f'DreamShell_bootloader_v{BOOT_VERSION}.cdi'))
         for path in names:
             if path.startswith('/') or '..' in Path(path).parts:
                 raise ValueError(f'Unsafe archive path: {path}')
@@ -120,6 +121,11 @@ def main():
                 data = (ROOT/'utils'/file).read_bytes()
                 dest.writestr(name, data)
                 checksums.append(f'{hashlib.sha256(data).hexdigest()}  {name}\n')
+            # The bootloader guide refers to this optional configuration
+            # template. Include it in the complete build as well as its ZIP.
+            data = (ROOT/'resources/boot.cfg.example').read_bytes()
+            dest.writestr('boot.cfg.example', data)
+            checksums.append(f'{hashlib.sha256(data).hexdigest()}  boot.cfg.example\n')
             metadata = (json.dumps(info, indent=2)+'\n').encode()
             dest.writestr('build-info.json', metadata)
             checksums.append(f'{hashlib.sha256(metadata).hexdigest()}  build-info.json\n')
