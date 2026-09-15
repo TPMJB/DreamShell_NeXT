@@ -5,13 +5,13 @@
 
 APP_NAME = launch_app
 TARGET_NAME = app_$(APP_NAME)
-OBJS = module.o items.o scene.o manage.o
+OBJS = module.o items.o scene.o manage.o music.o
 DBG_LIBS = -lds
 EXPORTS_FILE = exports.txt
 
 VER_MAJOR = 2
-VER_MINOR = 0
-VER_MICRO = 2
+VER_MINOR = 1
+VER_MICRO = 0
 
 KOS_CFLAGS += -I./
 

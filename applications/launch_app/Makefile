@@ -19,12 +19,17 @@ $(DEPS): $(wildcard modules/*.c modules/*.h)
 clean:
 	cd modules && make clean && cd ../
 
-install: app.xml catalog.xml $(DEPS)
+music/menu.wav: ../../utils/generate_menu_music.py
+	$(PYTHON) ../../utils/generate_menu_music.py --output $@
+
+install: app.xml catalog.xml music/menu.wav $(DEPS)
 	-mkdir -p $(APP_DIR)
 	-mkdir -p $(APP_DIR)/modules
 	-mkdir -p $(APP_DIR)/scripts
 	-mkdir -p $(APP_DIR)/images
+	-mkdir -p $(APP_DIR)/music
 	cp modules/app_$(APP_NAME).klf $(APP_DIR)/modules/app_$(APP_NAME).klf
 	cp app.xml $(APP_DIR)/app.xml
 	cp catalog.xml $(APP_DIR)/catalog.xml
 	cp images/*.png $(APP_DIR)/images
+	cp music/menu.wav music/README.md $(APP_DIR)/music/
