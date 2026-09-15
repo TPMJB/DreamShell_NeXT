@@ -4,7 +4,7 @@ Optional tips help support development, testing and documentation. Downloads rem
 
 # DreamShell NeXT — by TPMJB
 
-A Dreamcast tools environment inspired by DreamShell
+A Dreamcast tools environment inspired by Swat's DreamShell
 and KallistiOS. NeXT adds exFAT boot/storage support, a controller-friendly app
 launcher, a QWERTY keyboard and directory browser, and reliable GD ripping with
 checkpoints, catalog verification and targeted recovery.
