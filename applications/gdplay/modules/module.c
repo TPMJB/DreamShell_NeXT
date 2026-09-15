@@ -112,17 +112,19 @@ static void title(const char *value) {
     for(int line=0;line<3;line++) {
         char text[132]; size_t n=0,space=0;
         GUI_Font *font=APP_GET_FONT(line<2?"heading":"body");
+        int width=GUI_WidgetGetArea(self.title[line]).w;
         while(*p==' ') p++;
         while(p[n] && n<128) {
             text[n]=p[n]; n++; text[n]=0;
-            if(GUI_FontGetTextSize(font,text).w>338) { n--; break; }
+            if(GUI_FontGetTextSize(font,text).w>width) { n--; break; }
             if(text[n-1]==' ') space=n-1;
         }
         if(p[n] && space) n=space;
         if(!n && *p) n=1;
         memcpy(text,p,n); text[n]=0;
         if(line==2 && p[n]) {
-            while(n && GUI_FontGetTextSize(font,text).w>308) text[--n]=0;
+            int dots=GUI_FontGetTextSize(font,"...").w;
+            while(n && GUI_FontGetTextSize(font,text).w>width-dots) text[--n]=0;
             strcat(text,"...");
         }
         GUI_LabelSetText(self.title[line],text); p+=n;

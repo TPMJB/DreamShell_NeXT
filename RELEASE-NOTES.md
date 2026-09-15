@@ -1,87 +1,83 @@
-# DreamShell NeXT 1.0.0 — by TPMJB
+# DreamShell NeXT 0.9 — by TPMJB
 
-The first complete NeXT release brings the tested development branches into one
-download. It is based on SWAT's DreamShell and KallistiOS; their original credits
-and licenses are retained. NeXT's release number is separate from the underlying
-DreamShell 4.0.5 Beta 3 core/API version shown by some older applications.
+This complete build collects the bootloader, launcher/music, ISO Loader/Games,
+VMU Manager and utility app work, plus the screen-edge and Region Changer fixes.
+The project build number is 0.9; the underlying core/API remains DreamShell
+4.0.5 Beta 3. Individual applications retain their own version numbers.
 
 ## Install
 
-1. Finish or Stop any current operation and wait for idle. Power down before
+1. Finish or stop any current operation and wait for idle. Power down before
    moving the SD/CF card to your computer.
-2. Extract **DreamShell-NeXT-v1.0.0.zip**. Copy/merge its entire **DS** folder onto
-   the card root and replace matching files. Keep your previous DS folder as a
-   backup; preserve game dumps and personal files. Safely unmount the card.
-3. Boot normally. A working NeXT exFAT bootloader **3.0** CD can keep loading the
-   new core: the new splash and chime are inside `DS/DS_CORE.BIN`.
+2. Extract **DreamShell-NeXT-v0.9.zip**. Copy the complete **DS** folder to the
+   device root, replacing matching files. Preserve your existing configuration,
+   custom music, game dumps and other personal files; keep the previous DS folder
+   as a backup. Safely unmount the device.
+3. Boot normally. A working NeXT exFAT bootloader 3.0 CD can load the new core.
+   The included bootloader CD adds the newer boot menu and recovery controls.
 
-For a new installation or an older bootloader, burn the included
-`DreamShell_bootloader_v3.0.cdi` **as a disc image**. This CD loads the DS folder
-from SD/IDE and supports FAT16, FAT32 and exFAT. The included
-`DreamShell-NeXT-v1.0.0.cdi` is the complete CD-based DreamShell distribution.
-The refreshed bootloader has NeXT text branding; replacing your current 3.0 CD
-is optional. No BIOS flashing is required for this update.
+The ZIP contains both the bootloader CDI and **DreamShell-NeXT-v0.9.cdi**, the
+complete CD distribution. Burn CDI files as disc images. No BIOS flashing is
+required to install this build. `host-tools/` stays on your computer.
+Use `DS_CORE.BIN` on a console; DEBUG/EMU variants are included for diagnostics.
 
-Copy the whole DS folder together: the keyboard, launcher and ripper depend on
-the matching core. `host-tools/` stays on your computer. `DEBUG_DS_CORE.BIN` and
-`EMU_DS_CORE.BIN` are optional diagnostic/emulator variants, not replacements
-for the normal `DS_CORE.BIN` on a console.
+## GD Ripper and Games
 
-## Included
+GD Ripper 2.2.1 defaults to **/ide/Games** when IDE/CF is connected, otherwise
+**/sd/Games**, then **/pc/Games**. It creates the Games folder if needed and
+places each disc in **Games/<disc title>/** with its GDI and track files.
+The destination buttons open or create Games on the selected device. You can
+still go Up and choose another directory or an existing dump to resume.
+An unavailable or unwritable destination stops the operation; no existing
+file is replaced to create the folder.
 
-- **New boot splash and original chime.** Navy/cyan DreamShell NeXT branding,
-  with TPMJB attribution. Existing startup-sound enable/volume settings apply.
-  The boot texture uses 1 MiB of PVR memory, down from 2 MiB. Audio playback now
-  bounds its final buffer read and frees each stream on completion or failure.
-- **Launcher 2.0.2.** A contained application list, descriptions that wrap at
-  word boundaries, previews and controller navigation.
-- **QWERTY onscreen keyboard.** Text preview, insertion cursor, Shift/symbols,
-  Backspace, Done and Cancel. Modal input fixes duplicate characters.
-- **GD Ripper 2.2.0.** Automatic disc-title detection, directory browsing and
-  saved-dump selection; checkpoints, Stop/Resume, logs, streaming CRC checks,
-  bundled TOSEC/Redump-derived catalog, optional storage read-back and targeted
-  sector recovery. Recovery keeps backups and rechecks repaired output.
-- **exFAT support** through the bootloader, core, GD Ripper's filesystem service
-  and ISO Loader 0.9.0, alongside FAT16/FAT32. See `exfat-guide.md` for supported
-  partition layouts, file-size limits and storage requirements.
-- **All standard apps, modules and firmware** from the complete release build,
-  plus desktop verification/recovery tools and the installation/test guides.
-- **Selected upstream fix:** query the initialized SD/W5500 SPI interface
-  instead of interpreting an SPI function's error code. The existing kernel pin and
-  GD-ROM timeout fix are preserved. See `upstream-review.md` for the review.
+Games uses the same default Games folder on SD and IDE. Open Games after a rip
+to scan it automatically. Existing lower-case `games` folders work on FAT32 and
+exFAT. A saved custom `games_path` still takes precedence; select that location
+in the ripper or restore the Games default to keep them aligned. PC output is
+for host storage and is not a Games-menu device.
 
-## Controls and verification
+Stop/Resume, recovery checkpoints, streaming CRCs, the bundled disc catalog,
+optional storage read-back and targeted sector recovery are retained. See
+`host-tools/README.md`, `input-ui-guide.md` and `readback-guide.md` for details.
 
-The launcher uses D-pad/stick to select and A to open. In the ripper choose
-**Destination** to browse folders; open an existing dump and select **Select this
-dump** to resume or verify it. See `input-ui-guide.md` for keyboard controls.
+## Screens and Region Changer
 
-Normal CRC checking hashes the disc stream/checkpoint without another slow SD
-read. **Storage read-back** checks the actual saved files. **Advanced CRC** checks
-data-sector integrity and supports targeted rereads. A whole-track catalog CRC
-cannot itself identify which sector differs. Preserve `verify.log`, `rip.log`
-and sidecars if the console and a PC disagree before another repair attempt.
+File Manager, GD Play, Settings, BIOS Flasher, Region Changer, Speedtest,
+Memtest and Network keep their controls and labels at least 32 pixels inside
+the 640x480 screen. Fonts keep their native sizes. File pickers and progress
+bars follow the same bounds, and Memtest's controller legend is above the edge.
 
-FAT32 and exFAT share the current filesystem implementation. A useful remaining
-hardware regression check is one known-good FAT32 rip with a clean Stop/Resume
-and independent PC hashes. Existing matching dumps need not be ripped again.
+Region Changer reads the console's physical factory settings independently of
+the boot BIOS's read return values or temporary region override. It shows the
+stored region, language, video standard and swirl, with unknown fields clearly
+identified. Reading and backups need no hardware modification. Writes still
+require a recognized partition layout and compatible hardware, with a verified
+backup before erase and comparison against the physical flash afterward.
+Changes take effect after restart. Menu/Back remains available while idle.
 
-## Validation and limits
+## Other included work
 
-The release pipeline runs the host regression suite, Linux FAT32/exFAT
-interoperability checks, sanitizer checks for input/audio, and the full SH-4
-build. It checks the archive's required apps, boot discs, firmware and embedded
-boot assets before publishing. `build-info.json` records the source commit and
-component versions; `SHA256SUMS` in the ZIP covers its files.
+- Bootloader branding, checked loading, boot settings and recovery controls.
+- Launcher with the original After Hours music loop and saved music level.
+- ISO Loader/Games navigation, metadata, artwork and launch-error fixes,
+  including the WinCE SD read-address correction.
+- VMU Manager with explicit save operations, Copy all saves and full-card images.
+- The complete core, standard apps, modules, firmware, onscreen keyboard,
+  boot splash/chime, FAT32/exFAT support and desktop verification tools.
 
-The launcher and GD ripping from exFAT have been exercised on a physical
-Dreamcast. Successful PC/console CRC reruns do not conclusively explain the
-earlier intermittent read-back discrepancy; diagnostic capture remains enabled.
-The new keyboard, every other app, game-loading combinations and future
-GD-ROM-plus-IDE/CF setups still need their own hardware checks. This release
-does not change GDEMU firmware or add EXT4. Serial SD speed remains limited by
-the interface.
+App-specific guides are included beside this file. `build-info.json` identifies
+the exact source and packaged app versions. `SHA256SUMS` covers the ZIP contents.
 
-DreamShell NeXT enhancements and branding by **TPMJB**. Built on **SWAT's
-DreamShell**, **KallistiOS**, **FatFs**, and the other credited projects. See
-`DS/doc/LICENSE`, `DS/doc/NOTICE`, and the source tree for original notices.
+## Validation
+
+The build runs host regression tests, FAT32/exFAT interoperability checks,
+screen bounds and font previews, then compiles the Dreamcast modules and complete
+distribution. Packaging checks all app XML against source, native modules,
+boot discs, firmware, music, version data and embedded boot assets.
+Host previews are not hardware emulation; the corrected screens and Region
+Changer still need a console check. Flash-write tests use simulated hardware.
+
+DreamShell NeXT enhancements and branding by **TPMJB**, built on **SWAT's
+DreamShell**, **KallistiOS**, **FatFs**, and the other credited projects. Original
+licenses and notices are retained in `DS/doc/LICENSE`, `DS/doc/NOTICE` and source.

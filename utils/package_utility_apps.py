@@ -5,9 +5,9 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as E
 ROOT=Path(__file__).resolve().parents[1]
-APPS = {'filemanager':'2.0.0', 'settings':'2.0.0', 'gdplay':'2.0.0',
-        'bios_flasher':'3.0.0', 'region_changer':'2.0.0', 'speedtest':'2.0.0',
-        'memtest':'2.0.0', 'network':'2.0.0'}
+APPS = {'filemanager':'2.0.1', 'settings':'2.0.1', 'gdplay':'2.0.1',
+        'bios_flasher':'3.0.1', 'region_changer':'2.0.1', 'speedtest':'2.0.1',
+        'memtest':'2.0.1', 'network':'2.0.1'}
 
 def package(source,dest):
     with ZipFile(source) as full, ZipFile(dest,'w',ZIP_DEFLATED) as out:

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="GD Ripper" version="2.2.0" icon="images/icon.png">
+<app name="GD Ripper" version="2.2.1" icon="images/icon.png">
   <resources>
     <module src="modules/app_gd_ripper.klf" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="16" name="body" />
@@ -159,11 +159,11 @@
     <cardstack name="pages">
       <panel name="main-page" width="640" height="480">
         <label x="24" y="16" width="592" height="28" font="title" color="#E7EEF4" text="GD RIPPER  /  NeXT" align="left" valign="center" />
-        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.2.0  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
+        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.2.1  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
         <label x="24" y="70" width="592" height="20" font="body" color="#53E1E3" text="Waiting for disc..." align="left" valign="center" name="disc-label" />
         <label x="24" y="100" width="70" height="22" font="body" color="#9BAFC1" text="Folder:" align="left" />
         <input type="text" name="gname-text" value="ripped_disc" x="96" y="96" width="520" height="28" size="254" font="body" fontcolor="#14202B" onblur="export:gd_ripper_Gamename()" />
-        <label x="24" y="134" width="450" height="20" font="body" color="#9BAFC1" text="/sd" align="left" valign="center" name="destination-path" />
+        <label x="24" y="134" width="450" height="20" font="body" color="#9BAFC1" text="/sd/Games" align="left" valign="center" name="destination-path" />
         <input type="button" x="488" y="128" width="128" height="32" name="browse-btn" onclick="export:gd_ripper_ShowFileBrowser()" normal="b128-32-normal" highlight="b128-32-highlight" pressed="b128-32-pressed" disabled="b128-32-disabled">
           <label font="body" color="#F0F6FA" text="Destination" align="center" />
         </input>
@@ -205,7 +205,7 @@
         <input type="button" x="488" y="58" width="128" height="28" name="folder-up" onclick="export:gd_ripper_Folder()" normal="b128-28-normal" highlight="b128-28-highlight" pressed="b128-28-pressed" disabled="b128-28-disabled">
           <label font="small" color="#F0F6FA" text="Up one folder" align="center" />
         </input>
-        <label x="24" y="95" width="592" height="20" font="small" color="#9BAFC1" text="/sd" align="left" valign="center" name="folder-path" />
+        <label x="24" y="95" width="592" height="20" font="small" color="#9BAFC1" text="/sd/Games" align="left" valign="center" name="folder-path" />
         <input type="button" x="24" y="122" width="592" height="27" name="folder-0" onclick="export:gd_ripper_Folder()" normal="b592-27-normal" highlight="b592-27-highlight" pressed="b592-27-pressed" disabled="b592-27-disabled">
           <label font="small" color="#F0F6FA" text="" align="left" />
         </input>

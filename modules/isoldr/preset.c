@@ -34,17 +34,23 @@ typedef struct {
 	const char *name;
 	int conf_type;
 	void *pointer;
+	size_t capacity;
 } isoldr_conf;
 
 static int conf_parse(isoldr_conf *cfg, const char *filename) {
 	file_t fd = fs_open(filename, O_RDONLY);
 
 	if(fd == FILEHND_INVALID) {
-		ds_printf("DS_ERROR: Can't open %s\n", filename);
+		isoldr_error("Can't open %s\n", filename);
 		return -1;
 	}
 
 	size_t size = fs_total(fd);
+    if(!size || size > 16384) {
+        fs_close(fd);
+        isoldr_error("Preset is empty or too large.\n");
+        return -1;
+    }
 	char *buf = (char *)malloc(size + 1);
 	char *optname = NULL, *value = NULL;
 
@@ -56,7 +62,7 @@ static int conf_parse(isoldr_conf *cfg, const char *filename) {
 	if(fs_read(fd, buf, size) != size) {
 		fs_close(fd);
 		free(buf);
-		ds_printf("DS_ERROR: Can't read %s\n", filename);
+		isoldr_error("Can't read %s\n", filename);
 		return -1;
 	}
 
@@ -86,7 +92,12 @@ static int conf_parse(isoldr_conf *cfg, const char *filename) {
 					break;
 
 				case CONF_STR:
-					strcpy((char *)cfg[i].pointer, trim_spaces(value));
+					if(!cfg[i].capacity || strlen(trim_spaces(value)) >= cfg[i].capacity) {
+                        isoldr_error("Preset value is too long: %s\n", cfg[i].name);
+                        free(buf);
+                        return -1;
+                    }
+                    strcpy((char *)cfg[i].pointer, trim_spaces(value));
 					break;
 
 				case CONF_ULONG:
@@ -194,12 +205,12 @@ static int mount_presets_romdisk(int device_idx) {
 		getenv("PATH"), preset_romdisk_names[device_idx]);
 
 	if(fs_load(romdisk_path, (void **)&preset_romdisk_data[device_idx]) <= 0) {
-		ds_printf("DS_ERROR: Failed to load romdisk %s\n", romdisk_path);
+		isoldr_error("Failed to load romdisk %s\n", romdisk_path);
 		return -1;
 	}
 
 	if(fs_romdisk_mount(preset_mount_points[device_idx], preset_romdisk_data[device_idx], 0) < 0) {
-		ds_printf("DS_ERROR: Failed to mount romdisk %s\n", romdisk_path);
+		isoldr_error("Failed to mount romdisk %s\n", romdisk_path);
 		free(preset_romdisk_data[device_idx]);
 		preset_romdisk_data[device_idx] = NULL;
 		return -1;
@@ -319,18 +330,18 @@ static int cdda_exists(const char *image_file) {
 
 uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 
-	uintptr_t exec_addr = ISOLDR_DEFAULT_ADDR_LOW;
+	uintptr_t exec_addr = ISOLDR_DEFAULT_ADDR;
 	int use_dma = 1, emu_async = 8, use_irq = 0, alt_read = 0, use_gpio = 0;
 	int fastboot = 0, low = 0, emu_vmu = 0, scr_hotkey = 0, region = -1;
 	int boot_mode = BOOT_MODE_DIRECT;
 	int bin_type = BIN_TYPE_AUTO;
 	int naomi_set = 0;
 	uint32_t heap = HEAP_MODE_AUTO, emu_cdda = 0;
-	char title[32] = "";
+	char title[129] = "";
 	char device[8] = "";
 	char memory[12] = "";
 	char heap_memory[12] = "";
-	char bin_file[12] = "";
+	char bin_file[16] = "";
 	char patch_a[2][10];
 	char patch_v[2][10];
 
@@ -348,24 +359,24 @@ uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 			{ "scrhotkey",CONF_INT,   (void *) &scr_hotkey },
 			{ "gpio",     CONF_INT,   (void *) &use_gpio   },
 			{ "region",   CONF_INT,   (void *) &region     },
-			{ "heap",     CONF_STR,   (void *) heap_memory },
-			{ "memory",   CONF_STR,   (void *) memory      },
+			{ "heap",     CONF_STR,   (void *) heap_memory, sizeof(heap_memory) },
+			{ "memory",   CONF_STR,   (void *) memory, sizeof(memory) },
 			{ "async",    CONF_INT,   (void *) &emu_async  },
 			{ "mode",     CONF_INT,   (void *) &boot_mode  },
 			{ "type",     CONF_INT,   (void *) &bin_type   },
-			{ "file",     CONF_STR,   (void *) bin_file    },
-			{ "title",    CONF_STR,   (void *) title       },
-			{ "device",   CONF_STR,   (void *) device      },
+			{ "file",     CONF_STR,   (void *) bin_file, sizeof(bin_file) },
+			{ "title",    CONF_STR,   (void *) title, sizeof(title) },
+			{ "device",   CONF_STR,   (void *) device, sizeof(device) },
 			{ "fastboot", CONF_INT,   (void *) &fastboot   },
 			{ "naomi",    CONF_INT,   (void *) &naomi_set  },
-			{ "pa1",      CONF_STR,   (void *) patch_a[0]  },
-			{ "pv1",      CONF_STR,   (void *) patch_v[0]  },
-			{ "pa2",      CONF_STR,   (void *) patch_a[1]  },
-			{ "pv2",      CONF_STR,   (void *) patch_v[1]  },
+			{ "pa1",      CONF_STR,   (void *) patch_a[0], sizeof(patch_a[0]) },
+			{ "pv1",      CONF_STR,   (void *) patch_v[0], sizeof(patch_v[0]) },
+			{ "pa2",      CONF_STR,   (void *) patch_a[1], sizeof(patch_a[1]) },
+			{ "pv2",      CONF_STR,   (void *) patch_v[1], sizeof(patch_v[1]) },
 			{ NULL,       CONF_END,   NULL }
 		};
 		if(conf_parse(options, preset_file) < 0) {
-			ds_printf("DS_ERROR: Can't parse preset\n");
+			isoldr_error("Can't parse preset\n");
 			return (uintptr_t)-1;
 		}
 	}
@@ -377,7 +388,16 @@ uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 		}
 	}
 
-	if(region == -1) {
+	if(boot_mode < BOOT_MODE_DIRECT || boot_mode > BOOT_MODE_IPBIN_TRUNC ||
+       bin_type < BIN_TYPE_AUTO || bin_type > BIN_TYPE_NAOMI ||
+       (bin_type == BIN_TYPE_NAOMI && isoldr->image_type != IMAGE_TYPE_ROM_NAOMI) ||
+       emu_async < 0 || emu_async > 16 || emu_vmu < 0 || emu_vmu > 999 ||
+       region < -1 || region > ISOLDR_REGION_AUSTRALIA) {
+        isoldr_error("Preset contains invalid boot, read, VMU, or region values.\n");
+        return (uintptr_t)-1;
+    }
+
+    if(region == -1) {
 		region = flashrom_get_region_only();
 		if(region <= 0) {
 			region = ISOLDR_REGION_JAPAN;
@@ -447,13 +467,13 @@ uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 	}
 
 	if(strlen(device) > 0 && strncmp(device, "auto", 4) != 0) {
-		strncpy(isoldr->fs_dev, device, sizeof(isoldr->fs_dev));
+		snprintf(isoldr->fs_dev, sizeof(isoldr->fs_dev), "%s", device);
 	}
 
 	if(strlen(bin_file) > 0) {
 		char image_path[NAME_MAX];
 		build_image_full_path(isoldr, image_path, sizeof(image_path));
-		isoldr_set_boot_file(isoldr, image_path, bin_file);
+		if(isoldr_set_boot_file(isoldr, image_path, bin_file) < 0) return (uintptr_t)-1;
 	}
 
 	for(int i = 0; i < 2; ++i) {
@@ -476,7 +496,11 @@ uintptr_t isoldr_apply_preset(isoldr_info_t *isoldr, const char *preset_file) {
 		}
 	}
 
-	return exec_addr;
+	if(!strcmp(isoldr->fs_dev, ISOLDR_DEV_SDCARD)) {
+        isoldr->use_dma = 0;
+        isoldr->alt_read = 0;
+    }
+    return exec_addr;
 }
 
 int isoldr_save_preset(isoldr_info_t *info, const char *filename,

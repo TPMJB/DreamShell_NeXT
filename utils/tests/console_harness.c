@@ -4,10 +4,13 @@
 #include <assert.h>
 #include <dirent.h>
 static const char *mount_root;
+static const char *ide_mount_root, *pc_mount_root;
 static DIR *dirs[1024];
 static const char *map_path(const char *p) {
     static char mapped[2048];
     if (mount_root && !strncmp(p,"/sd",3) && (!p[3] || p[3]=='/')) { snprintf(mapped,sizeof(mapped),"%s%s",mount_root,p+3); return mapped; }
+    if (ide_mount_root && !strncmp(p,"/ide",4) && (!p[4] || p[4]=='/')) { snprintf(mapped,sizeof(mapped),"%s%s",ide_mount_root,p+4); return mapped; }
+    if (pc_mount_root && !strncmp(p,"/pc",3) && (!p[3] || p[3]=='/')) { snprintf(mapped,sizeof(mapped),"%s%s",pc_mount_root,p+3); return mapped; }
     return p;
 }
 
@@ -123,7 +126,7 @@ int fs_close(file_t f) {if(f>=0 && f<1024 && dirs[f]){closedir(dirs[f]);dirs[f]=
 off_t fs_seek(file_t f,off_t o,int w) {return lseek(f,o,w);}
 int fs_complete(file_t f,ssize_t *n) {*n=0;return fsync(f);}
 int fs_unlink(const char *p) {return unlink(p);}
-int fs_mkdir(const char *p) {return mkdir(p,0700);}
+int fs_mkdir(const char *p) {return mkdir(map_path(p),0700);}
 const dirent_t *fs_readdir(file_t f) {
     static dirent_t out;
     if(f<0 || f>=1024 || !dirs[f])return NULL;
@@ -200,6 +203,22 @@ static void mock_recovery_progress(void *data, uint32_t pass, uint32_t fad,
 int main(int argc,char **argv) {
     if(argc<2)return 2;
     setup();
+    if (!strcmp(argv[1], "default-destination") || !strcmp(argv[1], "device-destination")) {
+        const char *device = argc>3 ? argv[3] : "sd";
+        if(!strcmp(device,"sd") || !strcmp(device,"both")) mount_root=argv[2];
+        if(!strcmp(device,"ide") || !strcmp(device,"both")) ide_mount_root=argv[2];
+        if(!strcmp(device,"pc")) pc_mount_root=argv[2];
+        static App_t app = {.state = APP_STATE_OPENED};
+        gd_ripper_Init(&app,NULL);
+        if(!strcmp(argv[1],"device-destination")) {
+            char name[32]; snprintf(name,sizeof(name),"device-%s",device);
+            gd_ripper_Destination(host_widget(name));
+            printf("%s|%d\n",self.folders.path,self.folders.valid); return 0;
+        }
+        int rv=gd_prepare_destination(self.selected_path);
+        printf("%s|%d|%d\n",self.selected_path,rv,DirExists(self.selected_path));
+        return 0;
+    }
     if (!strcmp(argv[1], "input-once")) {
         SDL_Event e = {.type = SDL_KEYDOWN}; e.key.keysym.sym = SDLK_a;
         focused = self.gname; input_event(NULL,&e,EVENT_ACTION_UPDATE);

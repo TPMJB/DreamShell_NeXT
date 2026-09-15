@@ -182,13 +182,63 @@ int main(void) {
     return 0;
 }''')
 
+    def test_region_reads_physical_flash_and_verifies_both_write_conventions(self):
+        self.compile_run(r'''
+#include <assert.h>
+#include <limits.h>
+#include <string.h>
+#include "applications/region_changer/modules/region_flash.h"
+#include "applications/maintenance_model.h"
+int main(void) {
+    uint8_t flash[REGION_FLASH_SIZE], data[REGION_FACTORY_SIZE];
+    memset(flash,0xac,sizeof(flash));
+    memcpy(flash+REGION_FACTORY_START,"00211",5); /* Europe / English / PAL */
+    assert(region_flash_read(flash,REGION_FACTORY_START,data,sizeof(data))==0);
+    assert(maintenance_factory_valid(data,sizeof(data)) && data[2]=='2');
+    assert(!memcmp(data,flash+REGION_FACTORY_START,sizeof(data)));
+    /* Read again after a physical change; no BIOS result or cached copy. */
+    flash[REGION_FACTORY_START+2]='Z';
+    assert(region_flash_read(flash,REGION_FACTORY_START,data,sizeof(data))==0);
+    assert(data[2]=='Z' && maintenance_factory_valid(data,sizeof(data)));
+    assert(region_flash_written(flash,REGION_FACTORY_START,data,sizeof(data),0)==0);
+    assert(region_flash_written(flash,REGION_FACTORY_START,data,sizeof(data),sizeof(data))==0);
+    assert(region_flash_written(flash,REGION_FACTORY_START,data,sizeof(data),-1)<0);
+    assert(region_flash_written(flash,REGION_FACTORY_START,data,sizeof(data),sizeof(data)-1)<0);
+    flash[REGION_FACTORY_START+8000]^=1;
+    assert(region_flash_written(flash,REGION_FACTORY_START,data,sizeof(data),0)<0);
+    assert(region_flash_written(flash,REGION_FACTORY_START,data,sizeof(data),sizeof(data))<0);
+    memset(flash+REGION_FACTORY_START,255,sizeof(data));
+    assert(region_flash_read(flash,REGION_FACTORY_START,data,sizeof(data))==0);
+    assert(!maintenance_factory_valid(data,sizeof(data))); /* never show Japan by default */
+    for(int part=0;part<5;part++) {
+        int start,size;
+        assert(region_partition(part,&start,&size));
+        assert(region_partition_matches(part,start,size));
+        assert(!region_partition_matches(part,start+1,size));
+        assert(!region_partition_matches(part,start,size-1));
+    }
+    assert(!region_partition_matches(-1,0,8192));
+    assert(!region_partition_matches(5,0,8192));
+    assert(!region_partition_matches(0,0,8192)); /* in range, wrong partition */
+    assert(region_flash_read(flash,-1,data,1)<0);
+    assert(region_flash_read(flash,INT_MAX,data,1)<0);
+    assert(region_flash_read(flash,REGION_FLASH_SIZE,data,1)<0);
+    assert(region_flash_read(flash,0,data,SIZE_MAX)<0);
+    assert(region_flash_read(flash,REGION_FLASH_SIZE-1,data,2)<0);
+    assert(region_flash_read(flash,0,data,0)<0);
+    assert(region_flash_read(NULL,0,data,1)<0);
+    assert(region_flash_read(flash,0,NULL,1)<0);
+    assert(region_flash_read(flash,REGION_FLASH_SIZE-1,data,1)==0);
+    return 0;
+}''')
+
     def test_layout_callbacks_geometry_and_dependencies(self):
         for app,prefix in [('bios_flasher','BiosFlasher'),('region_changer','RegionChanger'),
                            ('speedtest','Speedtest'),('memtest','Memtest'),('network','NetworkApp')]:
             path=ROOT/'applications'/app
             xml=E.parse(path/'app.xml').getroot()
             exports=(path/'modules/exports.txt').read_text().splitlines()
-            self.assertEqual(xml.get('version'), '3.0.0' if app=='bios_flasher' else '2.0.0')
+            self.assertEqual(xml.get('version'), '3.0.1' if app=='bios_flasher' else '2.0.1')
             from PIL import Image
             with Image.open(path/xml.get('icon')) as icon:
                 self.assertEqual(icon.size, (64,64), app)

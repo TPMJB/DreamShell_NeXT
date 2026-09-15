@@ -1,0 +1,22 @@
+# DreamShell NeXT bootloader 3.1
+# Optional: copy this file to DS/boot.cfg on SD and edit with a text editor.
+# These values preserve the default immediate boot behavior.
+boot_order=auto
+autoboot=1
+boot_delay=0
+diagnostics=0
+
+# Example: prefer SD, then IDE, then CD (other devices remain available).
+# boot_order=sd,ide,cd
+
+# Optional preferred and fallback cores. Leave empty for normal discovery.
+# The fallback is selected automatically only when the preferred file is absent.
+# Read errors always leave the recovery menu open.
+core_path=
+fallback_path=
+# core_path=/sd/DS/DS_CORE.BIN
+# fallback_path=/ide/DS/DS_CORE.BIN
+
+# autoboot=0 always opens the menu.
+# boot_delay=3 shows a three-second countdown; any button stops it.
+# diagnostics=1 shows detection/load times, byte counts, and settings source.

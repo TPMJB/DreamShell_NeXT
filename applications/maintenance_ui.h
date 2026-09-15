@@ -10,7 +10,7 @@ typedef struct {
     Event_t *input;
     GUI_Widget *rows[6], *actions[3], *menu, *main, *browser, *fm, *dialog;
     GUI_Widget *path, *status, *note, *detail[2], *progress;
-    int focus, busy, cancel, asking, browsing, folder, purpose;
+    int focus, busy, cancel, asking, browsing, folder, purpose, progress_width;
     void (*row)(int, int);
     void (*action)(int);
     void (*confirm)(int);
@@ -44,7 +44,8 @@ static void ma_status(const char *text, int error) {
 }
 static void ma_note(const char *text) { GUI_LabelSetText(ui.note, ma_tail(text, 87)); }
 static void ma_progress(size_t done, size_t total) {
-    GUI_WidgetSetSize(ui.progress, total ? (int)(592.0 * done / total) : 0, 4);
+    if(done > total) done = total;
+    GUI_WidgetSetSize(ui.progress, total ? (int)((double)ui.progress_width * done / total) : 0, 4);
 }
 static GUI_Widget *ma_focused(void) {
     return ui.focus < 6 ? ui.rows[ui.focus] : ui.focus < 9 ? ui.actions[ui.focus - 6] : ui.menu;
@@ -184,6 +185,7 @@ static void ma_init(App_t *app, const char *name) {
     ui.status = ma_widget("status"); ui.note = ma_widget("note");
     ui.detail[0] = ma_widget("detail-0"); ui.detail[1] = ma_widget("detail-1");
     ui.progress = ma_widget("progress");
+    ui.progress_width = GUI_WidgetGetArea(ui.progress).w;
     ui.input = AddEvent(name, EVENT_TYPE_INPUT, EVENT_PRIO_DEFAULT, ma_input, NULL);
     if(ui.input) SetEventActive(ui.input, 0);
     ma_browser_close(); ma_progress(0, 1);

@@ -1,0 +1,225 @@
+name: NeXT combined apps build
+
+on:
+  push:
+    branches:
+      - codex/iso-loader-next
+  workflow_dispatch:
+
+concurrency:
+  group: dreamshell-iso-loader-next-build
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    name: Build combined apps update
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GIT_TERMINAL_PROMPT: "0"
+      REQUIRE_EXFAT_TESTS: "1"
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup || true
+          sudo apt-get clean || true
+          df -hT
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gawk patch bzip2 tar make cmake pkg-config \
+            gettext wget bison flex sed meson ninja-build \
+            build-essential diffutils curl python3 python3-pil rake zlib1g-dev exfatprogs dosfstools \
+            genisoimage squashfs-tools texinfo git zip \
+            libgmp-dev libmpfr-dev libmpc-dev libelf-dev libisofs-dev \
+            libpng-dev libjpeg-dev liblzo2-dev liblua5.2-dev lua5.2
+
+      - name: Install tolua
+        run: |
+          git clone --depth 1 https://github.com/LuaDist/tolua.git /tmp/tolua
+          cmake -S /tmp/tolua -B /tmp/tolua/build
+          make -C /tmp/tolua/build -j"$(nproc)"
+          sudo make -C /tmp/tolua/build install
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Test storage, ripper and ISO Loader
+        run: python3 -m unittest discover -s utils/tests -v
+
+      - name: Render native interface preview and check text bounds
+        run: |
+          python3 utils/preview_iso_loader.py --output /tmp/iso-loader-preview --emit
+          python3 utils/preview_games_menu.py --output /tmp/games-preview
+          python3 utils/preview_utility_apps.py /tmp/utility-preview
+
+      - name: Prepare directories
+        run: |
+          sudo mkdir -p /usr/local/dc/kos /opt/toolchains/dc
+          sudo chown -R "$(id -u):$(id -g)" /usr/local/dc /opt/toolchains
+
+      - name: Resolve kos-ports SHA
+        id: ports
+        run: echo "sha=$(git ls-remote https://github.com/KallistiOS/kos-ports.git HEAD | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore toolchain cache
+        id: cache-toolchain
+        uses: actions/cache/restore@v5
+        with:
+          path: /opt/toolchains/dc
+          key: dc-toolchain-${{ runner.os }}-${{ hashFiles('sdk/toolchain/Makefile.cfg', 'sdk/toolchain/patches/*.diff', 'sdk/doc/KallistiOS.txt') }}
+
+      - name: Restore kos-ports cache
+        id: cache-ports
+        uses: actions/cache/restore@v5
+        with:
+          path: /usr/local/dc/kos/kos-ports
+          key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
+
+      - name: Clone kos-ports
+        if: steps.cache-ports.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --filter=blob:none \
+            https://github.com/KallistiOS/kos-ports.git /usr/local/dc/kos/kos-ports
+
+      - name: Prepare KallistiOS tree
+        run: bash .github/scripts/dev-build.sh prepare
+
+      - name: Build toolchain
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: bash .github/scripts/dev-build.sh toolchain
+
+      - name: Verify toolchain
+        run: test -x /opt/toolchains/dc/sh-elf/bin/sh-elf-gcc
+
+      - name: Check app and module SH-4 compilation
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          make -C applications/iso_loader/modules module.o utils.o exports.o
+          make -C modules/isoldr module.o preset.o elf.o exports.o
+          make -C modules/isofs gdi.o
+          make -C applications/games_menu/modules module.o utils.o menu.o system_menu.o preset.o exports.o
+          make -C applications/settings/modules module.o exports.o
+          make -C applications/gdplay/modules module.o exec.o exports.o
+          make -C applications/filemanager/modules module.o exports.o
+
+      - name: Check GDI parser has no SH-4 runtime imports
+        run: |
+          cat > /tmp/gdi-import-check.c <<'C_PROBE'
+          #include <isofs/gdi_parse.h>
+          int parse_track(const char *p, ds_gdi_track *t) { return ds_gdi_parse(p, t); }
+          int parse_count(const char *p) { return ds_gdi_count(p); }
+          C_PROBE
+          /opt/toolchains/dc/sh-elf/bin/sh-elf-gcc -ml -m4-single -O2 -I include -c /tmp/gdi-import-check.c -o /tmp/gdi-import-check.o
+          /opt/toolchains/dc/sh-elf/bin/sh-elf-nm -u /tmp/gdi-import-check.o > /tmp/gdi-imports.txt
+          if test -s /tmp/gdi-imports.txt; then
+            cat /tmp/gdi-imports.txt
+            exit 1
+          fi
+
+      - name: Check ISO Loader SH-4 builds
+        run: bash .github/scripts/dev-build.sh loaders
+
+      - name: Save toolchain cache
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: /opt/toolchains/dc
+          key: dc-toolchain-${{ runner.os }}-${{ hashFiles('sdk/toolchain/Makefile.cfg', 'sdk/toolchain/patches/*.diff', 'sdk/doc/KallistiOS.txt') }}
+
+      - name: Build KallistiOS
+        run: bash .github/scripts/dev-build.sh kos
+
+      - name: Build kos-ports
+        run: bash .github/scripts/dev-build.sh ports
+
+      - name: Save kos-ports cache
+        if: steps.cache-ports.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: /usr/local/dc/kos/kos-ports
+          key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
+
+      - name: Build DreamShell release
+        run: bash .github/scripts/dev-build.sh release
+
+      - name: Package combined apps update
+        run: |
+          python3 utils/package_utility_apps.py DreamShell-dev.zip utility-apps.zip
+          python3 - <<'PY_PACKAGE'
+          from zipfile import ZipFile, ZIP_DEFLATED
+          from hashlib import sha256
+          import os
+          prefix='DS/apps/iso_loader/'
+          with ZipFile('utility-apps.zip') as utilities:
+              assert utilities.testzip() is None
+              utility_files={name for name in utilities.namelist() if name.startswith('DS/')}
+              utility_guide=utilities.read('Utility-Apps-README.md')
+          with ZipFile('DreamShell-dev.zip') as full:
+              assert full.testzip() is None
+              assert b'version="2.0.6"' in full.read(prefix+'app.xml')
+              assert b'version="1.0.3"' in full.read('DS/apps/games_menu/app.xml')
+              for name in (prefix+'modules/app_iso_loader.klf','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/firmware/isoldr/sd.elf'):
+                  assert len(full.read(name)) > 1000, name
+              import struct
+              firmware=[n for n in full.namelist() if n.startswith('DS/firmware/isoldr/') and n.endswith('.elf')]
+              assert firmware
+              for name in firmware:
+                  elf=full.read(name)
+                  assert elf[:7]==b'\x7fELF\x01\x01\x01', name
+                  assert b'game loader v0.9.2\n' in elf, name
+                  hdr=struct.unpack_from('<HHIIIIIHHHHHH',elf,16)
+                  entry,phoff,shoff=hdr[3:6]
+                  phsize,phnum,shsize,shnum=hdr[8:12]
+                  assert phsize==32 and phoff+phnum*phsize<=len(elf), name
+                  segments=[struct.unpack_from('<IIIIIIII',elf,phoff+i*phsize) for i in range(phnum)]
+                  loads=[p for p in segments if p[0]==1]
+                  assert loads and all(p[4]<=p[5] and p[1]+p[4]<=len(elf) for p in loads), name
+                  vmin=min(p[2] for p in loads); vmax=max(p[2]+p[5] for p in loads)
+                  assert entry==vmin and vmax-vmin+1024<=2*1024*1024, (name,hex(entry),hex(vmin))
+                  assert shsize==40 and shoff+shsize*shnum<=len(elf), name
+                  print('Firmware layout:',name,'entry',hex(entry),'runtime bytes',vmax-vmin+1024)
+              with ZipFile('DreamShell-ISO-Loader-2.0.6.zip','w',ZIP_DEFLATED) as update:
+                  sums=[]
+                  for name in full.namelist():
+                      include=name in utility_files or (name.startswith(prefix) and not name.startswith(prefix+'presets/')) or name.startswith('DS/firmware/isoldr/') or name.startswith('DS/apps/games_menu/images/') or name=='DS/apps/games_menu/fonts/default.txf' or name in ('DS/apps/games_menu/app.xml','DS/apps/games_menu/modules/app_games_menu.klf','DS/modules/isoldr.klf','DS/modules/isofs.klf','DS/fonts/ttf/arial_lite.ttf','DS/fonts/ttf/m23.ttf')
+                      if include:
+                          data=full.read(name)
+                          update.writestr(name,data)
+                          if not name.endswith('/'):
+                              sums.append(sha256(data).hexdigest()+'  '+name)
+                  update.write('utils/README.iso-loader-next.md','ISO-Loader-Guide.md')
+                  update.writestr('Utility-Apps-README.md',utility_guide)
+                  update.write('/tmp/utility-preview/utility-apps-preview.png','Utility-Apps-Preview.png')
+                  update.write('/tmp/iso-loader-preview/ISO-Loader-Preview.png','ISO-Loader-Preview.png')
+                  update.write('/tmp/iso-loader-preview/ISO-Loader-Check-Preview.png','ISO-Loader-Check-Preview.png')
+                  update.write('/tmp/games-preview/Games-Preview.png','Games-Preview.png')
+                  update.writestr('SOURCE-REVISION.txt',os.environ['GITHUB_SHA']+'\n')
+                  update.writestr('SHA256SUMS.txt','\n'.join(sums)+'\n')
+                  assert utility_files.issubset(update.namelist())
+                  assert len(update.namelist())==len(set(update.namelist()))
+                  assert 'DS/DS_CORE.BIN' not in update.namelist()
+          # GitHub supplies the download ZIP. Upload the contents, not our ZIP.
+          with ZipFile('DreamShell-ISO-Loader-2.0.6.zip') as update:
+              assert update.testzip() is None
+              update.extractall('iso-loader-update')
+          PY_PACKAGE
+
+      - name: Upload update
+        uses: actions/upload-artifact@v4
+        with:
+          name: DreamShell-NeXT-Combined-Apps-Preview
+          path: iso-loader-update/
+          if-no-files-found: error

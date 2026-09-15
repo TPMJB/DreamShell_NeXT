@@ -6,6 +6,8 @@
 
 #include "main.h"
 #include "fs.h"
+#include <fatfs.h>
+#include <dc/sd.h>
 
 static void early_init(void) {
 	/* hardware_sys_mode() is not ready yet at KOS_INIT_EARLY time */
@@ -100,13 +102,11 @@ int flashrom_get_region_only() {
 	}
 }
 
-int start_pressed = 0;
+volatile int start_pressed = 0;
+uint32 boot_detect_ms;
 
 static void start_callback(void) {
-	if(!start_pressed) {
-		dbglog(DBG_INFO, "Enter the boot menu...\n");
-		start_pressed = 1;
-	}
+	start_pressed = 1;
 }
 
 static void show_boot_message(void) {
@@ -116,6 +116,21 @@ static void show_boot_message(void) {
 	dbglog(DBG_INFO, "  !!! Press START to enter the boot menu !!!\n\n");
 }
 
+
+uint32 boot_detect_devices(bool rescan) {
+	uint64 started = timer_ms_gettime64();
+	if(rescan) {
+		fs_fat_unmount_sd();
+		sd_shutdown();
+		/* IDE must be connected before power-on. Refresh its volumes without
+		   flushing or resetting a possibly absent device on the shared G1 bus. */
+		fs_fat_unmount_ide();
+	}
+	int ide = InitIDE();
+	int sd = InitSDCard();
+	if(ide && sd && !DirExists("/brd")) InitRomdisk();
+	return (uint32)(timer_ms_gettime64() - started);
+}
 
 int main(int argc, char **argv) {
 
@@ -134,39 +149,21 @@ int main(int argc, char **argv) {
 	}
 #endif
 
-	int ird = 1;
 	dbgio_dev_select("fb");
 	show_boot_message();
-
-	if(!InitIDE()) {
-		ird = 0;
-	}
-
-	if(!InitSDCard()) {
-		ird = 0;
-	}
-
-	if(ird) {
-		InitRomdisk();
-	}
-
+	boot_detect_ms = boot_detect_devices(false);
+	menu_init();
+	menu_autoboot();
 	dbgio_disable();
-
-	if(!start_pressed) {
-		menu_init();
-		loading_core(1);
-	}
 
 	pvr_init(&params);
 	pvr_set_bg_color(192.0/255.0, 192.0/255.0, 192.0/255.0);
 	spiral_init();
 
-	if(!start_pressed) 
-		init_menu_txr();
-	else
-		menu_init();
+	menu_graphics_init();
 
 	while(1) {
+		menu_update();
 		pvr_wait_ready();
 		pvr_scene_begin();
 		pvr_list_begin(PVR_LIST_TR_POLY);

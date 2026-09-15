@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<app name="GD Play" version="2.0.0" icon="images/icon.png">
+<app name="GD Play" version="2.0.1" icon="images/icon.png">
   <resources>
     <module src="modules/app_gdplay.klf" />
     <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
@@ -8,9 +8,6 @@
     <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <surface name="bg" width="640" height="480">
       <fill color="#101923" />
-    </surface>
-    <surface name="panel" width="592" height="320">
-      <fill color="#1B2A39" />
     </surface>
     <surface name="b116x32-normal" width="116" height="32">
       <fill color="#223548" />
@@ -27,69 +24,55 @@
       <fill color="#26313B" />
     </surface>
     <image name="disc-art" src="images/disc.svg.png" />
-    <surface name="art-panel" width="228" height="276">
+    <surface name="art-panel" width="216" height="258">
       <fill color="#1B2A39" />
     </surface>
-    <surface name="b284x36-normal" width="284" height="36">
+    <surface name="b282x36-normal" width="282" height="36">
       <fill color="#223548" />
     </surface>
-    <surface name="b284x36-highlight" width="284" height="36">
+    <surface name="b282x36-highlight" width="282" height="36">
       <fill color="#53E1E3" />
-      <fill x="2" y="2" width="280" height="32" color="#155B71" />
+      <fill x="2" y="2" width="278" height="32" color="#155B71" />
     </surface>
-    <surface name="b284x36-pressed" width="284" height="36">
+    <surface name="b282x36-pressed" width="282" height="36">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="280" height="32" color="#155B71" />
+      <fill x="2" y="2" width="278" height="32" color="#155B71" />
     </surface>
-    <surface name="b284x36-disabled" width="284" height="36">
-      <fill color="#26313B" />
-    </surface>
-    <surface name="b296x36-normal" width="296" height="36">
-      <fill color="#223548" />
-    </surface>
-    <surface name="b296x36-highlight" width="296" height="36">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="292" height="32" color="#155B71" />
-    </surface>
-    <surface name="b296x36-pressed" width="296" height="36">
-      <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="292" height="32" color="#155B71" />
-    </surface>
-    <surface name="b296x36-disabled" width="296" height="36">
+    <surface name="b282x36-disabled" width="282" height="36">
       <fill color="#26313B" />
     </surface>
   </resources>
   <body width="640" height="480" background="bg" onload="export:gdplay_Init()" onopen="export:gdplay_Open()" onclose="export:gdplay_Close()" onunload="export:gdplay_Shutdown()">
-    <label name="heading" text="GD Play" x="24" y="18" width="430" height="30" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="subtitle" text="DreamShell NeXT  /  Play an original disc" x="24" y="48" width="580" height="20" font="small" color="#A7B9CB" align="left" valign="center" />
-    <input name="exit-btn" type="button" x="500" y="20" width="116" height="32" onclick="export:gdplay_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+    <label name="heading" text="GD Play" x="32" y="32" width="440" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Play an original disc" x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="exit-btn" type="button" x="492" y="32" width="116" height="32" onclick="export:gdplay_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
       <label name="exit-btn-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <panel x="24" y="88" width="228" height="276" background="art-panel" />
-    <image name="disc-image" src="disc-art" x="46" y="124" width="184" height="184" />
-    <label name="disc-type" text="DISC DRIVE" x="44" y="96" width="190" height="24" font="small" color="#53E1E3" align="left" valign="center" />
-    <label name="disc-state" text="Checking disc..." x="44" y="326" width="192" height="26" font="body" color="#A7B9CB" align="left" valign="center" />
-    <label name="title1-txt" text="Insert a Dreamcast disc" x="276" y="92" width="340" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="title2-txt" text="" x="276" y="122" width="340" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="title3-txt" text="" x="276" y="152" width="340" height="22" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="region-label" text="Region" x="276" y="192" width="132" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="region-txt" text="--" x="416" y="192" width="200" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="vga-label" text="VGA support" x="276" y="220" width="132" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="vga-txt" text="--" x="416" y="220" width="200" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="date-label" text="Released" x="276" y="248" width="132" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="date-txt" text="--" x="416" y="248" width="200" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="disk-num-label" text="Disc" x="276" y="276" width="132" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="disk-num-txt" text="--" x="416" y="276" width="200" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="version-label" text="Version" x="276" y="304" width="132" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="version-txt" text="--" x="416" y="304" width="200" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="product-label" text="Product ID" x="276" y="332" width="132" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="product-txt" text="--" x="416" y="332" width="200" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
-    <label name="status" text="Close the lid to read the disc." x="24" y="376" width="592" height="40" font="small" color="#A7B9CB" align="left" valign="center" />
-    <input name="play-btn" type="button" x="24" y="426" width="284" height="36" onclick="export:gdplay_play()" normal="b284x36-normal" highlight="b284x36-highlight" pressed="b284x36-pressed" disabled="b284x36-disabled">
-      <label name="play-btn-caption" text="Play disc" x="12" y="0" width="260" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <panel x="32" y="94" width="216" height="258" background="art-panel" />
+    <image name="disc-image" src="disc-art" x="48" y="126" width="184" height="184" />
+    <label name="disc-type" text="DISC DRIVE" x="48" y="100" width="184" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="disc-state" text="Checking disc..." x="48" y="318" width="184" height="26" font="body" color="#A7B9CB" align="left" valign="center" />
+    <label name="title1-txt" text="Insert a Dreamcast disc" x="272" y="98" width="336" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="title2-txt" text="" x="272" y="128" width="336" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="title3-txt" text="" x="272" y="158" width="336" height="22" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="region-label" text="Region" x="272" y="192" width="112" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="region-txt" text="--" x="392" y="192" width="216" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="vga-label" text="VGA support" x="272" y="220" width="112" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="vga-txt" text="--" x="392" y="220" width="216" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="date-label" text="Released" x="272" y="248" width="112" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="date-txt" text="--" x="392" y="248" width="216" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="disk-num-label" text="Disc" x="272" y="276" width="112" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="disk-num-txt" text="--" x="392" y="276" width="216" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="version-label" text="Version" x="272" y="304" width="112" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="version-txt" text="--" x="392" y="304" width="216" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="product-label" text="Product ID" x="272" y="332" width="112" height="24" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="product-txt" text="--" x="392" y="332" width="216" height="24" font="body" color="#EFF5FC" align="left" valign="center" />
+    <label name="status" text="Close the lid to read the disc." x="32" y="362" width="576" height="36" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="play-btn" type="button" x="32" y="408" width="282" height="36" onclick="export:gdplay_play()" normal="b282x36-normal" highlight="b282x36-highlight" pressed="b282x36-pressed" disabled="b282x36-disabled">
+      <label name="play-btn-caption" text="Play disc" x="12" y="0" width="258" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="refresh-btn" type="button" x="320" y="426" width="296" height="36" onclick="export:gdplay_Refresh()" normal="b296x36-normal" highlight="b296x36-highlight" pressed="b296x36-pressed" disabled="b296x36-disabled">
-      <label name="refresh-btn-caption" text="Read disc again" x="12" y="0" width="272" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="refresh-btn" type="button" x="326" y="408" width="282" height="36" onclick="export:gdplay_Refresh()" normal="b282x36-normal" highlight="b282x36-highlight" pressed="b282x36-pressed" disabled="b282x36-disabled">
+      <label name="refresh-btn-caption" text="Read disc again" x="12" y="0" width="258" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
   </body>
 </app>

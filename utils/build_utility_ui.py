@@ -9,6 +9,9 @@ import xml.etree.ElementTree as E
 
 ROOT = Path(__file__).resolve().parents[1]
 BG, PANEL, TEXT, MUTED, ACCENT = '#101923', '#1B2A39', '#EFF5FC', '#A7B9CB', '#53E1E3'
+# Keep every control and label inside this TV-safe rectangle. Reflow at native
+# resolution instead of shrinking fonts; overscan must not hide the footer.
+SAFE_X, SAFE_Y, SAFE_W, SAFE_H = 32, 32, 576, 416
 
 def node(parent, tag, **attrs):
     return E.SubElement(parent, tag, {k: str(v) for k, v in attrs.items()})
@@ -31,11 +34,12 @@ def button(p, r, name, text, x, y, w, h, onclick):
                 node(s,'fill',x=2,y=2,width=w-4,height=h-4,color='#155B71')
     b=node(p,'input',name=name,type='button',x=x,y=y,width=w,height=h,onclick=onclick,
            **{state:f'{stem}-{state}' for state in ('normal','highlight','pressed','disabled')})
-    label(b,name+'-caption',text,12,0,w-24,h,'small' if w<106 else 'body')
+    padding=10 if w<106 else 12
+    label(b,name+'-caption',text,padding,0,w-padding*2,h,'small' if w<106 else 'body')
     return b
 
 def app(folder, title, subtitle, native, lua=False):
-    a=E.Element('app',name=title,version='2.0.0',icon='images/icon.png')
+    a=E.Element('app',name=title,version='2.0.1',icon='images/icon.png')
     r=node(a,'resources')
     if lua:
         for mod in ['tolua','luaDS','luaGUI']:
@@ -45,12 +49,11 @@ def app(folder, title, subtitle, native, lua=False):
     for name,size in [('body',16),('small',14),('tiny',12),('heading',24)]:
         node(r,'font',name=name,size=size,src='../../fonts/ttf/arial_lite.ttf',type='ttf')
     surface(r,'bg',640,480,BG)
-    surface(r,'panel',592,320,PANEL)
     body=node(a,'body',width=640,height=480,background='bg',
               onload=f'export:{native}_Init()',onopen=f'export:{native}_Open()',
               onclose=f'export:{native}_Close()',onunload=f'export:{native}_Shutdown()')
-    label(body,'heading',title,24,18,430,30,'heading')
-    label(body,'subtitle',subtitle,24,48,580,20,'small',MUTED)
+    label(body,'heading',title,SAFE_X,SAFE_Y,440,28,'heading')
+    label(body,'subtitle',subtitle,SAFE_X,62,SAFE_W,18,'small',MUTED)
     return a,r,body
 
 def save(a,folder):
@@ -59,59 +62,59 @@ def save(a,folder):
 
 def layouts():
     a,r,b=app('settings','Settings','DreamShell NeXT  /  Make it yours','SettingsApp')
-    button(b,r,'back-btn','Menu',500,20,116,32,'export:SettingsApp_Back()')
+    button(b,r,'back-btn','Menu',492,32,116,32,'export:SettingsApp_Back()')
     for i,title in enumerate(['Display','Sound','Startup','Clock','System']):
-        button(b,r,f'tab-{i}',title,24+i*120,76,112,32,'export:SettingsApp_Tab()')
+        button(b,r,f'tab-{i}',title,32+i*117,88,108,30,'export:SettingsApp_Tab()')
     for i in range(7):
-        button(b,r,f'row-{i}','',24,118+i*39,592,36,'export:SettingsApp_Change()')
-    label(b,'help','A changes a value. X changes it back.',24,393,592,18,'small',MUTED)
-    label(b,'save-status','No unsaved changes',24,415,592,18,'small',ACCENT)
-    label(b,'controls','D-pad Select / Adjust   X Previous   Y Tab   B Menu',24,442,430,22,'tiny',MUTED)
-    button(b,r,'save-btn','Save settings',464,438,152,32,'export:SettingsApp_Save()')
+        button(b,r,f'row-{i}','',32,126+i*34,576,30,'export:SettingsApp_Change()')
+    label(b,'help','A changes a value. X changes it back.',32,366,576,18,'small',MUTED)
+    label(b,'save-status','No unsaved changes',32,388,576,18,'small',ACCENT)
+    label(b,'controls','D-pad Select / Adjust   X Previous   Y Tab   B Menu',32,426,412,22,'tiny',MUTED)
+    button(b,r,'save-btn','Save settings',456,414,152,32,'export:SettingsApp_Save()')
     node(b,'dialog',name='dialog',font='body',x=70,y=140,width=500,height=220,
          onconfirm='export:SettingsApp_Confirm()',oncancel='export:SettingsApp_Cancel()')
     save(a,'settings')
 
     a,r,b=app('gdplay','GD Play','DreamShell NeXT  /  Play an original disc','gdplay')
-    button(b,r,'exit-btn','Menu',500,20,116,32,'export:gdplay_Back()')
+    button(b,r,'exit-btn','Menu',492,32,116,32,'export:gdplay_Back()')
     node(r,'image',name='disc-art',src='images/disc.svg.png')
-    surface(r,'art-panel',228,276,PANEL)
-    node(b,'panel',x=24,y=88,width=228,height=276,background='art-panel')
-    node(b,'image',name='disc-image',src='disc-art',x=46,y=124,width=184,height=184)
-    label(b,'disc-type','DISC DRIVE',44,96,190,24,'small',ACCENT)
-    label(b,'disc-state','Checking disc...',44,326,192,26,'body',MUTED)
-    label(b,'title1-txt','Insert a Dreamcast disc',276,92,340,28,'heading')
-    label(b,'title2-txt','',276,122,340,28,'heading')
-    label(b,'title3-txt','',276,152,340,22)
+    surface(r,'art-panel',216,258,PANEL)
+    node(b,'panel',x=32,y=94,width=216,height=258,background='art-panel')
+    node(b,'image',name='disc-image',src='disc-art',x=48,y=126,width=184,height=184)
+    label(b,'disc-type','DISC DRIVE',48,100,184,24,'small',ACCENT)
+    label(b,'disc-state','Checking disc...',48,318,184,26,'body',MUTED)
+    label(b,'title1-txt','Insert a Dreamcast disc',272,98,336,28,'heading')
+    label(b,'title2-txt','',272,128,336,28,'heading')
+    label(b,'title3-txt','',272,158,336,22)
     for i,(key,title) in enumerate([('region','Region'),('vga','VGA support'),('date','Released'),('disk-num','Disc'),('version','Version'),('product','Product ID')]):
-        label(b,key+'-label',title,276,192+i*28,132,24,'small',MUTED)
-        label(b,key+'-txt','--',416,192+i*28,200,24)
-    label(b,'status','Close the lid to read the disc.',24,376,592,40,'small',MUTED)
-    button(b,r,'play-btn','Play disc',24,426,284,36,'export:gdplay_play()')
-    button(b,r,'refresh-btn','Read disc again',320,426,296,36,'export:gdplay_Refresh()')
+        label(b,key+'-label',title,272,192+i*28,112,24,'small',MUTED)
+        label(b,key+'-txt','--',392,192+i*28,216,24)
+    label(b,'status','Close the lid to read the disc.',32,362,576,36,'small',MUTED)
+    button(b,r,'play-btn','Play disc',32,408,282,36,'export:gdplay_play()')
+    button(b,r,'refresh-btn','Read disc again',326,408,282,36,'export:gdplay_Refresh()')
     save(a,'gdplay')
 
     a,r,b=app('filemanager','File Manager','DreamShell NeXT  /  Two panes. Clear destinations.','FileManagerApp',True)
-    button(b,r,'exit-btn','Menu',500,20,116,32,'console:app -o')
+    button(b,r,'exit-btn','Menu',492,32,116,32,'console:app -o')
     for name,color in [('white-bg','#14212E'),('blue-bg','#1B3041'),('row','#182838'),('row-focus','#225765'),('row-select','#155B71')]:
-        surface(r,name,288 if name.endswith('bg') else 268,224 if name.endswith('bg') else 28,color)
+        surface(r,name,280 if name.endswith('bg') else 260,196 if name.endswith('bg') else 28,color)
     for i,side in enumerate(['top','bottom']):
-        x=24+i*304
-        button(b,r,f'path-{side}','/',x,80,288,32,f'FileManager:choosePane({i})')
-        button(b,r,f'up-{side}','Up',x,118,64,28,f'FileManager:up({i})')
-        button(b,r,f'device-{side}','Devices',x+72,118,104,28,f'FileManager:devices({i})')
-        button(b,r,f'refresh-{side}','Refresh',x+184,118,104,28,f'FileManager:refresh({i})')
-        node(b,'filemanager',name=f'filemgr-{side}',path='/',x=x,y=154,width=288,height=224,
+        x=32+i*296
+        button(b,r,f'path-{side}','/',x,88,280,30,f'FileManager:choosePane({i})')
+        button(b,r,f'up-{side}','Up',x,124,56,28,f'FileManager:up({i})')
+        button(b,r,f'device-{side}','Devices',x+64,124,100,28,f'FileManager:devices({i})')
+        button(b,r,f'refresh-{side}','Refresh',x+172,124,108,28,f'FileManager:refresh({i})')
+        node(b,'filemanager',name=f'filemgr-{side}',path='/',x=x,y=160,width=280,height=196,
              background='white-bg',item_font='small',item_font_color=TEXT,
              item_normal='row',item_highlight='row-focus',item_pressed='row-select',item_disabled='row',
              item_selected_normal='row-select',item_selected_highlight='row-focus',item_selected_pressed='row-select',item_selected_disabled='row',
              onclick=f'FileManagerItemClick{side.title()}',oncontextclick=f'FileManagerItemContextClick{side.title()}',
              onselect=f'FileManagerItemSelect{side.title()}')
-    label(b,'title','Select a file or folder.',24,382,592,24,'small',ACCENT)
-    p=node(b,'panel',name='toolbar-panel',x=24,y=410,width=592,height=28)
+    label(b,'title','Select a file or folder.',32,362,576,24,'small',ACCENT)
+    p=node(b,'panel',name='toolbar-panel',x=32,y=394,width=576,height=28)
     for i,(name,text,fn) in enumerate([('copy','Copy','toolbarCopy'),('rename','Rename','toolbarRename'),('mkdir','New folder','toolbarMkdir'),('delete','Delete','toolbarDelete'),('archive','Archive','toolbarArchive'),('mount','Mount ISO','toolbarMountISO')]):
-        button(p,r,name+'-btn',text,i*100,0,92,28,f'FileManager:{fn}()')
-    label(b,'controls','D-pad Browse / Switch pane   A Open   B Up   X Copy   Y Actions',24,446,592,22,'tiny',MUTED)
+        button(p,r,name+'-btn',text,i*97,0,89 if i<5 else 91,28,f'FileManager:{fn}()')
+    label(b,'controls','D-pad Browse / Switch pane   A Open   B Up   X Copy   Y Actions',32,430,576,18,'tiny',MUTED)
     node(b,'dialog',name='modal-dialog',font='body',x=70,y=130,width=500,height=240,
          onconfirm='FileManager:ModalClick(true)',oncancel='FileManager:ModalClick(false)')
     save(a,'filemanager')

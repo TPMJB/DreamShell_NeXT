@@ -11,6 +11,28 @@ import xml.etree.ElementTree as E
 ROOT=Path(__file__).resolve().parents[2]
 
 class UtilityAppsTests(unittest.TestCase):
+    def test_all_redesigned_screens_fit_tv_safe_area(self):
+        # Independent of generator constants: these margins are the regression
+        # requirement from the console photo, not just the 640x480 canvas bounds.
+        apps=('filemanager','gdplay','settings','bios_flasher','region_changer',
+              'speedtest','memtest','network')
+        def check(element, ox, oy, parent_width, parent_height, app):
+            x,y=int(element.get('x',0)),int(element.get('y',0))
+            w,h=int(element.get('width',0)),int(element.get('height',0))
+            identity=(app, element.tag, element.get('name'))
+            self.assertGreater(w,0,identity); self.assertGreater(h,0,identity)
+            self.assertGreaterEqual(x,0,identity); self.assertGreaterEqual(y,0,identity)
+            self.assertLessEqual(x+w,parent_width,identity)
+            self.assertLessEqual(y+h,parent_height,identity)
+            self.assertGreaterEqual(ox+x,32,identity)
+            self.assertGreaterEqual(oy+y,32,identity)
+            self.assertLessEqual(ox+x+w,608,identity)
+            self.assertLessEqual(oy+y+h,448,identity)
+            for child in element: check(child,ox+x,oy+y,w,h,app)
+        for app in apps:
+            body=E.parse(ROOT/'applications'/app/'app.xml').getroot().find('body')
+            for element in body: check(element,0,0,640,480,app)
+
     def test_bounded_disc_metadata_and_clock_edges(self):
         source=r'''
 #include <assert.h>
@@ -102,7 +124,7 @@ assert(not fm:continueOperation())
         for app in ('filemanager','gdplay','settings'):
             path=ROOT/'applications'/app
             tree=E.parse(path/'app.xml').getroot()
-            self.assertEqual(tree.get('version'),'2.0.0')
+            self.assertEqual(tree.get('version'),'2.0.1')
             names=[e.get('name') for e in tree.find('body').iter() if e.get('name')]
             self.assertEqual(len(names),len(set(names)),app)
             exports=(path/'modules/exports.txt').read_text().splitlines()

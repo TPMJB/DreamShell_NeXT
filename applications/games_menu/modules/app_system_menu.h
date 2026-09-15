@@ -89,6 +89,7 @@ void SetMessageOptimizer(const char *fmt, const char *message);
 int StopOptimizeCovers();
 
 void ShowCoverScan();
+void FinishCoverScan(void);
 void HideCoverScan();
 void SetMessageScan(const char *fmt, const char *message);
 int StopScanCovers();

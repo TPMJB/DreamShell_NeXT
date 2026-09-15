@@ -77,6 +77,30 @@ class ConsoleTests(unittest.TestCase):
     def run_c(self, *args):
         return subprocess.check_output([str(self.exe), *map(str,args)], text=True).strip().split()
 
+    def test_default_destination_creates_games_and_preserves_existing_rips(self):
+        self.assertEqual(self.run_c('default-destination',self.path),['/sd/Games|0|1'])
+        game=self.path/'Games'/'My disc'; game.mkdir()
+        track=game/'track03.bin'; track.write_bytes(b'keep this rip')
+        self.assertEqual(self.run_c('default-destination',self.path),['/sd/Games|0|1'])
+        self.assertEqual(track.read_bytes(),b'keep this rip')
+
+    def test_default_destination_never_overwrites_a_file_named_games(self):
+        target=self.path/'Games'; target.write_bytes(b'keep this file')
+        self.assertEqual(self.run_c('default-destination',self.path),['/sd/Games|-1|0'])
+        self.assertEqual(target.read_bytes(),b'keep this file')
+
+    def test_destination_uses_ide_cf_sd_and_pc_games_folders(self):
+        for device,expected in [('both','ide'),('ide','ide'),('sd','sd'),('pc','pc')]:
+            with self.subTest(device=device):
+                root=self.path/device; root.mkdir()
+                self.assertEqual(self.run_c('default-destination',root,device),
+                                 [f'/{expected}/Games|0|1'])
+                self.assertTrue((root/'Games').is_dir())
+        for device in ('sd','ide','pc'):
+            with self.subTest(button=device):
+                self.assertEqual(self.run_c('device-destination',self.path/device,device),
+                                 [f'/{device}/Games|1'])
+
     def transition(self, scenario='append', resume=False):
         data=self.transition_data
         self.disc.write_bytes(data)

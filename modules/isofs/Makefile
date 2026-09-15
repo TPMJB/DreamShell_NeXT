@@ -11,7 +11,7 @@ EXPORTS_FILE = exports.txt
 
 VER_MAJOR = 1
 VER_MINOR = 8
-VER_MICRO = 0
+VER_MICRO = 1
 
 all: rm-elf
 
@@ -26,3 +26,5 @@ install: $(TARGET) $(TARGET_LIB)
 	-rm $(DS_SDK)/lib/$(TARGET_LIB)
 	cp $(TARGET) $(DS_BUILD)/modules/$(TARGET)
 	cp $(TARGET_LIB) $(DS_SDK)/lib/$(TARGET_LIB)
+
+gdi.o: ../../include/isofs/gdi_parse.h

@@ -8,6 +8,7 @@
 #include <tsunami/tsunami.h>
 #include "app_module.h"
 #include "layout.h"
+#include "music.h"
 
 typedef struct script_item { char name[64]; char file[NAME_MAX]; } script_item_t;
 typedef enum { LAUNCH_ITEM_APP, LAUNCH_ITEM_SCRIPT } launch_item_type_t;
@@ -40,7 +41,7 @@ typedef struct {
     Banner *preview_banner;
     preview_cache_t preview_cache[2];
     Rectangle *selection, *selection_edge;
-    Label *title[2], *description[4], *category_label, *counter_label, *clock_label;
+    Label *title[2], *description[4], *category_label, *counter_label, *clock_label, *music_label;
     Dialog *delete_dialog;
     script_item_t pending_shortcut;
     launch_delete_type_t pending_delete_type;

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="Launch App" icon="images/icon.png" version="2.0.2">
+<app name="Launch App" icon="images/icon.png" version="2.1.0">
   <resources>
     <module src="modules/app_launch_app.klf" />
     <font src="../../fonts/txf/helvetica.txf" name="caption_font" />
@@ -18,6 +18,7 @@
     <rectangle name="selection" transparent="true" x="24" y="102" width="224" height="40" radius="5" color="#225765FF" z="70" />
     <rectangle name="selection_edge" transparent="true" x="24" y="106" width="3" height="32" color="#65DFCFFF" z="71" />
     <label smear="false" name="app-count" x="32" y="425" text="" font="caption_font" fontsize="12" color="#A8B8C9FF" z="74" />
+    <label smear="false" name="music-toggle" x="124" y="425" text="Y Music 15%" font="caption_font" fontsize="12" color="#65DFCFFF" z="74" />
     <label smear="false" name="detail-title-0" x="280" y="116" text="" font="caption_font" fontsize="23" color="#F1F5FAFF" z="74" />
     <label smear="false" name="detail-title-1" x="280" y="140" text="" font="caption_font" fontsize="23" color="#F1F5FAFF" z="74" />
     <label smear="false" name="detail-category" x="280" y="161" text="" font="caption_font" fontsize="12" color="#65DFCFFF" z="74" />

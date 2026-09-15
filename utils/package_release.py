@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
-"""Validate and seal the full build before a versioned GitHub release."""
+"""Validate and seal a complete build. Publishing is a separate workflow."""
 import hashlib
 import json
 from pathlib import Path
 import re
+import posixpath
+import struct
 import subprocess
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
+from package_boot_branding import VERSION as BOOT_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
     version = (ROOT/'VERSION').read_text().strip()
-    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+    if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', version):
         raise ValueError('VERSION must be a numeric release version')
     output = ROOT/f'DreamShell-NeXT-v{version}.zip'
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     info = dict(project='DreamShell NeXT', version=version, source_commit=commit,
-                base_core='DreamShell 4.0.5 Beta 3', bootloader='3.0',
-                gd_ripper='2.2.0', launcher='2.0.2', iso_loader='0.9.0',
+                base_core='DreamShell 4.0.5 Beta 3', bootloader=BOOT_VERSION,
+                build_kind='complete integration build',
                 kallistios=(ROOT/'sdk/doc/KallistiOS.txt').read_text().strip(),
                 kernel_patches=sorted(p.name for p in (ROOT/'sdk/kos-patches').glob('*.patch')))
     required = {
@@ -31,7 +34,7 @@ def main():
         'DS/doc/LICENSE', 'DS/doc/NOTICE', 'DS/lua/startup.lua',
         'host-tools/verify_gd_dump.py', 'host-tools/make_gd_redump_db.py',
         'exfat-guide.md', 'input-ui-guide.md', 'readback-guide.md',
-        'README-FIRST.md', 'upstream-review.md', 'DreamShell_bootloader_v3.0.cdi',
+        'README-FIRST.md', 'upstream-review.md', f'DreamShell_bootloader_v{BOOT_VERSION}.cdi',
         f'DreamShell-NeXT-v{version}.cdi',
     }
     with ZipFile(ROOT/'DreamShell-dev.zip') as source:
@@ -44,12 +47,51 @@ def main():
         for path in names:
             if path.startswith('/') or '..' in Path(path).parts:
                 raise ValueError(f'Unsafe archive path: {path}')
-        if not any(n.startswith('DS/firmware/isoldr/') and n.endswith('.bin') for n in names):
-            raise ValueError('ISO Loader firmware is missing')
-        for app, ver in [('gd_ripper', '2.2.0'), ('launch_app', '2.0.2')]:
-            metadata = ET.fromstring(source.read(f'DS/apps/{app}/app.xml'))
-            if metadata.get('version') != ver:
-                raise ValueError(f'Wrong {app} version')
+        # The new loader installs ELF payloads and removes the legacy BINs.
+        firmware = sorted(n for n in names if n.startswith('DS/firmware/isoldr/') and n.endswith('.elf'))
+        if not all(f'DS/firmware/isoldr/{device}.elf' in firmware for device in ('sd','ide','cd')):
+            raise ValueError('SD/IDE/CD ISO Loader firmware is missing')
+        for name in firmware:
+            elf = source.read(name)
+            if elf[:7] != b'\x7fELF\x01\x01\x01' or b'game loader v0.9.2\n' not in elf:
+                raise ValueError(f'Stale or invalid loader: {name}')
+            hdr = struct.unpack_from('<HHIIIIIHHHHHH',elf,16)
+            entry,phoff,shoff = hdr[3:6]
+            phsize,phnum,shsize,shnum = hdr[8:12]
+            if hdr[1]!=42 or phsize!=32 or phoff+phnum*phsize>len(elf):
+                raise ValueError(f'Invalid SH-4 loader headers: {name}')
+            loads = [p for i in range(phnum) if (p:=struct.unpack_from('<IIIIIIII',elf,phoff+i*phsize))[0]==1]
+            if not loads or any(p[4]>p[5] or p[1]+p[4]>len(elf) for p in loads):
+                raise ValueError(f'Invalid loader segments: {name}')
+            first,last = min(p[2] for p in loads),max(p[2]+p[5] for p in loads)
+            if entry!=first or last-first+1024>2*1024*1024 or shsize!=40 or shoff+shsize*shnum>len(elf):
+                raise ValueError(f'Loader does not fit its runtime area: {name}')
+        info['iso_loader_firmware'] = '0.9.2'
+        # Validate against the integrated source, not old release version
+        # constants. A successful ZIP step must not hide stale app binaries/XML.
+        versions = {}
+        for app_xml in sorted((ROOT/'applications').glob('*/app.xml')):
+            app = app_xml.parent.name
+            path = f'DS/apps/{app}/app.xml'
+            xml = source.read(path)
+            if xml != app_xml.read_bytes():
+                raise ValueError(f'Packaged {app} XML differs from source')
+            metadata = ET.fromstring(xml)
+            versions[app] = metadata.get('version')
+            icon = metadata.get('icon')
+            if icon and posixpath.normpath(f'DS/apps/{app}/{icon}') not in names:
+                raise ValueError(f'Missing {app} launcher icon')
+            for module in metadata.findall('resources/module'):
+                module_path = posixpath.normpath(f'DS/apps/{app}/'+module.get('src'))
+                data = source.read(module_path)
+                if len(data)<1024 or data[:7]!=b'\x7fELF\x01\x01\x01' or int.from_bytes(data[18:20],'little')!=42:
+                    raise ValueError(f'Invalid SH-4 module: {module_path}')
+        info['app_versions'] = versions
+        for path in ('DS/apps/launch_app/music/menu.wav',
+                     'DS/apps/vmu_manager/modules/app_vmu_manager.klf',
+                     'DS/modules/isoldr.klf', 'DS/modules/isofs.klf'):
+            if path not in names or len(source.read(path)) < 1024:
+                raise ValueError(f'Missing integrated component: {path}')
         expected_apps = {f'DS/apps/{p.parent.name}/app.xml' for p in (ROOT/'applications').glob('*/app.xml')}
         if not expected_apps <= names:
             raise ValueError(f'Missing standard apps: {sorted(expected_apps-names)}')
@@ -67,6 +109,15 @@ def main():
                 if name.endswith('/'):
                     continue
                 data = source.read(name)
+                dest.writestr(name, data)
+                checksums.append(f'{hashlib.sha256(data).hexdigest()}  {name}\n')
+            guides = {'utility-apps-guide.md':'README.utility-apps.md',
+                      'iso-loader-guide.md':'README.iso-loader-next.md',
+                      'vmu-manager-guide.md':'README.vmu-manager.md',
+                      'bootloader-guide.md':'README.boot-branding.md',
+                      'menu-music-guide.md':'README.menu-music.md'}
+            for name, file in guides.items():
+                data = (ROOT/'utils'/file).read_bytes()
                 dest.writestr(name, data)
                 checksums.append(f'{hashlib.sha256(data).hexdigest()}  {name}\n')
             metadata = (json.dumps(info, indent=2)+'\n').encode()

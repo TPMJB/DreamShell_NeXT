@@ -8,6 +8,7 @@
 #include "ds.h"
 #include "isoldr.h"
 #include <kos/elf.h>
+#include <isoldr/elf_check.h>
 
 #define ET_EXEC 2
 #define ET_DYN  3
@@ -31,19 +32,19 @@ typedef struct elf_phdr {
 
 static int elf_hdr_ok(const elf_hdr_t *hdr) {
 	if(hdr->ident[0] != 0x7f || memcmp(hdr->ident + 1, "ELF", 3)) {
-		ds_printf("DS_ERROR: File is not a valid ELF file\n");
+		isoldr_error("File is not a valid ELF file\n");
 		return 0;
 	}
 	if(hdr->ident[EI_CLASS] != ELFCLASS32 || hdr->ident[EI_DATA] != ELFDATA2LSB) {
-		ds_printf("DS_ERROR: Invalid ELF architecture flags\n");
+		isoldr_error("Invalid ELF architecture flags\n");
 		return 0;
 	}
 	if(hdr->machine != EM_SH) {
-		ds_printf("DS_ERROR: Invalid ELF machine %02x\n", hdr->machine);
+		isoldr_error("Invalid ELF machine %02x\n", hdr->machine);
 		return 0;
 	}
 	if(hdr->type != ET_EXEC && hdr->type != ET_DYN) {
-		ds_printf("DS_ERROR: Unsupported ELF type %d\n", hdr->type);
+		isoldr_error("Unsupported ELF type %d\n", hdr->type);
 		return 0;
 	}
 	return 1;
@@ -52,8 +53,8 @@ static int elf_hdr_ok(const elf_hdr_t *hdr) {
 static int patch_dir32(uint8_t *img, size_t img_size, uint32_t off, uint32_t add) {
 	uint32_t v;
 
-	if(off + 4 > img_size) {
-		ds_printf("DS_ERROR: ELF reloc offset %08lx out of image\n", (unsigned long)off);
+	if(!isoldr_elf_span(img_size, off, 1, 4)) {
+		isoldr_error("ELF reloc offset %08lx out of image\n", (unsigned long)off);
 		return -1;
 	}
 	memcpy(&v, img + off, 4);
@@ -86,11 +87,11 @@ static int apply_rel_exec(uint8_t *img, size_t img_size, uint32_t link_base,
 					continue;
 				}
 				if(type != R_SH_DIR32 && type != R_SH_RELATIVE) {
-					ds_printf("DS_ERROR: Unknown ELF REL type %02x\n", type);
+					isoldr_error("Unknown ELF REL type %02x\n", type);
 					return -1;
 				}
 				if(rel[j].offset < link_base) {
-					ds_printf("DS_ERROR: ELF REL address %08lx below link base\n",
+					isoldr_error("ELF REL address %08lx below link base\n",
 						(unsigned long)rel[j].offset);
 					return -1;
 				}
@@ -113,11 +114,11 @@ static int apply_rel_exec(uint8_t *img, size_t img_size, uint32_t link_base,
 					continue;
 				}
 				if(type != R_SH_DIR32 && type != R_SH_RELATIVE) {
-					ds_printf("DS_ERROR: Unknown ELF RELA type %02x\n", type);
+					isoldr_error("Unknown ELF RELA type %02x\n", type);
 					return -1;
 				}
 				if(rela[j].offset < link_base) {
-					ds_printf("DS_ERROR: ELF RELA address %08lx below link base\n",
+					isoldr_error("ELF RELA address %08lx below link base\n",
 						(unsigned long)rela[j].offset);
 					return -1;
 				}
@@ -131,8 +132,9 @@ static int apply_rel_exec(uint8_t *img, size_t img_size, uint32_t link_base,
 	}
 
 	if(nrel == 0 && delta != 0) {
-		ds_printf("DS_WARNING: ELF has no relocations, image is linked at 0x%08lx\n",
+		isoldr_error("ELF has no relocations for the selected address. Linked at 0x%08lx\n",
 			(unsigned long)link_base);
+        return -1;
 	}
 	else if(nrel > 0) {
 		ds_printf("DS_PROCESS: Applied %d ELF relocations, delta 0x%08lx\n",
@@ -141,7 +143,7 @@ static int apply_rel_exec(uint8_t *img, size_t img_size, uint32_t link_base,
 	return 0;
 }
 
-static int load_exec(const uint8_t *elf, elf_hdr_t *hdr, uint32_t dest,
+static int load_exec(const uint8_t *elf, size_t elf_size, elf_hdr_t *hdr, uint32_t dest,
 	uint8_t **out_data, size_t *out_size) {
 	elf_phdr_t *phdrs;
 	elf_shdr_t *shdrs;
@@ -154,11 +156,26 @@ static int load_exec(const uint8_t *elf, elf_hdr_t *hdr, uint32_t dest,
 	int i;
 
 	if(hdr->phnum < 1 || hdr->phoff == 0) {
-		ds_printf("DS_ERROR: ELF has no program headers\n");
+		isoldr_error("ELF has no program headers\n");
 		return -1;
 	}
 
-	phdrs = (elf_phdr_t *)(elf + hdr->phoff);
+	if(hdr->phentsize != sizeof(elf_phdr_t) ||
+       !isoldr_elf_span(elf_size, hdr->phoff, hdr->phnum, sizeof(elf_phdr_t)) ||
+       (hdr->shnum && (hdr->shentsize != sizeof(elf_shdr_t) ||
+        !isoldr_elf_span(elf_size, hdr->shoff, hdr->shnum, sizeof(elf_shdr_t))))) {
+        isoldr_error("Truncated ELF header tables.\n"); return -1;
+    }
+    phdrs = (elf_phdr_t *)(elf + hdr->phoff);
+    shdrs = (elf_shdr_t *)(elf + hdr->shoff);
+    for(i = 0; i < hdr->shnum; ++i) {
+        if(shdrs[i].type == SHT_REL || shdrs[i].type == SHT_RELA) {
+            size_t entry = shdrs[i].type == SHT_REL ? sizeof(elf_rel_t) : sizeof(elf_rela_t);
+            if(shdrs[i].size % entry || !isoldr_elf_span(elf_size, shdrs[i].offset, shdrs[i].size, 1)) {
+                isoldr_error("Truncated ELF relocation table.\n"); return -1;
+            }
+        }
+    }
 
 	for(i = 0; i < hdr->phnum; i++) {
 		uint32_t end;
@@ -166,12 +183,16 @@ static int load_exec(const uint8_t *elf, elf_hdr_t *hdr, uint32_t dest,
 		if(phdrs[i].type != PT_LOAD) {
 			continue;
 		}
-		if(phdrs[i].vaddr < vmin) {
+		if(phdrs[i].filesz > phdrs[i].memsz ||
+           !isoldr_elf_span(elf_size, phdrs[i].offset, phdrs[i].filesz, 1)) {
+            isoldr_error("Truncated ELF load segment.\n"); return -1;
+        }
+        if(phdrs[i].vaddr < vmin) {
 			vmin = phdrs[i].vaddr;
 		}
 		end = phdrs[i].vaddr + phdrs[i].memsz;
 		if(end < phdrs[i].vaddr) {
-			ds_printf("DS_ERROR: ELF segment overflow\n");
+			isoldr_error("ELF segment overflow\n");
 			return -1;
 		}
 		if(end > vmax) {
@@ -180,7 +201,7 @@ static int load_exec(const uint8_t *elf, elf_hdr_t *hdr, uint32_t dest,
 	}
 
 	if(vmin == 0xffffffff || vmax <= vmin) {
-		ds_printf("DS_ERROR: ELF has no loadable segments\n");
+		isoldr_error("ELF has no loadable segments\n");
 		return -1;
 	}
 	if(vmin < ISOLDR_PARAMS_SIZE) {
@@ -191,10 +212,13 @@ static int load_exec(const uint8_t *elf, elf_hdr_t *hdr, uint32_t dest,
 	}
 
 	img_size = vmax - link_base;
-	img = (uint8_t *)aligned_alloc(32, img_size);
+    if(img_size > 2 * 1024 * 1024 || hdr->entry != link_base + ISOLDR_PARAMS_SIZE) {
+        isoldr_error("Unsupported ELF firmware extent or entry address.\n"); return -1;
+    }
+    img = (uint8_t *)memalign(32, (img_size + 31) & ~(size_t)31);
 
 	if(img == NULL) {
-		ds_printf("DS_ERROR: No free memory, needed %d bytes\n", (int)img_size);
+		isoldr_error("No free memory, needed %d bytes\n", (int)img_size);
 		return -1;
 	}
 
@@ -209,8 +233,8 @@ static int load_exec(const uint8_t *elf, elf_hdr_t *hdr, uint32_t dest,
 		}
 		off = phdrs[i].vaddr - link_base;
 		if(phdrs[i].filesz > 0) {
-			if(off + phdrs[i].filesz > img_size) {
-				ds_printf("DS_ERROR: ELF segment does not fit\n");
+			if(!isoldr_elf_span(img_size, off, phdrs[i].filesz, 1)) {
+				isoldr_error("ELF segment does not fit\n");
 				free(img);
 				return -1;
 			}
@@ -244,16 +268,19 @@ int isoldr_elf_load(const char *path, uint32_t dest,
 	fd = fs_open(path, O_RDONLY);
 
 	if(fd == FILEHND_INVALID) {
-		ds_printf("DS_ERROR: Can't open file: %s\n", path);
+		isoldr_error("Can't open file: %s\n", path);
 		return -1;
 	}
 
 	sz = fs_total(fd);
-	elf = (uint8_t *)aligned_alloc(32, sz);
+    if(sz < sizeof(elf_hdr_t) || sz > 8 * 1024 * 1024) {
+        fs_close(fd); isoldr_error("Invalid ELF firmware size.\n"); return -1;
+    }
+    elf = (uint8_t *)memalign(32, (sz + 31) & ~(size_t)31);
 
 	if(elf == NULL) {
 		fs_close(fd);
-		ds_printf("DS_ERROR: No free memory, needed %d bytes\n", (int)sz);
+		isoldr_error("No free memory, needed %d bytes\n", (int)sz);
 		return -1;
 	}
 
@@ -262,7 +289,7 @@ int isoldr_elf_load(const char *path, uint32_t dest,
 
 	if(rsz != sz) {
 		free(elf);
-		ds_printf("DS_ERROR: Can't load %s\n", path);
+		isoldr_error("Can't load %s\n", path);
 		return -1;
 	}
 
@@ -276,7 +303,7 @@ int isoldr_elf_load(const char *path, uint32_t dest,
 	ds_printf("DS_PROCESS: Loading ELF %s %d bytes, dest 0x%08lx\n",
 		path, (int)sz, (unsigned long)dest);
 
-	rc = load_exec(elf, hdr, dest, out_data, out_size);
+	rc = load_exec(elf, sz, hdr, dest, out_data, out_size);
 
 	free(elf);
 	return rc;

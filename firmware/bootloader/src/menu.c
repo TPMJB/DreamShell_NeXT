@@ -1,96 +1,86 @@
 /**
- * DreamShell bootloader
- * Menu
+ * DreamShell bootloader menu
  * (c)2011-2026 SWAT <http://www.dc-swat.ru>
+ * NeXT recovery controls and configuration (c)2026 TPMJB.
  */
-
-
 #include "main.h"
 #include "fs.h"
+#include <fatfs.h>
+#include <stdio.h>
+#include <string.h>
 
+#define ITEM_MAX 64
+#define DEVICE_MAX 16
+#define VISIBLE_ITEMS 6
+
+typedef struct {
+    char path[BOOT_PATH_MAX], label[80];
+    boot_format_t format;
+} boot_item_t;
+typedef struct {
+    boot_item_t items[ITEM_MAX];
+    int count, selected;
+    boot_config_t config;
+    char config_path[BOOT_PATH_MAX], notice[160];
+    bool hold;
+    uint32 detect_ms;
+} inventory_t;
+typedef enum { JOB_NONE, JOB_LOAD, JOB_SCAN } job_kind_t;
+typedef struct {
+    job_kind_t kind;
+    bool done, cancel;
+    char path[BOOT_PATH_MAX], message[160];
+    boot_format_t format;
+    boot_stage_t stage;
+    boot_image_t image;
+    uint32 count, total, load_ms;
+} boot_job_t;
+
+static inventory_t inventory, scanned;
+static boot_job_t job;
+static kthread_t *worker;
+static mutex_t job_mutex=MUTEX_INITIALIZER;
 static pvr_ptr_t txr_font;
-static float alpha, curs_alpha;
-static int frame, curs_alpha_dir;
-static float progress_w, old_per;
-static mutex_t video_mutex = MUTEX_INITIALIZER;
+static boot_countdown_t countdown;
+static bool details;
+static uint32 last_buttons;
+static uint64_t repeat_at;
 
-static volatile int load_process = 0;
-static int load_in_thread = 0;
-static volatile int binary_ready = 0;
-static uint32 binary_size = 0;
-static uint8 *binary_buff = NULL;
-
-typedef struct menu_item {
-	char name[NAME_MAX];
-	char path[NAME_MAX];
-	int mode;
-	int is_gz;
-	int is_scrambled;
-	struct menu_item *next;
-} menu_item_t;
-
-static menu_item_t *items;
-static int items_cnt = 0;
-static int selected = 0;
-static char message[NAME_MAX];
-
-static int must_lock_video() {
-	kthread_t *ct = thd_get_current();
-	return ct->tid != 1;
+static uint32 buttons(void) {
+    maple_device_t *device=maple_enum_type(0,MAPLE_FUNC_CONTROLLER);
+    cont_state_t *state=device ? maple_dev_status(device) : NULL;
+    return state ? state->buttons : 0;
 }
-
-
-#define lock_video() \
-	do { \
-		if(must_lock_video()) \
-			mutex_lock(&video_mutex); \
-	} while(0)
-
-
-#define unlock_video() \
-	do { \
-		if(must_lock_video()) \
-			mutex_unlock(&video_mutex); \
-	} while(0)
-
 
 int show_message(const char *fmt, ...) {
-	va_list args;
-	int i;
-	
-	if(!start_pressed)
-		return 0;
-	
-	va_start(args, fmt);
-	i = vsnprintf(message, NAME_MAX, fmt, args);
-	va_end(args);
-
-
-	return i;
+    va_list args;
+    mutex_lock(&job_mutex);
+    va_start(args,fmt);
+    int result=vsnprintf(job.message,sizeof(job.message),fmt,args);
+    va_end(args);
+    mutex_unlock(&job_mutex);
+    return result;
 }
 
-
-void init_menu_txr() {
-	uint16	*vram;
-	int	x, y;
-
-	txr_font = pvr_mem_malloc(256*256*2);
-	vram = (uint16*)txr_font;
-
-	for (y = 0; y < 8; y++) {
-		for (x = 0; x < 16; x++) {
-			bfont_draw(vram, 256, 0, y * 16 + x);
-			vram += 16;
-		}
-		vram += 23 * 256;
-	}
+void menu_graphics_init(void) {
+    txr_font=pvr_mem_malloc(256*256*2);
+    if(!txr_font) return;
+    uint16 *vram=(uint16 *)txr_font;
+    memset(vram,0,256*256*2);
+    for(int y=0; y<8; ++y) {
+        for(int x=0; x<16; ++x) {
+            bfont_draw(vram,256,0,y*16+x);
+            vram+=16;
+        }
+        vram+=23*256;
+    }
+    last_buttons=buttons();
+    if(last_buttons) countdown.armed=false;
 }
-
-/* The following funcs blatently ripped from libconio =) */
 
 /* Draw one font character (6x12) */
 static void draw_char(float x1, float y1, float z1, float a, float r,
-	float g, float b, int c) {
+	float g, float b, int c, float scale) {
 	pvr_vertex_t	vert;
 	int ix, iy;
 	float u1, v1, u2, v2;
@@ -109,7 +99,7 @@ static void draw_char(float x1, float y1, float z1, float a, float r,
 
 		vert.flags = PVR_CMD_VERTEX;
 		vert.x = x1;
-		vert.y = y1 + 24;
+		vert.y = y1 + 24 * scale;
 		vert.z = z1;
 		vert.u = u1;
 		vert.v = v2;
@@ -123,14 +113,14 @@ static void draw_char(float x1, float y1, float z1, float a, float r,
 		vert.v = v1;
 		pvr_prim(&vert, sizeof(vert));
 		
-		vert.x = x1 + 12;
-		vert.y = y1 + 24;
+		vert.x = x1 + 12 * scale;
+		vert.y = y1 + 24 * scale;
 		vert.u = u2;
 		vert.v = v2;
 		pvr_prim(&vert, sizeof(vert));
 
 		vert.flags = PVR_CMD_VERTEX_EOL;
-		vert.x = x1 + 12;
+		vert.x = x1 + 12 * scale;
 		vert.y = y1;
 		vert.u = u2;
 		vert.v = v1;
@@ -140,7 +130,7 @@ static void draw_char(float x1, float y1, float z1, float a, float r,
 
 /* draw len chars at string */
 static void draw_string(float x, float y, float z, float a, float r, float g,
-		float b, char *str, int len) {
+		float b, char *str, int len, float scale) {
 	int i;
 	pvr_poly_cxt_t cxt;
 	pvr_poly_hdr_t poly;
@@ -151,8 +141,8 @@ static void draw_string(float x, float y, float z, float a, float r, float g,
 	pvr_prim(&poly, sizeof(poly));
 
 	for (i = 0; i < len; i++) {
-		draw_char(x, y, z, a, r, g, b, str[i]);
-		x += 12;
+		draw_char(x, y, z, a, r, g, b, str[i], scale);
+		x += 12 * scale;
 	}
 }
 
@@ -189,498 +179,372 @@ static void draw_box(float x, float y, float w, float h, float z, float a, float
 
 
 
-static int search_root_check(char *device, char *path, char *file) {
-	
-	char check[NAME_MAX];
-	
-	if(file == NULL) {
-		sprintf(check, "/%s%s", device, path);
-	} else {
-		sprintf(check, "/%s%s/%s", device, path, file);
-	}
-	
-	if((file == NULL && DirExists(check)) || (file != NULL && FileExists(check))) {
-		return 0;
-	}
-	
-	return -1;
+
+static void line(float x, float y, float scale, float r, float g, float b,
+                 const char *text, int max_chars) {
+    int length=(int)strlen(text);
+    if(length>max_chars) length=max_chars;
+    draw_string(x,y,101.0f,1.0f,r,g,b,(char *)text,length,scale);
 }
 
-
-static int search_root() {
-
-	dirent_t *ent;
-	file_t hnd;
-	menu_item_t *item;
-	char name[NAME_MAX];
-	int i;
-
-	hnd = fs_open("/", O_RDONLY | O_DIR);
-
-	if(hnd == FILEHND_INVALID) {
-		dbglog(DBG_ERROR, "Can't open root directory!\n");
-		return -1;
-	}
-
-	while ((ent = (dirent_t *)fs_readdir(hnd)) != NULL) {
-
-		if(!RootDeviceIsSupported(ent->name)) {
-			continue;
-		}
-
-		item = calloc(1, sizeof(menu_item_t));
-
-		if(!item) {
-			break;
-		}
-
-		item->next = items;
-		items = item;
-
-		for(i = 0; i < strlen(ent->name); i++) {
-			name[i] = toupper((int)ent->name[i]);
-		}
-
-		name[i] = '\0';
-		snprintf(item->name, NAME_MAX, "Boot from %s", name);
-		item->mode = 0;
-		items_cnt++;
-
-		dbglog(DBG_INFO, "Checking for root directory on /%s\n", ent->name);
-
-		if(!search_root_check(ent->name, "/DS", "/DS_CORE.BIN")) {
-
-			snprintf(item->path, NAME_MAX, "/%s/DS/DS_CORE.BIN", ent->name);
-
-		} else if(!search_root_check(ent->name, "", "/DS_CORE.BIN")) {
-
-			snprintf(item->path, NAME_MAX, "/%s/DS_CORE.BIN", ent->name);
-
-		} else if(!search_root_check(ent->name, "", "/1DS_CORE.BIN")) {
-
-			snprintf(item->path, NAME_MAX, "/%s/1DS_CORE.BIN", ent->name);
-			item->is_scrambled = 1;
-
-		} else if(!search_root_check(ent->name, "/DS", "/ZDS_CORE.BIN")) {
-
-			snprintf(item->path, NAME_MAX, "/%s/DS/ZDS_CORE.BIN", ent->name);
-			item->is_gz = 1;
-
-		} else if(!search_root_check(ent->name, "", "/ZDS_CORE.BIN")) {
-
-			snprintf(item->path, NAME_MAX, "/%s/ZDS_CORE.BIN", ent->name);
-			item->is_gz = 1;
-
-		} else {
-			item->path[0] = 0;
-		}
-	}
-
-	fs_close(hnd);
-	return 0;
+static bool core_exists(const char *path) {
+    if(!boot_core_path_valid(path)) return false;
+    file_t fd=fs_open(path,O_RDONLY);
+    if(fd==FILEHND_INVALID) return false;
+    return fs_close(fd)==0;
 }
 
-
-static void update_progress(float per) {
-	int pct;
-
-	if(per < 0.0f)
-		per = 0.0f;
-	else if(per > 100.0f)
-		per = 100.0f;
-
-	pct = (int)(per + 0.5f);
-
-	lock_video();
-	progress_w = ((640.0f - 180.0f) / 100.0f) * per;
-
-	if(old_per != per) {
-		old_per = per;
-		show_message("Loading %02d%c", pct, '%');
-	}
-
-	unlock_video();
+static void add_item(inventory_t *out, const char *path) {
+    for(int i=0; i<out->count; ++i)
+        if(!strcmp(out->items[i].path,path)) return;
+    if(!core_exists(path)) return;
+    if(out->count==ITEM_MAX) {
+        out->hold=true;
+        snprintf(out->notice,sizeof(out->notice),"Too many cores; set core_path in boot.cfg");
+        return;
+    }
+    boot_item_t *item=&out->items[out->count++];
+    snprintf(item->path,sizeof(item->path),"%s",path);
+    item->format=boot_path_format(path);
+    const char *filename=strrchr(path,'/');
+    const char *device_end=strchr(path+1,'/');
+    snprintf(item->label,sizeof(item->label),"%.*s  /  %s",
+             (int)(device_end-path-1),path+1,filename+1);
 }
 
-
-static uint32 gzip_get_file_size(char *filename) {
-	
-	file_t fd;
-	uint32 len;
-	uint32 size;
-	
-	fd = fs_open(filename, O_RDONLY);
-	
-	if(fd < 0)
-		return 0;
-	
-	if(fs_seek(fd, -4, SEEK_END) <= 0) {
-		fs_close(fd);
-		return 0;
-	}
-	
-	len = fs_read(fd, &size, sizeof(size));
-	fs_close(fd);
-	
-	if(len != 4) {
-		return 0;
-	}
-	
-	return size;
+static bool read_config(const char *path, inventory_t *out) {
+    file_t fd=fs_open(path,O_RDONLY);
+    if(fd==FILEHND_INVALID) return false;
+    snprintf(out->config_path,sizeof(out->config_path),"%s",path);
+    char data[4097];
+    ssize_t size=fs_total(fd);
+    size_t count=0;
+    bool valid=size>=0 && size<=4096;
+    while(valid && count<(size_t)size) {
+        ssize_t got=fs_read(fd,data+count,(size_t)size-count);
+        if(got<=0 || got>size-(ssize_t)count) { valid=false; break; }
+        count+=(size_t)got;
+    }
+    if(valid) {
+        char extra;
+        if(fs_read(fd,&extra,1)!=0) valid=false;
+    }
+    if(fs_close(fd)) valid=false;
+    unsigned bad_line=valid ? boot_config_parse(data,count,&out->config) : 1;
+    if(bad_line) {
+        out->hold=true;
+        snprintf(out->notice,sizeof(out->notice),
+                 "boot.cfg error at line %u; using defaults",bad_line);
+    }
+    return true;
 }
 
+static void scan(inventory_t *out) {
+    static const char *normal[]={"/DS/DS_CORE.BIN","/DS_CORE.BIN","/1DS_CORE.BIN",
+                                 "/DS/ZDS_CORE.BIN","/ZDS_CORE.BIN"};
+    static const char *alternate[]={"/DS/DEBUG_DS_CORE.BIN","/DS/EMU_DS_CORE.BIN"};
+    char devices[DEVICE_MAX][16], path[BOOT_PATH_MAX];
+    int count=0;
+    memset(out,0,sizeof(*out));
+    boot_config_defaults(&out->config);
+    file_t root=fs_open("/",O_RDONLY|O_DIR);
+    if(root==FILEHND_INVALID) {
+        out->hold=true;
+        strcpy(out->notice,"Cannot list boot devices");
+        return;
+    }
+    const dirent_t *entry;
+    while((entry=fs_readdir(root))!=NULL) {
+        if(!RootDeviceIsSupported(entry->name) || strlen(entry->name)>=16) continue;
+        if(count==DEVICE_MAX) { out->hold=true; break; }
+        snprintf(devices[count++],sizeof(devices[0]),"%s",entry->name);
+    }
+    fs_close(root);
 
-void *loading_thd(void *param) {
-	
-	menu_item_t *item = (menu_item_t *)param;
-	file_t fd = FILEHND_INVALID;
-	gzFile fdz = NULL;
-	uint8 *pbuff;
-	uint32 count = 0;
-	int i = 0;
-	
-	if(item->is_gz) {
-		
-		dbglog(DBG_INFO, "Loading compressed binary %s ...\n", item->path);
-		
-		binary_size = gzip_get_file_size(item->path);
-		fdz = gzopen(item->path, "r");
-	
-		if(fdz == NULL) {
-			lock_video();
-			show_message("Can't open file");
-			unlock_video();
-			load_process = 0;
-			binary_size = 0;
-			return NULL;
-		}
-		
-		
-	} else {
-		
-		dbglog(DBG_INFO, "Loading binary %s ...\n", item->path);
-	
-		fd = fs_open(item->path, O_RDONLY);
-		
-		if(fd == FILEHND_INVALID) {
-			lock_video();
-			show_message("Can't open file");
-			unlock_video();
-			load_process = 0;
-			return NULL;
-		}
-		
-		binary_size = fs_total(fd);
-	}
-	
-	if(!binary_size) {
-		lock_video();
-		show_message("File is empty");
-		unlock_video();
-		
-		if(fd != FILEHND_INVALID)
-			fs_close(fd);
-			
-		if(fdz)
-			gzclose(fdz);
-		
-		load_process = 0;
-		return NULL;
-	}
-	
-	update_progress(0);
-	binary_buff = (uint8 *)aligned_alloc(32, binary_size);
-	
-	if(binary_buff != NULL) {
-		
-		memset(binary_buff, 0, binary_size);
-		pbuff = binary_buff;
-		
-		if(item->is_gz) {
-			
-			if(!load_in_thread) {
-				
-				i = gzread(fdz, pbuff, binary_size);
-				
-				if(i < 0) {
-					lock_video();
-					show_message("Loading error");
-					load_process = 0;
-					binary_size = 0;
-					free(binary_buff);
-					gzclose(fdz);
-					unlock_video();
-					return NULL;
-				}
-				
-			} else {
-			
-				while((i = gzread(fdz, pbuff, 16384)) > 0) {
-					pbuff += i;
-					count += i;
-					update_progress((float)count * 100.0f / (float)binary_size);
-				}
-			}
-			
-			gzclose(fdz);
-			
-		} else {
-			
-			if(!load_in_thread) {
-				
-				i = fs_read(fd, pbuff, binary_size);
-				
-				if(i < 0) {
-					lock_video();
-					show_message("Loading error");
-					load_process = 0;
-					binary_size = 0;
-					free(binary_buff);
-					fs_close(fd);
-					unlock_video();
-					return NULL;
-				}
-
-			} else {
-		
-				while((i = fs_read(fd, pbuff, 32768)) > 0) {
-					pbuff += i;
-					count += i;
-					update_progress((float)count * 100.0f / (float)binary_size);
-				}
-			}
-			
-			fs_close(fd);
-		}
-		
-		if(item->is_scrambled) {
-
-			lock_video();
-			show_message("Descrambling...");
-			unlock_video();
-
-			uint8 *tmp_buf = (uint8 *)aligned_alloc(32, binary_size);
-			descramble(binary_buff, tmp_buf, binary_size);
-			free(binary_buff);
-			binary_buff = tmp_buf;
-		}
-
-		if(load_in_thread)
-			update_progress(100.0f);
-
-		lock_video();
-		show_message("Executing...");
-		unlock_video();
-
-		if(load_in_thread) {
-			thd_sleep(100);
-			binary_ready = 1;
-		} else {
-			dbglog(DBG_INFO, "Executing...\n");
-			thd_sleep(100);
-			arch_exec(binary_buff, binary_size);
-		}
-
-	} else {
-
-		lock_video();
-		show_message("Not enough memory: %d Kb", binary_size / 1024);
-		binary_size = 0;
-		unlock_video();
-	}
-	
-	load_process = 0;
-	return NULL;
+    /* Settings lookup is independent of boot order: SD, then IDE. */
+    bool found=false;
+    for(int type=0; type<2 && !found; ++type) {
+        for(int part=0; part<4 && !found; ++part) {
+            char name[16];
+            if(part) snprintf(name,sizeof(name),"%s%d",type ? "ide" : "sd",part);
+            else snprintf(name,sizeof(name),"%s",type ? "ide" : "sd");
+            for(int i=0; i<count && !found; ++i) if(!strcmp(devices[i],name)) {
+                snprintf(path,sizeof(path),"/%s/DS/boot.cfg",name);
+                found=read_config(path,out);
+                if(!found) {
+                    snprintf(path,sizeof(path),"/%s/boot.cfg",name);
+                    found=read_config(path,out);
+                }
+            }
+        }
+    }
+    /* Stable sort preserves the original root order for boot_order=auto. */
+    for(int i=1; i<count; ++i) {
+        char value[16]; strcpy(value,devices[i]);
+        int j=i;
+        while(j && boot_device_rank(&out->config,devices[j-1])>
+                   boot_device_rank(&out->config,value)) {
+            strcpy(devices[j],devices[j-1]); --j;
+        }
+        strcpy(devices[j],value);
+    }
+    if(*out->config.core_path) add_item(out,out->config.core_path);
+    if(*out->config.fallback_path) add_item(out,out->config.fallback_path);
+    bool configured_found=out->count>0;
+    for(int i=0; i<count; ++i)
+        for(unsigned n=0; n<sizeof(normal)/sizeof(*normal); ++n) {
+            snprintf(path,sizeof(path),"/%s%s",devices[i],normal[n]);
+            add_item(out,path);
+        }
+    int automatic_count=out->count;
+    for(int i=0; i<count; ++i)
+        for(unsigned n=0; n<sizeof(alternate)/sizeof(*alternate); ++n) {
+            snprintf(path,sizeof(path),"/%s%s",devices[i],alternate[n]);
+            add_item(out,path);
+        }
+    if(!out->count) {
+        out->hold=true;
+        if(!*out->notice) strcpy(out->notice,"No cores found. Insert SD and press X to rescan.");
+    } else if(!automatic_count) {
+        out->hold=true;
+        if(!*out->notice) strcpy(out->notice,"Choose an alternate core and press A to boot.");
+    } else if((*out->config.core_path || *out->config.fallback_path) && !configured_found) {
+        out->hold=true;
+        if(!*out->notice) strcpy(out->notice,"Configured core not found. Choose a core or edit boot.cfg.");
+    }
 }
 
-
-static menu_item_t *get_selected() {
-	
-	menu_item_t *item = NULL;
-	int i = 0;
-	
-	for (item = items, i = 0; i < selected; i++, item = item->next)
-		;
-		
-	return item;
+int menu_init(void) {
+    scan(&inventory);
+    inventory.detect_ms=boot_detect_ms;
+    details=inventory.config.diagnostics;
+    if(*inventory.notice) show_message("%s",inventory.notice);
+    else show_message("Choose a core. A boots; X refreshes devices.");
+    boot_countdown_start(&countdown,timer_ms_gettime64(),&inventory.config,
+                         start_pressed || inventory.hold,inventory.count>0);
+    return 0;
 }
 
-void loading_core(int no_thd) {
-	
-	menu_item_t *item = get_selected();
-	
-	if(item->path[0] != 0 && !load_process) {
-		
-		file_t	f;
-		f = fs_open(item->path, O_RDONLY);
-		
-		if(f == FILEHND_INVALID) {
-			show_message("Can't open %s", item->path);
-			return;
-		}
-		
-		fs_close(f);
-		show_message("Loading...");
-		load_process = 1;
-		
-		if(no_thd) {
-			load_in_thread = 0;
-			loading_thd((void*)item);
-		} else {
-			load_in_thread = 1;
-			thd_create(0, loading_thd, (void*)item);
-		}
-	}
+static bool progress(boot_stage_t stage, uint32 count, uint32 total, void *arg) {
+    bool cancelled;
+    mutex_lock(&job_mutex);
+    job.stage=stage; job.count=count; job.total=total;
+    cancelled=job.cancel;
+    mutex_unlock(&job_mutex);
+    if(arg && (start_pressed || (buttons() & (CONT_START|CONT_B)))) {
+        start_pressed=1;
+        return false;
+    }
+    return !cancelled;
 }
 
-
-static uint32 last_btns = 0;
-static uint32 frames = 0;
-
-static void check_input() {
-	maple_device_t *cont = NULL;
-	cont_state_t *state = NULL;
-	
-	if(binary_ready) {
-		arch_exec(binary_buff, binary_size);
-	}
-
-	cont = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
-	frames++;
-
-	if(cont) {
-		state = (cont_state_t *)maple_dev_status(cont);
-		
-		if(!state) return;
-
-		if (last_btns != state->buttons) {
-			if (state->buttons & CONT_DPAD_UP) {
-				selected--;
-				if (selected < 0)
-					selected += items_cnt;
-			}
-			if (state->buttons & CONT_DPAD_DOWN) {
-				selected++;
-				if (selected >= items_cnt)
-					selected -= items_cnt;
-			}
-			if ((state->buttons & CONT_DPAD_LEFT) || (state->buttons & CONT_DPAD_RIGHT)) {
-				menu_item_t *item = get_selected();
-				item->mode = item->mode ? 0 : 1;
-			}
-			if (state->buttons & CONT_A) {
-				loading_core(0);
-			}
-			if (state->buttons & CONT_B) {
-				loading_core(0);
-			}
-			if(state->buttons & CONT_Y) {
-				loading_core(1);
-			}
-			if(state->buttons & CONT_X) {
-				loading_core(1);
-			}
-			frames = 0;
-			last_btns = state->buttons;
-		}
-	}
-	
-	if(frames > 300) {
-		loading_core(0);
-		frames = 0;
-	}
+static void *run_job(void *arg) {
+    (void)arg;
+    if(job.kind==JOB_SCAN) {
+        uint32 elapsed=boot_detect_devices(true);
+        scan(&scanned);
+        scanned.detect_ms=elapsed;
+        mutex_lock(&job_mutex);
+        job.done=true;
+        mutex_unlock(&job_mutex);
+        return NULL;
+    }
+    boot_image_t result;
+    uint64_t started=timer_ms_gettime64();
+    boot_load(job.path,job.format,progress,NULL,&result);
+    mutex_lock(&job_mutex);
+    job.image=result;
+    job.count=result.count; job.total=result.size;
+    job.load_ms=(uint32)(timer_ms_gettime64()-started);
+    job.done=true;
+    mutex_unlock(&job_mutex);
+    return NULL;
 }
 
-int menu_init() {
-
-	alpha = 0.0f;
-	frame = 0;
-	progress_w = 0.0f;
-	curs_alpha = 0.5f;
-	curs_alpha_dir = 0;
-	items_cnt = 0;
-
-	if(start_pressed) {
-		init_menu_txr();
-	}
-
-	search_root();
-	selected = items_cnt > 1 ? items_cnt - 1 : 0;
-
-	while(selected > 0) {
-		menu_item_t *item = get_selected();
-
-		if(item->path[0] != 0) {
-			return 0;
-		}
-		selected--;
-	}
-
-	selected = 0;
-	return 0;
+static void reset_job(job_kind_t kind) {
+    mutex_lock(&job_mutex);
+    memset(&job,0,sizeof(job));
+    job.kind=kind;
+    mutex_unlock(&job_mutex);
 }
 
+static void begin_load(bool foreground) {
+    countdown.armed=false;
+    if(worker) return;
+    if(!inventory.count) {
+        show_message("No core selected. Insert SD and press X.");
+        return;
+    }
+    boot_item_t *item=&inventory.items[inventory.selected];
+    reset_job(JOB_LOAD);
+    snprintf(job.path,sizeof(job.path),"%s",item->path);
+    job.format=item->format;
+    show_message("Loading core...");
+    if(foreground) {
+        uint64_t started=timer_ms_gettime64();
+        boot_load(job.path,job.format,progress,(void *)1,&job.image);
+        job.count=job.image.count; job.total=job.image.size;
+        job.load_ms=(uint32)(timer_ms_gettime64()-started);
+        if(job.image.error==BOOT_OK) {
+            arch_exec(job.image.data,job.image.size);
+            free(job.image.data); job.image.data=NULL;
+        }
+        show_message("%s",boot_error_message(job.image.error));
+        job.kind=JOB_NONE;
+    } else {
+        worker=thd_create(false,run_job,NULL);
+        if(!worker) {
+            job.kind=JOB_NONE;
+            show_message("Cannot start loader. Press A to retry.");
+        }
+    }
+}
 
-void menu_frame() {
-	menu_item_t *item;
-	float y;
+void menu_autoboot(void) {
+    if(countdown.armed && inventory.config.delay_seconds==0 && !start_pressed)
+        begin_load(true);
+}
 
-	/* Delay */
-	frame++;
-	if (frame < 120)
-		return;
+static void finish_job(void) {
+    if(!worker) return;
+    mutex_lock(&job_mutex);
+    bool done=job.done;
+    mutex_unlock(&job_mutex);
+    if(!done) return;
+    thd_join(worker,NULL);
+    worker=NULL;
+    countdown.armed=false;
+    if(job.kind==JOB_SCAN) {
+        inventory=scanned;
+        boot_detect_ms=inventory.detect_ms;
+        details=inventory.config.diagnostics;
+        show_message("%s",*inventory.notice ? inventory.notice :
+                     "Devices refreshed. Choose a core and press A.");
+    } else {
+        if(job.cancel && job.image.error==BOOT_OK) {
+            free(job.image.data); job.image.data=NULL;
+            job.image.error=BOOT_CANCELLED;
+        }
+        if(job.image.error==BOOT_OK) {
+            arch_exec(job.image.data,job.image.size);
+            free(job.image.data); job.image.data=NULL;
+        }
+        show_message("%s",boot_error_message(job.image.error));
+    }
+    job.kind=JOB_NONE;
+}
 
-	/* Adjust alpha */
-	if (alpha < 1.0f)
-		alpha += 1/30.0f;
-	else
-		alpha = 1.0f;
-	
-	if(!curs_alpha_dir) {
-		curs_alpha -= 1/120.0f;
-		if(curs_alpha <= 0.30f) {
-			curs_alpha_dir = 1;
-		}
-	} else {
-		curs_alpha += 1/120.0f;
-		if(curs_alpha >= 0.70f) {
-			curs_alpha_dir = 0;
-		}
-	}
+void menu_update(void) {
+    if(start_pressed) countdown.armed=false;
+    uint32 current=buttons();
+    uint32 pressed=current & ~last_buttons;
+    uint64_t now=timer_ms_gettime64();
+    last_buttons=current;
+    if(pressed & (CONT_DPAD_UP|CONT_DPAD_DOWN)) repeat_at=now+350;
+    else if((current & (CONT_DPAD_UP|CONT_DPAD_DOWN)) && now>=repeat_at) {
+        pressed |= current & (CONT_DPAD_UP|CONT_DPAD_DOWN);
+        repeat_at=now+120;
+    }
+    bool due=boot_countdown_due(&countdown,now,current!=0);
+    if(worker) {
+        if(pressed & (CONT_B|CONT_START)) {
+            mutex_lock(&job_mutex);
+            if(job.kind==JOB_LOAD) job.cancel=true;
+            mutex_unlock(&job_mutex);
+        }
+        if(pressed & CONT_Y) details=!details;
+        finish_job();
+        return;
+    }
+    if(pressed & CONT_Y) details=!details;
+    if(pressed & CONT_B) {
+        details=false;
+        show_message("Automatic boot stopped. Choose a core; A boots.");
+        return;
+    }
+    if(pressed & CONT_START) {
+        show_message("Boot menu stays open until you press A.");
+        return;
+    }
+    if(pressed & CONT_DPAD_UP)
+        if(inventory.count) inventory.selected=(inventory.selected+inventory.count-1)%inventory.count;
+    if(pressed & CONT_DPAD_DOWN)
+        if(inventory.count) inventory.selected=(inventory.selected+1)%inventory.count;
+    if(pressed & CONT_X) {
+        reset_job(JOB_SCAN);
+        show_message("Scanning devices...");
+        worker=thd_create(false,run_job,NULL);
+        if(!worker) {
+            job.kind=JOB_NONE;
+            show_message("Cannot start rescan. Press X to retry.");
+        }
+        return;
+    }
+    if((pressed & CONT_A) || due) begin_load(false);
+}
 
-	/* Draw title */
-	draw_box(90, 90, 640-180, 26, 100.0f, alpha * 0.6f, 0.0f, 0.0f, 0.0f);
-	draw_string(320.0f - (12*strlen(title))/2, 92.0f, 101.0f, alpha, 1, 1, 1, (char*)title, strlen(title));
-	
-	/* Draw background plane */
-	draw_box(90, 90+26, 640-180, 480-(180+26), 100.0f, alpha * 0.3f, 0.0f, 0.0f, 0.0f);
-	//draw_box(88, 88+30, 640-176, 480-(180+22), 100.0f, alpha * 0.6f, 0.0f, 0.0f, 0.0f);
+void menu_frame(void) {
+    if(!txr_font) return;
+    char status[160], path[BOOT_PATH_MAX], info[120];
+    uint32 count,total,load_ms;
+    boot_stage_t stage;
+    job_kind_t kind;
+    mutex_lock(&job_mutex);
+    snprintf(status,sizeof(status),"%s",job.message);
+    snprintf(path,sizeof(path),"%s",job.path);
+    count=job.count; total=job.total; load_ms=job.load_ms;
+    stage=job.stage; kind=job.kind;
+    mutex_unlock(&job_mutex);
 
-	/* Draw menu items */
-	for (y = 90+37, item = items; item; item = item->next, y += 25.0f) {
-		
-		if(item->path[0] != 0) {
-			draw_string(100.0f, y, 101.0f, alpha, 1, 1, 1, 
-						(item->mode ? item->path : item->name), 
-						strlen(item->mode ? item->path : item->name));
-			
-		} else {
-			draw_string(100.0f, y, 101.0f, alpha * 0.6f, 1, 1, 1, item->name, strlen(item->name));
-		}
-	}
+    draw_box(20,18,600,444,100,0.97f,0.035f,0.075f,0.13f);
+    draw_box(20,18,600,3,100.5f,1,0.3f,0.9f,0.86f);
+    line(36,31,0.85f,0.9f,0.98f,1,title,56);
+    if(countdown.armed) {
+        uint64_t now=timer_ms_gettime64();
+        unsigned seconds=now<countdown.deadline ? (unsigned)((countdown.deadline-now+999)/1000) : 0;
+        snprintf(info,sizeof(info),"Booting in %us - any button opens the menu",seconds);
+    } else snprintf(info,sizeof(info),"%d core%s available",inventory.count,inventory.count==1 ? "" : "s");
+    line(36,63,0.6f,0.6f,0.8f,0.85f,info,78);
 
-	/* Cursor */
-	draw_box(90, 90 + 36 + selected * 25 - 1,
-		640-180, 26, 100.5f, 
-		alpha * curs_alpha, 0.3f, 0.3f, 0.3f);
-		
-		
-	mutex_lock(&video_mutex);
-	draw_box(90, 480-(90+26), 640-180, 26, 100.0f, alpha * 0.6f, 0.0f, 0.0f, 0.0f);
-	draw_box(90, 480-(90+26), progress_w, 26, 101.0f, alpha * 0.9f, 0.85f, 0.15f, 0.15f);
-	draw_string(320.0f - (12*strlen(message))/2, 480-(90+24), 102.0f, alpha, 1, 1, 1, message, strlen(message));
-	mutex_unlock(&video_mutex);
-	
-	/* Check for key input */
-	check_input();
+    int first=inventory.selected>=VISIBLE_ITEMS ? inventory.selected-VISIBLE_ITEMS+1 : 0;
+    draw_box(32,90,576,150,100.2f,1,0.055f,0.11f,0.18f);
+    if(!inventory.count) line(44,116,0.75f,0.8f,0.85f,0.9f,"No readable boot cores found",60);
+    for(int n=0; n<VISIBLE_ITEMS && first+n<inventory.count; ++n) {
+        int index=first+n;
+        float y=94+n*24;
+        if(index==inventory.selected) draw_box(34,y,572,23,100.5f,1,0.13f,0.29f,0.36f);
+        line(44,y+2,0.75f,0.93f,0.97f,1,inventory.items[index].label,61);
+    }
+    if(inventory.count>VISIBLE_ITEMS) {
+        snprintf(info,sizeof(info),"%d / %d",inventory.selected+1,inventory.count);
+        line(532,246,0.5f,0.55f,0.8f,0.85f,info,12);
+    }
+    const char *selected=inventory.count ? inventory.items[inventory.selected].path : "";
+    const char *shown=worker && kind==JOB_LOAD ? path : selected;
+    line(36,264,0.5f,0.65f,0.9f,0.94f,shown,94);
+    if(strlen(shown)>94) line(36,280,0.5f,0.65f,0.9f,0.94f,shown+94,94);
+    if(strlen(shown)>188) line(36,296,0.5f,0.65f,0.9f,0.94f,shown+188,94);
+
+    if(details) {
+        snprintf(info,sizeof(info),"Detection %lu ms   Last load %lu ms",
+                 (unsigned long)inventory.detect_ms,(unsigned long)load_ms);
+        line(36,314,0.5f,0.7f,0.8f,0.9f,info,94);
+        snprintf(info,sizeof(info),"Last read %lu / %lu bytes",(unsigned long)count,(unsigned long)total);
+        line(36,331,0.5f,0.7f,0.8f,0.9f,info,94);
+        line(36,348,0.5f,0.55f,0.75f,0.82f,
+             *inventory.config_path ? inventory.config_path : "Default settings (no boot.cfg)",94);
+    }
+    if(worker && kind==JOB_LOAD)
+        snprintf(status,sizeof(status),"%s  %lu / %lu KiB",
+                 stage==BOOT_DECODING ? "Decoding" : "Reading",
+                 (unsigned long)(count/1024),(unsigned long)(total/1024));
+    draw_box(32,362,576,40,100.2f,1,0.06f,0.13f,0.2f);
+    if(total) {
+        float width=576.0f*(float)count/(float)total;
+        if(width>576) width=576;
+        draw_box(32,398,width,3,100.5f,1,0.3f,0.9f,0.86f);
+    }
+    line(40,373,0.6f,0.95f,0.98f,1,status,78);
+    line(36,416,0.65f,0.8f,0.92f,0.95f,"A Boot / Retry    B Cancel    X Rescan",70);
+    line(36,440,0.55f,0.55f,0.75f,0.82f,"Up/Down Choose core    Y Details    Start Stay in menu",84);
 }

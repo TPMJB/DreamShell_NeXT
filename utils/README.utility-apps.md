@@ -1,4 +1,13 @@
-# DreamShell NeXT utility apps 2.1
+# DreamShell NeXT utility apps 2.2
+
+The eight redesigned utilities now keep all controls, labels and file pickers
+within a 32-pixel inset on the native 640x480 display. Font sizes are unchanged.
+Progress bars follow the actual layout width. This fixes TV overscan hiding
+the footer and bottom actions.
+
+When this guide is bundled with `ISO-Loader-Guide.md`, follow that guide for the
+combined update's contents and installation. The utility-only package below
+also remains available from its own branch workflow.
 
 Merge this update's **DS** folder into the DS folder on your SD/IDE device.
 Replace matching files. Keep the current boot disc. This update contains only
@@ -65,8 +74,14 @@ on-console summary. Apply preserves every other factory byte. Factory restores
 require an exact 8 KiB file and recognized field values. Advanced offers separate
 backup/restore/clear actions for Block 1 and the game-settings partition. Every
 erase requires a verified backup and a subsequent full read-back comparison.
-An unexpected flash partition layout stops the operation. Factory writes still
-require suitable hardware; the app does not bypass write protection.
+Reads use the physical flash through its uncached mapping, so boot BIOS read
+return conventions and temporary region overrides cannot misreport the stored
+settings or corrupt a backup. Unknown fields are shown as unknown; A retries
+the read. Opening the app rereads the console. Reading requires no modification.
+An unavailable or unexpected BIOS partition layout permits viewing and backup,
+but blocks writes. Write verification checks physical flash even when the BIOS
+returns zero on success. Factory writes still require suitable hardware; the
+app does not bypass write protection.
 
 ## Speedtest 2.0
 

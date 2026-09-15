@@ -42,3 +42,12 @@ isoLoader_toggleVMU
 isoLoader_FwItemClick
 isoLoader_FwItemSelect
 isoLoader_toggleRegion
+
+isoLoader_Check
+isoLoader_Baseline
+isoLoader_RestoreProfile
+isoLoader_Details
+isoLoader_Dismiss
+isoLoader_Up
+isoLoader_Open
+isoLoader_Close

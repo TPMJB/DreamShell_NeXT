@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<app name="Settings" version="2.0.0" icon="images/icon.png">
+<app name="Settings" version="2.0.1" icon="images/icon.png">
   <resources>
     <module src="modules/app_settings.klf" />
     <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
@@ -8,9 +8,6 @@
     <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <surface name="bg" width="640" height="480">
       <fill color="#101923" />
-    </surface>
-    <surface name="panel" width="592" height="320">
-      <fill color="#1B2A39" />
     </surface>
     <surface name="b116x32-normal" width="116" height="32">
       <fill color="#223548" />
@@ -26,32 +23,32 @@
     <surface name="b116x32-disabled" width="116" height="32">
       <fill color="#26313B" />
     </surface>
-    <surface name="b112x32-normal" width="112" height="32">
+    <surface name="b108x30-normal" width="108" height="30">
       <fill color="#223548" />
     </surface>
-    <surface name="b112x32-highlight" width="112" height="32">
+    <surface name="b108x30-highlight" width="108" height="30">
       <fill color="#53E1E3" />
-      <fill x="2" y="2" width="108" height="28" color="#155B71" />
+      <fill x="2" y="2" width="104" height="26" color="#155B71" />
     </surface>
-    <surface name="b112x32-pressed" width="112" height="32">
+    <surface name="b108x30-pressed" width="108" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="108" height="28" color="#155B71" />
+      <fill x="2" y="2" width="104" height="26" color="#155B71" />
     </surface>
-    <surface name="b112x32-disabled" width="112" height="32">
+    <surface name="b108x30-disabled" width="108" height="30">
       <fill color="#26313B" />
     </surface>
-    <surface name="b592x36-normal" width="592" height="36">
+    <surface name="b576x30-normal" width="576" height="30">
       <fill color="#223548" />
     </surface>
-    <surface name="b592x36-highlight" width="592" height="36">
+    <surface name="b576x30-highlight" width="576" height="30">
       <fill color="#53E1E3" />
-      <fill x="2" y="2" width="588" height="32" color="#155B71" />
+      <fill x="2" y="2" width="572" height="26" color="#155B71" />
     </surface>
-    <surface name="b592x36-pressed" width="592" height="36">
+    <surface name="b576x30-pressed" width="576" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="588" height="32" color="#155B71" />
+      <fill x="2" y="2" width="572" height="26" color="#155B71" />
     </surface>
-    <surface name="b592x36-disabled" width="592" height="36">
+    <surface name="b576x30-disabled" width="576" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b152x32-normal" width="152" height="32">
@@ -70,51 +67,51 @@
     </surface>
   </resources>
   <body width="640" height="480" background="bg" onload="export:SettingsApp_Init()" onopen="export:SettingsApp_Open()" onclose="export:SettingsApp_Close()" onunload="export:SettingsApp_Shutdown()">
-    <label name="heading" text="Settings" x="24" y="18" width="430" height="30" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="subtitle" text="DreamShell NeXT  /  Make it yours" x="24" y="48" width="580" height="20" font="small" color="#A7B9CB" align="left" valign="center" />
-    <input name="back-btn" type="button" x="500" y="20" width="116" height="32" onclick="export:SettingsApp_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+    <label name="heading" text="Settings" x="32" y="32" width="440" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Make it yours" x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="back-btn" type="button" x="492" y="32" width="116" height="32" onclick="export:SettingsApp_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
       <label name="back-btn-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="tab-0" type="button" x="24" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
-      <label name="tab-0-caption" text="Display" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="tab-0" type="button" x="32" y="88" width="108" height="30" onclick="export:SettingsApp_Tab()" normal="b108x30-normal" highlight="b108x30-highlight" pressed="b108x30-pressed" disabled="b108x30-disabled">
+      <label name="tab-0-caption" text="Display" x="12" y="0" width="84" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="tab-1" type="button" x="144" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
-      <label name="tab-1-caption" text="Sound" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="tab-1" type="button" x="149" y="88" width="108" height="30" onclick="export:SettingsApp_Tab()" normal="b108x30-normal" highlight="b108x30-highlight" pressed="b108x30-pressed" disabled="b108x30-disabled">
+      <label name="tab-1-caption" text="Sound" x="12" y="0" width="84" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="tab-2" type="button" x="264" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
-      <label name="tab-2-caption" text="Startup" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="tab-2" type="button" x="266" y="88" width="108" height="30" onclick="export:SettingsApp_Tab()" normal="b108x30-normal" highlight="b108x30-highlight" pressed="b108x30-pressed" disabled="b108x30-disabled">
+      <label name="tab-2-caption" text="Startup" x="12" y="0" width="84" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="tab-3" type="button" x="384" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
-      <label name="tab-3-caption" text="Clock" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="tab-3" type="button" x="383" y="88" width="108" height="30" onclick="export:SettingsApp_Tab()" normal="b108x30-normal" highlight="b108x30-highlight" pressed="b108x30-pressed" disabled="b108x30-disabled">
+      <label name="tab-3-caption" text="Clock" x="12" y="0" width="84" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="tab-4" type="button" x="504" y="76" width="112" height="32" onclick="export:SettingsApp_Tab()" normal="b112x32-normal" highlight="b112x32-highlight" pressed="b112x32-pressed" disabled="b112x32-disabled">
-      <label name="tab-4-caption" text="System" x="12" y="0" width="88" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="tab-4" type="button" x="500" y="88" width="108" height="30" onclick="export:SettingsApp_Tab()" normal="b108x30-normal" highlight="b108x30-highlight" pressed="b108x30-pressed" disabled="b108x30-disabled">
+      <label name="tab-4-caption" text="System" x="12" y="0" width="84" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-0" type="button" x="24" y="118" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-0-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-0" type="button" x="32" y="126" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-0-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-1" type="button" x="24" y="157" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-1-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-1" type="button" x="32" y="160" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-1-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-2" type="button" x="24" y="196" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-2-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-2" type="button" x="32" y="194" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-2-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-3" type="button" x="24" y="235" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-3-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-3" type="button" x="32" y="228" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-3-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-4" type="button" x="24" y="274" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-4-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-4" type="button" x="32" y="262" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-4-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-5" type="button" x="24" y="313" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-5-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-5" type="button" x="32" y="296" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-5-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <input name="row-6" type="button" x="24" y="352" width="592" height="36" onclick="export:SettingsApp_Change()" normal="b592x36-normal" highlight="b592x36-highlight" pressed="b592x36-pressed" disabled="b592x36-disabled">
-      <label name="row-6-caption" text="" x="12" y="0" width="568" height="36" font="body" color="#EFF5FC" align="left" valign="center" />
+    <input name="row-6" type="button" x="32" y="330" width="576" height="30" onclick="export:SettingsApp_Change()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+      <label name="row-6-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
-    <label name="help" text="A changes a value. X changes it back." x="24" y="393" width="592" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
-    <label name="save-status" text="No unsaved changes" x="24" y="415" width="592" height="18" font="small" color="#53E1E3" align="left" valign="center" />
-    <label name="controls" text="D-pad Select / Adjust   X Previous   Y Tab   B Menu" x="24" y="442" width="430" height="22" font="tiny" color="#A7B9CB" align="left" valign="center" />
-    <input name="save-btn" type="button" x="464" y="438" width="152" height="32" onclick="export:SettingsApp_Save()" normal="b152x32-normal" highlight="b152x32-highlight" pressed="b152x32-pressed" disabled="b152x32-disabled">
+    <label name="help" text="A changes a value. X changes it back." x="32" y="366" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="save-status" text="No unsaved changes" x="32" y="388" width="576" height="18" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="controls" text="D-pad Select / Adjust   X Previous   Y Tab   B Menu" x="32" y="426" width="412" height="22" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <input name="save-btn" type="button" x="456" y="414" width="152" height="32" onclick="export:SettingsApp_Save()" normal="b152x32-normal" highlight="b152x32-highlight" pressed="b152x32-pressed" disabled="b152x32-disabled">
       <label name="save-btn-caption" text="Save settings" x="12" y="0" width="128" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
     <dialog name="dialog" font="body" x="70" y="140" width="500" height="220" onconfirm="export:SettingsApp_Confirm()" oncancel="export:SettingsApp_Cancel()" />

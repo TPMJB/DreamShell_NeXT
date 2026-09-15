@@ -21,6 +21,7 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <dc/cdrom.h>
+#include "destination.h"
 
 DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 
@@ -609,18 +610,9 @@ void gd_ripper_Init(App_t *app, const char* fileName)
 			self.database_path[0] = '\0';
 		}
 
-		if(DirExists("/ide")) {
-			strcpy(self.selected_path, "/ide");
-		}
-		else if(DirExists("/sd")) {
-			strcpy(self.selected_path, "/sd");
-		}
-		else if(DirExists("/pc")) {
-			strcpy(self.selected_path, "/pc");
-		}
-		else {
-			strcpy(self.selected_path, "/ram");
-		}
+		snprintf(self.selected_path, sizeof(self.selected_path), "%s", gd_default_destination());
+		if(gd_prepare_destination(self.selected_path) < 0)
+			set_message("Games folder unavailable. Check the device or choose another folder.");
 
 		GUI_LabelSetText(self.destination_path, self.selected_path);
 		GUI_WidgetSetEnabled(self.cancel_btn, 0);
@@ -1305,6 +1297,9 @@ static void* gd_ripper_thread(void *arg) {
 	self.failure_stage = NULL;
 	self.failure_detail[0] = '\0';
 	GUI_LabelSetText(self.track_label, "Checking destination...");
+	if(gd_prepare_destination(self.rip_destination) < 0) {
+		storage_error("Destination unavailable", self.rip_destination, errno); goto out;
+	}
 	if (check_storage(self.rip_destination) != CMD_OK) goto out;
 
 	wait_for_drive_settle();
@@ -1372,7 +1367,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.2.0 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.2.1 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -2581,11 +2576,14 @@ void gd_ripper_Toggle(GUI_Widget *widget) {
 }
 
 void gd_ripper_Destination(GUI_Widget *widget) {
-    const char *path = widget == APP_GET_WIDGET("device-sd") ? "/sd" :
-        widget == APP_GET_WIDGET("device-ide") ? "/ide" : "/pc";
+    const char *path = widget == APP_GET_WIDGET("device-sd") ? NEXT_SD_GAMES_PATH :
+        widget == APP_GET_WIDGET("device-ide") ? NEXT_IDE_GAMES_PATH : NEXT_PC_GAMES_PATH;
     snprintf(self.folders.path, sizeof(self.folders.path), "%s", path);
+    int ready = gd_prepare_destination(path);
     folder_scan(&self.folders, 0);
     folder_display();
+    if(ready < 0) GUI_LabelSetText(APP_GET_WIDGET("destination-error"),
+        "Games folder unavailable. Check the device, or go Up to choose a folder.");
 }
 
 static void activate_focus(void) {

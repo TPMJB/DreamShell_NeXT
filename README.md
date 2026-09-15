@@ -5,7 +5,7 @@ and KallistiOS. NeXT adds exFAT boot/storage support, a controller-friendly app
 launcher, a QWERTY keyboard and directory browser, and reliable GD ripping with
 checkpoints, catalog verification and targeted recovery.
 
-**[Download the full NeXT 1.0.0 release](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/v1.0.0)**
+**[DreamShell NeXT 0.9 build](https://github.com/TPMJB/DreamShell_NeXT/actions/workflows/next-build.yml)**
 — includes the complete DS folder, boot CDs, firmware and desktop tools.
 Read [installation and release notes](RELEASE-NOTES.md) before updating.
 Copy the whole DS folder together; a working NeXT bootloader 3.0 CD can be reused.
@@ -18,7 +18,7 @@ Copy the whole DS folder together; a working NeXT bootloader 3.0 CD can be reuse
 - [CRC read-back diagnostics](utils/README.readback-diagnostic.md)
 - [Upstream changes reviewed for this release](docs/upstream-review.md)
 
-NeXT's 1.0.0 release number is independent of the DreamShell 4.0.5 Beta 3 core/API
+NeXT's 0.9 build number is independent of the DreamShell 4.0.5 Beta 3 core/API
 version. Original DreamShell, KallistiOS and third-party credits remain in the
 source and distributed notices. Other apps and hardware combinations are built
 but are not all validated on a physical console.
