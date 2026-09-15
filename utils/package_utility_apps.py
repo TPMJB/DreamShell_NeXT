@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as E
 ROOT=Path(__file__).resolve().parents[1]
-APPS = {'filemanager':'2.0.1', 'settings':'2.0.1', 'gdplay':'2.0.1',
+APPS = {'filemanager':'2.0.1', 'settings':'2.0.2', 'gdplay':'2.0.2',
         'bios_flasher':'3.0.1', 'region_changer':'2.0.1', 'speedtest':'2.0.1',
         'memtest':'2.0.1', 'network':'2.0.1'}
 

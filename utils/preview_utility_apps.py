@@ -9,12 +9,18 @@ S=2
 RESAMPLE=getattr(Image,'Resampling',Image).LANCZOS
 
 class Preview:
-    def __init__(self,app,values,focus='',hidden=()):
+    def __init__(self,app,values,focus='',hidden=(),active_tab=None):
         self.app=app;self.path=ROOT/'applications'/app
         self.xml=E.parse(self.path/'app.xml').getroot()
         self.resources={e.get('name'):e for e in self.xml.find('resources') if e.get('name')}
         self.fonts={e.get('name'):ImageFont.truetype(str(ROOT/'resources/fonts/ttf/arial_lite.ttf'),int(e.get('size'))*S) for e in self.xml.find('resources') if e.tag=='font'}
         self.values=values;self.focus=focus;self.hidden=set(hidden);self.overflows=[]
+        if active_tab is not None:
+            for i in range(5):
+                tab=self.xml.find(f"body/input[@name='tab-{i}']")
+                for state in ('normal','highlight','pressed'):
+                    tab.set(state,f'tab-active-{state}' if i==active_tab else f'b108x30-{state}')
+                tab.find('label').set('color','#101923' if i==active_tab else '#EFF5FC')
         self.canvas=Image.new('RGB',(640*S,480*S),'#101923');self.draw=ImageDraw.Draw(self.canvas)
     def rect(self,x,y,w,h,color):
         self.draw.rectangle((x*S,y*S,(x+w)*S-1,(y+h)*S-1),fill=color)
@@ -76,13 +82,14 @@ def main(folder):
         ['Connect at startup:  Ethernet','Sync clock at startup:  On','Network configuration:  Open Network app','Devices:  SD yes / IDE no / VMU yes','Running from:  /sd/DS','Restore defaults:  Review before saving','Restart DreamShell']]
     for index,rows in enumerate(pages):
         values={f'row-{i}-caption':text for i,text in enumerate(rows)}
+        values['heading']='Settings / '+['Display','Sound','Startup','Clock','System'][index]
         values['help']=['Native output applies after restart. Auto detects your video cable.',
             'Muting preserves your individual sound choices. Save to apply.',
             'Startup changes apply after restart. Resources must be mounted.',
             'Clock fields use local time. Time zone applies to network clock sync.',
             'Clock sync needs a connection. Select Devices to refresh detection.'][index]
         values['save-status']='Unsaved changes  /  START or Save settings to keep them'
-        canvas=Preview('settings',values,focus='row-0',hidden={f'row-{i}' for i in range(len(rows),7)}).save(folder/f'settings-{index}.png')
+        canvas=Preview('settings',values,focus='row-0',hidden={f'row-{i}' for i in range(len(rows),7)},active_tab=index).save(folder/f'settings-{index}.png')
         if index==0:settings=canvas
     icons=Image.new('RGB',(1280,960),'#101923');d=ImageDraw.Draw(icons)
     font=ImageFont.truetype(str(ROOT/'resources/fonts/ttf/arial_lite.ttf'),24)

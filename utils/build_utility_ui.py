@@ -62,20 +62,29 @@ def save(a,folder):
 
 def layouts():
     a,r,b=app('settings','Settings','DreamShell NeXT  /  Make it yours','SettingsApp')
+    a.set('version','2.0.2')
+    b.find("label[@name='heading']").set('text','Settings / Display')
+    for state in ('normal','highlight','pressed'):
+        s=surface(r,f'tab-active-{state}',108,30,ACCENT if state=='normal' else '#EFF5FC')
+        if state!='normal':node(s,'fill',x=3,y=3,width=102,height=24,color=ACCENT)
     button(b,r,'back-btn','Menu',492,32,116,32,'export:SettingsApp_Back()')
     for i,title in enumerate(['Display','Sound','Startup','Clock','System']):
-        button(b,r,f'tab-{i}',title,32+i*117,88,108,30,'export:SettingsApp_Tab()')
+        tab=button(b,r,f'tab-{i}',title,32+i*117,88,108,30,'export:SettingsApp_Tab()')
+        if i==0:
+            for state in ('normal','highlight','pressed'):tab.set(state,f'tab-active-{state}')
+            tab.find('label').set('color',BG)
     for i in range(7):
         button(b,r,f'row-{i}','',32,126+i*34,576,30,'export:SettingsApp_Change()')
     label(b,'help','A changes a value. X changes it back.',32,366,576,18,'small',MUTED)
     label(b,'save-status','No unsaved changes',32,388,576,18,'small',ACCENT)
-    label(b,'controls','D-pad Select / Adjust   X Previous   Y Tab   B Menu',32,426,412,22,'tiny',MUTED)
+    label(b,'controls','Up/Down Select   Left/Right Change   Y Tab   B Menu',32,426,412,22,'tiny',MUTED)
     button(b,r,'save-btn','Save settings',456,414,152,32,'export:SettingsApp_Save()')
     node(b,'dialog',name='dialog',font='body',x=70,y=140,width=500,height=220,
          onconfirm='export:SettingsApp_Confirm()',oncancel='export:SettingsApp_Cancel()')
     save(a,'settings')
 
     a,r,b=app('gdplay','GD Play','DreamShell NeXT  /  Play an original disc','gdplay')
+    a.set('version','2.0.2')
     button(b,r,'exit-btn','Menu',492,32,116,32,'export:gdplay_Back()')
     node(r,'image',name='disc-art',src='images/disc.svg.png')
     surface(r,'art-panel',216,258,PANEL)
@@ -155,7 +164,9 @@ def icons():
     path=ROOT/'applications/gdplay/images'
     svg='<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><circle cx="128" cy="128" r="108" fill="#233E50" stroke="#6FE3C0" stroke-width="3"/><circle cx="128" cy="128" r="88" fill="none" stroke="#345666" stroke-width="2"/><path d="M63 58A96 96 0 0 1 158 37M99 219A96 96 0 0 0 196 193" fill="none" stroke="#7FD8DB" stroke-width="9"/><circle cx="128" cy="128" r="28" fill="#101923" stroke="#9DB8C6" stroke-width="3"/><circle cx="128" cy="128" r="11" fill="#1B2A39"/></svg>'
     (path/'disc.svg').write_text(svg+'\n')
-    svg2png(bytestring=svg.encode(), write_to=str(path/'disc.svg.png'))
+    # SDL GUI pictures use native pixels; XML dimensions do not resize them.
+    svg2png(bytestring=svg.encode(), write_to=str(path/'disc.svg.png'),
+            output_width=184,output_height=184)
 
 if __name__=='__main__':
     layouts()

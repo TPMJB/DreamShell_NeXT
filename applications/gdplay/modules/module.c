@@ -4,6 +4,7 @@
 #include <dc/sound/sound.h>
 #include "../../utility_ui.h"
 #include "disc_metadata.h"
+#include "disc_poll.h"
 DEFAULT_MODULE_EXPORTS(app_gdplay);
 
 #define DRIVE_TIMEOUT_MS 5000
@@ -83,20 +84,18 @@ static void scan_disc(void) {
 }
 static void *worker(void *unused) {
     (void)unused;
-    int old_status=-999,old_type=-999;
+    gdplay_poll_t poll={.disc_type=-1};
     while(!self.stop) {
         int status=-1,type=-1;
         int rv=cdrom_get_status(&status,&type);
+        mutex_lock(&result_lock);
         int request=self.request; self.request=0;
+        mutex_unlock(&result_lock);
         if(self.stop) break;
-        if(rv==ERR_DISC_CHG || request || (rv==ERR_OK && (status!=old_status || type!=old_type))) {
-            if(rv==ERR_OK && (status==CD_STATUS_OPEN || status==CD_STATUS_NO_DISC))
-                report("DISC DRIVE","No disc","Insert a disc and close the lid. B returns to the menu.");
-            else scan_disc();
-            /* Cache the post-read status: a non-game disc is not re-read every poll. */
-            status=-1;type=-1; cdrom_get_status(&status,&type);
-            old_status=status;old_type=type;
-        }
+        int operation=gdplay_poll(&poll,rv,status,type,request);
+        if(operation==GDPLAY_POLL_EMPTY)
+            report("DISC DRIVE","No disc","Insert a disc and close the lid. B returns to the menu.");
+        else if(operation==GDPLAY_POLL_READ) scan_disc();
         thd_sleep(150);
     }
     return NULL;
@@ -136,6 +135,7 @@ static void render(void *event,void *param,int action) {
     mutex_lock(&result_lock);
     disc_result_t result=self.result; self.pending=0;
     mutex_unlock(&result_lock);
+    int was_ready=self.ready;
     self.ready=result.ready;
     GUI_WidgetSetEnabled(self.buttons[0],self.ready);
     title(*result.info.title?result.info.title:"Insert a Dreamcast disc");
@@ -143,7 +143,10 @@ static void render(void *event,void *param,int action) {
     for(int i=0;i<6;i++) GUI_LabelSetText(self.fields[i],*fields[i]?fields[i]:"--");
     GUI_LabelSetText(self.type,result.type); GUI_LabelSetText(self.state,result.state);
     GUI_LabelSetText(self.message,result.message);
-    focus(self.ready?0:self.focus);
+    focus(self.ready && !was_ready && self.focus==1 ? 0 : self.focus);
+    /* Present each metadata snapshot together, including erased old text.
+     * This callback runs after the regular GUI dirty-rectangle update. */
+    GUI_ScreenDoUpdate(GUI_GetScreen(),1);
 }
 static void stop_worker(void) {
     self.stop=1;
@@ -152,7 +155,10 @@ static void stop_worker(void) {
 void gdplay_Back(GUI_Widget *widget) { (void)widget; OpenMainApp(); }
 void gdplay_Refresh(GUI_Widget *widget) {
     (void)widget;
-    if(self.worker) { self.ready=0; GUI_WidgetSetEnabled(self.buttons[0],0); self.request=1; }
+    if(self.worker) {
+        self.ready=0; GUI_WidgetSetEnabled(self.buttons[0],0);
+        mutex_lock(&result_lock); self.request=1; mutex_unlock(&result_lock);
+    }
     else GUI_LabelSetText(self.message,"Drive worker is unavailable. Reopen GD Play.");
 }
 void gdplay_play(GUI_Widget *widget) {
@@ -205,6 +211,7 @@ void gdplay_Init(App_t *app) {
 void gdplay_Open(App_t *app) {
     (void)app;
     self.stop=0; self.request=1;self.ready=0;
+    mutex_lock(&result_lock); self.pending=0; mutex_unlock(&result_lock);
     GUI_WidgetSetEnabled(self.buttons[0],0);
     utility_open(self.input); focus(1);
     if(!self.worker) self.worker=thd_create(0,worker,NULL);

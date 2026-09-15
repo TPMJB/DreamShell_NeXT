@@ -3,6 +3,7 @@
 #include "ds.h"
 #include "../../utility_ui.h"
 #include "settings_model.h"
+#include "settings_nav.h"
 
 DEFAULT_MODULE_EXPORTS(app_settings);
 
@@ -11,7 +12,7 @@ static struct {
     Event_t *input;
     Settings_t draft, saved;
     struct tm clock;
-    GUI_Widget *rows[7], *tabs[5], *back, *save, *status, *help, *dialog;
+    GUI_Widget *rows[7], *tabs[5], *back, *save, *status, *help, *dialog, *heading;
     int page, focus, action, clock_dirty;
     char apps[32][64];
     int app_count;
@@ -19,6 +20,7 @@ static struct {
 
 enum { ASK_NONE, ASK_DISCARD, ASK_DEFAULTS, ASK_REBOOT };
 static const int row_counts[] = {3,5,4,7,7};
+static const char *page_names[] = {"Display","Sound","Startup","Clock","System"};
 static const char *native_names[] = {"Auto (detect cable)","PAL 480i","NTSC 480i","VGA 480p"};
 static const char *shape_names[] = {"4:3 (640 x 480)","3:2 (720 x 480)","16:10 (768 x 480)","16:9 (854 x 480)"};
 static const int widths[] = {640,720,768,854};
@@ -57,18 +59,26 @@ static GUI_Widget *focused(void) {
     return self.back;
 }
 static void mark_focus(void) {
+    LockVideo();
     for(int i=0;i<5;i++) GUI_WidgetClearFlags(self.tabs[i],WIDGET_INSIDE);
     for(int i=0;i<7;i++) GUI_WidgetClearFlags(self.rows[i],WIDGET_INSIDE);
     GUI_WidgetClearFlags(self.save,WIDGET_INSIDE);
     GUI_WidgetClearFlags(self.back,WIDGET_INSIDE);
     GUI_WidgetSetFlags(focused(),WIDGET_INSIDE);
     for(int i=0;i<5;i++) {
+        int active=i==self.page;
+        GUI_ButtonSetNormalImage(self.tabs[i],APP_GET_SURFACE(active?"tab-active-normal":"b108x30-normal"));
+        GUI_ButtonSetHighlightImage(self.tabs[i],APP_GET_SURFACE(active?"tab-active-highlight":"b108x30-highlight"));
+        GUI_ButtonSetPressedImage(self.tabs[i],APP_GET_SURFACE(active?"tab-active-pressed":"b108x30-pressed"));
         GUI_LabelSetTextColor(GUI_ButtonGetCaption(self.tabs[i]),
-            i == self.page ? 83 : 239,i == self.page ? 225 : 245,i == self.page ? 227 : 252);
+            active ? 16 : 239,active ? 25 : 245,active ? 35 : 252);
     }
+    UnlockVideo();
 }
 static void refresh(void) {
     char text[160],tz[24];
+    snprintf(text,sizeof(text),"Settings / %s",page_names[self.page]);
+    GUI_LabelSetText(self.heading,text);
     for(int i=0;i<7;i++) {
         GUI_WidgetSetEnabled(self.rows[i],1);
         if(i < row_count()) GUI_WidgetClearFlags(self.rows[i],WIDGET_HIDDEN);
@@ -274,10 +284,14 @@ void SettingsApp_Change(GUI_Widget *widget) {
     if(i<0 || i>=row_count()) return;
     self.focus=5+i; change(i,1);
 }
-static void page(int index) { self.page=(index+5)%5; self.focus=5; refresh(); }
+static void page(int index,int enter_rows) {
+    self.page=(index+5)%5;
+    self.focus=enter_rows ? 5 : self.page;
+    refresh();
+}
 void SettingsApp_Tab(GUI_Widget *widget) {
     const char *name=GUI_ObjectGetName((GUI_Object *)widget);
-    if(name && strlen(name)>4) page(atoi(name+4));
+    if(name && strlen(name)>4) page(atoi(name+4),1);
 }
 static void input(void *event,void *param,int action) {
     (void)event;
@@ -291,13 +305,13 @@ static void input(void *event,void *param,int action) {
         e->type=SDL_NOEVENT; return;
     }
     if(key==UI_UP || key==UI_DOWN) {
-        self.focus=(self.focus+(key==UI_UP?-1:1)+row_count()+7)%(row_count()+7);
+        self.focus=settings_vertical_focus(self.page,self.focus,row_count(),key==UI_UP?-1:1);
         mark_focus();
     } else if(key==UI_LEFT || key==UI_RIGHT || key==UI_X) {
         int step=key==UI_RIGHT?1:-1;
         if(self.focus>=5 && self.focus<5+row_count()) change(self.focus-5,step);
-        else page(self.page+step);
-    } else if(key==UI_Y) page(self.page+1);
+        else if(self.focus<5 && key!=UI_X) page(self.page+step,0);
+    } else if(key==UI_Y) page(self.page+1,self.focus>=5);
     else if(key==UI_BACK) SettingsApp_Back(NULL);
     else if(key==UI_START) SettingsApp_Save(NULL);
     else if(key==UI_OK) GUI_WidgetClicked(focused(),0,0);
@@ -310,6 +324,7 @@ void SettingsApp_Init(App_t *app) {
     for(int i=0;i<5;i++) { char name[16]; snprintf(name,sizeof(name),"tab-%d",i); self.tabs[i]=APP_GET_WIDGET(name); }
     self.back=APP_GET_WIDGET("back-btn"); self.save=APP_GET_WIDGET("save-btn");
     self.status=APP_GET_WIDGET("save-status"); self.help=APP_GET_WIDGET("help"); self.dialog=APP_GET_WIDGET("dialog");
+    self.heading=APP_GET_WIDGET("heading");
     Item_t *item=listGetItemFirst(GetAppList());
     while(item && self.app_count<32) {
         App_t *a=item->data;
@@ -325,7 +340,7 @@ void SettingsApp_Open(App_t *app) {
     time_t now=rtc_unix_secs(); struct tm *value=gmtime(&now);
     if(value) self.clock=*value; else memset(&self.clock,0,sizeof(self.clock));
     self.clock.tm_isdst=0;
-    utility_open(self.input); page(0); pending();
+    utility_open(self.input); page(0,1); pending();
 }
 void SettingsApp_Close(App_t *app) { (void)app; utility_close(self.input); }
 void SettingsApp_Shutdown(App_t *app) { (void)app; utility_remove(&self.input); self.app=NULL; }

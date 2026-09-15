@@ -1,6 +1,6 @@
 # DreamShell NeXT 0.9 — by TPMJB
 
-This complete build collects the bootloader, launcher/music, ISO Loader/Games,
+This complete release collects the bootloader, launcher/music, ISO Loader/Games,
 VMU Manager and utility app work, plus the screen-edge and Region Changer fixes.
 The project build number is 0.9; the underlying core/API remains DreamShell
 4.0.5 Beta 3. Individual applications retain their own version numbers.
@@ -48,6 +48,16 @@ Memtest and Network keep their controls and labels at least 32 pixels inside
 the 640x480 screen. Fonts keep their native sizes. File pickers and progress
 bars follow the same bounds, and Memtest's controller legend is above the edge.
 
+Settings 2.0.2 keeps the current tab filled in cyan and names the page in the
+heading. Up from the first setting returns to that tab; Left/Right switches
+pages while staying on the tab row, and Down or A enters its settings.
+
+GD Play 2.0.2 fixes repeated Reading/Ready flashing caused by normal drive
+motion being mistaken for a disc change. Disc details remain visible until
+the media changes or Read disc again/X is selected. Metadata is repainted as
+one complete screen update, and the disc illustration fits its native viewport.
+Menu/B/START return remains available.
+
 Region Changer reads the console's physical factory settings independently of
 the boot BIOS's read return values or temporary region override. It shows the
 stored region, language, video standard and swirl, with unknown fields clearly
@@ -75,8 +85,9 @@ The build runs host regression tests, FAT32/exFAT interoperability checks,
 screen bounds and font previews, then compiles the Dreamcast modules and complete
 distribution. Packaging checks all app XML against source, native modules,
 boot discs, firmware, music, version data and embedded boot assets.
-Host previews are not hardware emulation; the corrected screens and Region
-Changer still need a console check. Flash-write tests use simulated hardware.
+Host previews are not hardware emulation. The GD Play polling and Settings
+navigation fixes have regression coverage, but this final revision has not
+been re-tested on a physical console here. Flash-write tests use simulated hardware.
 
 DreamShell NeXT enhancements and branding by **TPMJB**, built on **SWAT's
 DreamShell**, **KallistiOS**, **FatFs**, and the other credited projects. Original

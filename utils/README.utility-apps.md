@@ -30,6 +30,9 @@ itself are rejected. A cancelled directory copy retains files already completed.
 ## GD Play
 
 Disc details are read in a separate worker with bounded drive commands.
+Normal seek, busy and spin-down status changes do not trigger another read.
+The last result remains visible until a disc change or explicit refresh; a
+failed read stays visible instead of retrying and flashing continuously.
 A activates the selected button; X rereads the disc; B or START returns to the
 menu. The Menu button remains visible even with no disc or a read error.
 Exit can wait for the current drive command (up to five seconds) to finish.
@@ -38,8 +41,12 @@ requires a console reset. This update does not add in-game return hooks.
 
 ## Settings
 
-Display, Sound, Startup, Clock, and System tabs use the same controls. Up/down
-selects; left/right adjusts; A advances; X reverses; Y changes tabs; START saves.
+Display, Sound, Startup, Clock, and System tabs use the same controls. The
+current tab stays filled in cyan, and the heading names the current page.
+Up from the first setting returns to the current tab. Left/right on the tab
+row changes pages while keeping focus there; Down or A enters the settings.
+Within the settings list, Up/down selects, Left/right adjusts, A advances,
+and X reverses. Y changes tabs from anywhere; START saves.
 B returns to the menu, with a discard prompt if edits are pending.
 
 Changes stay in a draft until Save. Save verifies the configuration in boot
@@ -140,7 +147,7 @@ factory-byte preservation, short IO, unique-file creation, rejected backups,
 64-bit timing and UI export references. Layout previews use actual XML and the
 shipped font, with sample runtime values, not hardware emulation.
 
-Before any full release, test controller navigation/exit/reopen, storage reads,
+For console validation, test controller navigation/exit/reopen, storage reads,
 backup/report files, connection/server start-stop, and draft-save/reopen on the
 console. Test firmware writes only on hardware with a known recovery path.
 The initial app updates also still need console checks for FAT32/exFAT copy,

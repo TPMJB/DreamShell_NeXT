@@ -124,7 +124,7 @@ assert(not fm:continueOperation())
         for app in ('filemanager','gdplay','settings'):
             path=ROOT/'applications'/app
             tree=E.parse(path/'app.xml').getroot()
-            self.assertEqual(tree.get('version'),'2.0.1')
+            self.assertEqual(tree.get('version'),'2.0.1' if app=='filemanager' else '2.0.2')
             names=[e.get('name') for e in tree.find('body').iter() if e.get('name')]
             self.assertEqual(len(names),len(set(names)),app)
             exports=(path/'modules/exports.txt').read_text().splitlines()
