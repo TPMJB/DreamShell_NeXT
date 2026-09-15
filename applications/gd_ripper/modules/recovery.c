@@ -41,7 +41,7 @@ static int read_at(file_t fd, uint32_t index, uint8_t *buffer) {
 }
 
 static int read_queue(const char *path, uint32_t track, uint32_t first,
-        uint32_t count, uint8_t *bits, uint32_t *targets) {
+        uint32_t count, uint32_t sector_size, uint8_t *bits, uint32_t *targets) {
     char name[NAME_MAX], line[180];
     FILE *fp;
     int rv = CMD_ERROR;
@@ -58,7 +58,7 @@ static int read_queue(const char *path, uint32_t track, uint32_t first,
         if (sscanf(line, "%lu,%lu,%lu,%lu,%llu%n", &tn, &index, &lba, &fad,
                 &offset, &end) != 5 || strcmp(line + end, "\n") || tn != track ||
                 index >= count || fad != (uint64_t)first + index || fad < 150 ||
-                lba != fad - 150 || offset != (uint64_t)index * SECTOR_BYTES) goto out;
+                lba != fad - 150 || offset != (uint64_t)index * sector_size) goto out;
         if (!marked(bits, index)) { ++*targets; mark(bits, index, true); }
     }
     if (!ferror(fp)) rv = CMD_OK;
@@ -74,7 +74,7 @@ int gd_recovery_count(const char *path, uint32_t track, uint32_t first,
     if (!count || count > INT32_MAX / SECTOR_BYTES) return CMD_ERROR;
     bits = calloc((count + 7) / 8, 1);
     if (!bits) return CMD_ERROR;
-    rv = read_queue(path, track, first, count, bits, targets);
+    rv = read_queue(path, track, first, count, SECTOR_BYTES, bits, targets);
     free(bits);
     return rv;
 }
@@ -124,8 +124,8 @@ out:
 }
 
 static int validate_baseline(file_t fd, uint32_t tag, uint32_t first,
-        uint32_t count, uint32_t type, const uint8_t *bits, uint32_t targets,
-        uint32_t *whole) {
+        uint32_t count, uint32_t type, uint8_t *bits, uint32_t targets,
+        uint32_t *whole, bool restore_targets) {
     uint8_t header[HEADER_BYTES], record[8];
     uint32_t crc, previous = 0;
     if (fs_total(fd) != HEADER_BYTES + (int64_t)targets * 8 + 4 ||
@@ -140,7 +140,9 @@ static int validate_baseline(file_t fd, uint32_t tag, uint32_t first,
         uint32_t index;
         if (fs_read(fd, record, 8) != 8) return CMD_ERROR;
         index = get32(record);
-        if (index >= count || (i && index <= previous) || !marked(bits, index)) return CMD_ERROR;
+        if (index >= count || (i && index <= previous) ||
+                (!restore_targets && !marked(bits, index))) return CMD_ERROR;
+        if (restore_targets) mark(bits, index, true);
         previous = index;
         crc = crc32(crc, record, 8);
     }
@@ -191,6 +193,69 @@ static int restore_audio(const char *path, uint32_t tag, uint32_t count,
     return rv;
 }
 
+int gd_recovery_inspect(const char *path, uint32_t track, uint32_t first,
+        uint32_t count, uint32_t type, uint32_t sector_size, volatile int *active,
+        gd_recovery_status_t *status) {
+    char name[NAME_MAX];
+    uint8_t *bits = NULL, *buffer = NULL, header[HEADER_BYTES];
+    file_t baseline = FILEHND_INVALID, fd = FILEHND_INVALID;
+    uint32_t targets = 0, whole, tag;
+    int rv = CMD_ERROR;
+    memset(status, 0, sizeof(*status));
+    if (!active || !*active || !count ||
+            (sector_size != 2048 && sector_size != SECTOR_BYTES) ||
+            count > INT32_MAX / sector_size) goto out;
+    bits = calloc((count + 7) / 8, 1);
+    if (!bits || read_queue(path, track, first, count, sector_size, bits, &targets) != CMD_OK)
+        goto out;
+    status->flagged = status->remaining = targets;
+    status->pending = targets != 0;
+    /* Legacy cooked tracks have no raw-sector recovery evidence. */
+    if (sector_size != SECTOR_BYTES || (type != 0 && type != 4)) { rv = CMD_OK; goto out; }
+    if (sidecar(name, path, ".recovery-base") != CMD_OK) goto out;
+    baseline = fs_open(name, O_RDONLY);
+    if (baseline == FILEHND_INVALID) {
+        if (errno == ENOENT) rv = CMD_OK; /* No recovery has been committed yet. */
+        goto out;
+    }
+    tag = gd_crc_tag(track, first, count, SECTOR_BYTES);
+    /* A completed recovery removes .bad but retains its immutable baseline.
+     * Recover the original target list for history and validate it as strictly
+     * as the repair engine does. Reporting never edits either file. */
+    if (!targets) {
+        if (fs_read(baseline, header, sizeof(header)) != sizeof(header)) goto out;
+        targets = get32(header + 28);
+        if (!targets || targets > count || fs_seek(baseline, 0, SEEK_SET) != 0) goto out;
+    }
+    if (validate_baseline(baseline, tag, first, count, type, bits, targets,
+            &whole, !status->pending) != CMD_OK) goto out;
+    status->flagged = status->remaining = targets;
+    fd = fs_open(path, O_RDONLY);
+    buffer = memalign(32, SECTOR_BYTES);
+    if (fd == FILEHND_INVALID || !buffer || fs_total(fd) != (int64_t)count * SECTOR_BYTES)
+        goto out;
+    if (type == 4) {
+        for (uint32_t i = 0; i < count; ++i) {
+            if (!*active) goto out;
+            if (!marked(bits, i)) continue;
+            if (read_at(fd, i, buffer) != CMD_OK) goto out;
+            if (gd_check_sector(buffer, first + i) == 0) --status->remaining;
+            thd_pass();
+        }
+    } else if (restore_audio(path, tag, count, fd, bits, &status->remaining,
+            buffer, active) != CMD_OK) goto out;
+    if (!*active) goto out;
+    /* A cleared queue must agree with the retained repair evidence. */
+    if (!status->pending && status->remaining) goto out;
+    status->recovered = status->flagged - status->remaining;
+    rv = CMD_OK;
+out:
+    if (baseline != FILEHND_INVALID && fs_close(baseline)) rv = CMD_ERROR;
+    if (fd != FILEHND_INVALID && fs_close(fd)) rv = CMD_ERROR;
+    free(bits); free(buffer);
+    return rv;
+}
+
 static int backup_sector(const char *path, uint32_t fad, const uint8_t *buffer, bool sync) {
     char name[NAME_MAX], header[40];
     file_t fd;
@@ -223,7 +288,7 @@ int gd_recover_track(const char *path, uint32_t track, uint32_t first,
     buffer = memalign(32, 2368 * 3);
     if (!bits || !buffer) { result->error = "Recovery allocation failed"; goto out; }
     candidate = buffer + 2368; second = candidate + 2368;
-    if (read_queue(path, track, first, count, bits, &result->targets) != CMD_OK) goto out;
+    if (read_queue(path, track, first, count, SECTOR_BYTES, bits, &result->targets) != CMD_OK) goto out;
     if (!result->targets) { rv = CMD_OK; goto out; }
     result->remaining = result->targets;
     result->error = "Recovery track open/size failed";
@@ -238,7 +303,7 @@ int gd_recover_track(const char *path, uint32_t track, uint32_t first,
         baseline = fs_open(base, O_RDONLY);
     }
     if (baseline == FILEHND_INVALID || validate_baseline(baseline, tag, first, count,
-            type, bits, result->targets, &whole) != CMD_OK) goto out;
+            type, bits, result->targets, &whole, false) != CMD_OK) goto out;
 
     /* Only targets can have changed since the immutable baseline was saved.
      * Rebuild the current CRC, including any interrupted/torn patch. */

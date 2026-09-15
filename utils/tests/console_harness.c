@@ -250,6 +250,35 @@ int main(int argc,char **argv) {
             read_calls, (unsigned long long)read_bytes, result.error ? result.error : "OK");
         close(drive_fd); return 0;
     }
+    if (!strcmp(argv[1], "recovery-status")) {
+        self.track_count = 1;
+        self.tracks[0] = (track_info_t){.track_num=3, .start_lba=45150,
+            .sector_count=32, .type=atoi(argv[3]), .filename="track03.bin"};
+        scan_fault = argc > 4 ? atoi(argv[4]) : 0;
+        int rv = count_recovery_targets(argv[2]);
+        if (rv == CMD_OK) show_recovery_prompt();
+        printf("%d|%u|%u|%u|%d|%s|%s|%s|%d\n", rv,
+            self.recovery_totals.flagged, self.recovery_totals.recovered,
+            self.recovery_totals.remaining, self.recovery_totals.pending,
+            host_widget("recovery-count")->text, host_widget("recovery-history")->text,
+            host_widget("recovery-start")->text, read_calls);
+        return 0;
+    }
+    if (!strcmp(argv[1], "recovery-live-counts")) {
+        self.speed_label = host_widget("speed-label");
+        self.time_label = host_widget("time-label");
+        self.recovery_totals = (gd_recovery_status_t){.flagged=8, .recovered=2, .remaining=6, .pending=true};
+        self.recovery_tracks[0] = (gd_recovery_status_t){.flagged=3, .recovered=2, .remaining=1, .pending=true};
+        recovery_context_t context = {3, 4, 0, 0, &self.recovery_tracks[0]};
+        recovery_progress(&context, 0, 45151, 3, false);
+        assert(self.recovery_totals.remaining == 6); /* Reconciliation must not inflate it. */
+        recovery_progress(&context, 1, 45151, 1, false);
+        recovery_progress(&context, 1, 45151, 0, true);
+        assert(self.recovery_totals.remaining == 5 && self.recovery_totals.recovered == 3);
+        assert(!strcmp(self.speed_label->text, "Total: 5 unresolved"));
+        assert(!strcmp(self.time_label->text, "3 / 8 recovered"));
+        puts("ok"); return 0;
+    }
     if (!strcmp(argv[1], "thread")) {
         full_thread = 1;
         drive_fd = open(argv[2], O_RDONLY); assert(drive_fd >= 0);

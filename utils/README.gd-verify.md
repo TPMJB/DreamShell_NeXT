@@ -1,5 +1,30 @@
 # DreamShell GD Ripper 2.1.0
 
+## Recovery reporting in 2.2.2
+
+Recovery, the Start / Resume prompt and on-console verification now distinguish
+**originally flagged**, **recovered** and **unresolved** sectors. Counts include
+repairs from earlier sessions, including interrupted recovery. `verify.log`'s
+`bad_sectors` field is the current unresolved count; `recovery_flagged`,
+`recovery_recovered`, `recovery_remaining` and `recovery_pending` record the details.
+Unreadable or invalid recovery metadata reports counts as unavailable, never zero.
+
+Existing dumps need no conversion. Reporting reads the original target list and
+validates saved data sectors or audio confirmation records. It does not rewrite
+tracks, delete recovery records or read the entire track. Stream CRC verification
+still does not reread untouched sectors. Keep `.bad`, `.recovery-base`,
+`.recovery-audio`, `.repair-backup` and CRC files with your dump.
+
+If the last sector was repaired before an interruption prevented the final
+checkpoint, the prompt shows **0 unresolved** and **Finish recovery**. The dump
+stays incomplete until finalization succeeds. Repeated recovery does not treat
+the original error total as the remaining workload.
+
+Install the app update by merging its `DS` folder and restarting DreamShell;
+confirm GD Ripper **2.2.2**. This update needs no new core or boot disc.
+Hardware testing should check the counts before and after recovering a few
+sectors, stopping, resuming, and running verification on an existing partial dump.
+
 ## First pass, then optional recovery
 
 Enable **Advanced features > Recover damaged disc** before Start / Resume.

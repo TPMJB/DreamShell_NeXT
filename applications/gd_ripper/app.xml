@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="GD Ripper" version="2.2.0" icon="images/icon.png">
+<app name="GD Ripper" version="2.2.2" icon="images/icon.png">
   <resources>
     <module src="modules/app_gd_ripper.klf" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="16" name="body" />
@@ -159,7 +159,7 @@
     <cardstack name="pages">
       <panel name="main-page" width="640" height="480">
         <label x="24" y="16" width="592" height="28" font="title" color="#E7EEF4" text="GD RIPPER  /  NeXT" align="left" valign="center" />
-        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.2.0  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
+        <label x="24" y="46" width="592" height="20" font="small" color="#9BAFC1" text="2.2.2  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
         <label x="24" y="70" width="592" height="20" font="body" color="#53E1E3" text="Waiting for disc..." align="left" valign="center" name="disc-label" />
         <label x="24" y="100" width="70" height="22" font="body" color="#9BAFC1" text="Folder:" align="left" />
         <input type="text" name="gname-text" value="ripped_disc" x="96" y="96" width="520" height="28" size="254" font="body" fontcolor="#14202B" onblur="export:gd_ripper_Gamename()" />
@@ -272,10 +272,10 @@
         </input>
       </panel>
       <panel name="recovery-page" width="640" height="480">
-        <label x="24" y="32" width="592" height="32" font="title" color="#FF9A88" text="THIS DUMP'S A MESS." align="left" valign="center" />
+        <label x="24" y="32" width="592" height="32" font="title" color="#FF9A88" text="THIS DUMP'S A MESS." name="recovery-title" align="left" valign="center" />
         <label x="24" y="90" width="592" height="22" font="body" color="#E7EEF4" text="" name="recovery-folder" align="left" valign="center" />
         <label x="24" y="132" width="592" height="22" font="body" color="#E7EEF4" text="" name="recovery-count" align="left" valign="center" />
-        <label x="24" y="178" width="592" height="20" font="body" color="#D0DEE9" text="The readable data is saved. Unresolved sectors are flagged." align="left" valign="center" />
+        <label x="24" y="178" width="592" height="20" font="body" color="#D0DEE9" text="" name="recovery-history" align="left" valign="center" />
         <label x="24" y="206" width="592" height="20" font="body" color="#D0DEE9" text="This dump stays incomplete until every hole is recovered." align="left" valign="center" />
         <label x="24" y="250" width="592" height="20" font="body" color="#D0DEE9" text="" name="recovery-limit" align="left" valign="center" />
         <label x="24" y="278" width="592" height="20" font="body" color="#9BAFC1" text="Recovery may take a while. Stop saves progress." align="left" valign="center" />

@@ -1,0 +1,94 @@
+name: GD Ripper recovery patch
+
+on:
+  push:
+    branches: [codex/ripper-recovery-counts]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test recovery and filesystem metadata
+        run: |
+          python3 -m unittest discover -s utils/tests -p test_console_ripper.py -v
+          python3 -m unittest discover -s utils/tests -p test_fatfs_metadata.py -v
+
+      - name: Prepare compiler directories
+        run: |
+          sudo mkdir -p /opt/toolchains/dc /usr/local/dc/kos
+          sudo chown -R "$(id -u):$(id -g)" /opt/toolchains /usr/local/dc
+
+      # Reuse the release compiler; a patch build never starts a new toolchain build.
+      - uses: actions/cache/restore@v5
+        with:
+          path: /opt/toolchains/dc
+          key: dc-toolchain-${{ runner.os }}-${{ hashFiles('sdk/toolchain/Makefile.cfg', 'sdk/toolchain/patches/*.diff', 'sdk/doc/KallistiOS.txt') }}
+          fail-on-cache-miss: true
+
+      - name: Resolve cached port headers
+        id: ports
+        run: echo "sha=$(git ls-remote https://github.com/KallistiOS/kos-ports.git HEAD | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@v5
+        with:
+          path: /usr/local/dc/kos/kos-ports
+          key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
+          fail-on-cache-miss: true
+
+      - name: Prepare pinned KallistiOS headers
+        run: bash .github/scripts/dev-build.sh prepare
+
+      - name: Build GD Ripper module
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          # The loadable module uses the installed core's exports. Build that
+          # relocatable module directly, without rebuilding the core/boot disc.
+          make -C applications/gd_ripper/modules NO_LD_DEBUG=1
+          sh-elf-readelf -h applications/gd_ripper/modules/app_gd_ripper.klf
+          sh-elf-nm -u applications/gd_ripper/modules/app_gd_ripper.klf > module-imports.txt
+          if rg 'gd_recovery_|recovery_remaining|show_recovery_totals' module-imports.txt; then
+            echo "Unresolved internal recovery symbols" >&2
+            exit 1
+          fi
+
+      - name: Package app update
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          import xml.etree.ElementTree as ET
+          import struct
+          app = Path('applications/gd_ripper')
+          module = app/'modules/app_gd_ripper.klf'
+          elf = module.read_bytes()
+          assert elf[:6] == b'\x7fELF\x01\x01'
+          assert struct.unpack_from('<HH', elf, 16) == (1, 42), 'Expected relocatable SH-4 ELF'
+          assert ET.parse(app/'app.xml').getroot().get('version') == '2.2.2'
+          assert b'GD Ripper 2.2.2 diagnostic' in elf
+          target = Path('ripper-update/DS/apps/gd_ripper')
+          (target/'modules').mkdir(parents=True)
+          shutil.copy2(app/'app.xml', target/'app.xml')
+          shutil.copy2(module, target/'modules/app_gd_ripper.klf')
+          Path('ripper-update/README.txt').write_text(
+              'GD Ripper 2.2.2 recovery reporting fix\n\n'
+              'Merge DS into your existing DS folder, replace the two files and restart.\n'
+              'Keep all existing dumps and recovery records; no conversion is needed.\n'
+              'No core or boot disc update is required.\n\n'
+              'Recovery, resume and verification show original/recovered/unresolved counts.\n'
+              'If zero remain but a checkpoint was interrupted, select Finish recovery.\n'
+              'This fixes reporting; it does not change the drive retry algorithm.\n')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD-Ripper-2.2.2-recovery-reporting
+          path: ripper-update/
+          if-no-files-found: error
+          retention-days: 30

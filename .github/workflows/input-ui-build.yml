@@ -141,7 +141,7 @@ jobs:
               prefixes = ('DS/apps/gd_ripper/', 'DS/apps/launch_app/')
               files = {'DS/DS_CORE.BIN', 'DS/modules/vkb.klf', 'DS/fonts/ttf/arial_lite.ttf'}
               assert files <= set(full.namelist()), 'Core, keyboard or font missing'
-              assert b'version="2.2.0"' in full.read(prefixes[0]+'app.xml')
+              assert full.read(prefixes[0]+'app.xml') == Path('applications/gd_ripper/app.xml').read_bytes()
               assert b'version="2.0.2"' in full.read(prefixes[1]+'app.xml')
               with ZipFile('DreamShell-input-ui-update.zip', 'w', ZIP_DEFLATED) as update:
                   for name in full.namelist():

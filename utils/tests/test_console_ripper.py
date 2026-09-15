@@ -179,6 +179,109 @@ class ConsoleTests(unittest.TestCase):
         return subprocess.check_output([str(self.exe),'recover',str(self.disc),str(self.track),
             str(fault),str(stop),str(kind),str(passes)], text=True).strip().split('|')
 
+    def recovery_status(self, kind=4, scan_fault=0):
+        return subprocess.check_output([str(self.exe), 'recovery-status', str(self.path),
+            str(kind), str(scan_fault)], text=True).strip().split('|')
+
+    def set_track_type(self, kind):
+        state = self.path/'rip.state'
+        state.write_text(state.read_text().replace('32 4 2352', f'32 {kind} 2352'))
+
+    def assert_recovery_report(self, flagged, recovered, remaining, pending):
+        report = (self.path/'verify.log').read_text()
+        for key, value in (('recovery_flagged', flagged), ('recovery_recovered', recovered),
+                           ('recovery_remaining', remaining), ('bad_sectors', remaining),
+                           ('recovery_pending', pending)):
+            self.assertIn(f'{key} {value}\n', report)
+
+    def test_partial_data_recovery_reports_current_counts_and_preserves_original_queue(self):
+        self.recovery_fixture()
+        self.assertEqual(self.recover(fault=1)[:3], ['0', '2', '1'])
+        before = {p.name: p.read_bytes() for p in self.path.iterdir() if p.is_file()}
+        status = self.recovery_status()
+        self.assertEqual(status[:5], ['0', '3', '2', '1', '1'])
+        self.assertEqual(status[5:8], ['1 unresolved sectors.', 'Originally flagged: 3    Recovered: 2', 'Try recovery'])
+        self.assertEqual(status[8], '0')  # Inspection issues no disc reads.
+        self.assertEqual(before, {p.name: p.read_bytes() for p in self.path.iterdir() if p.is_file()})
+        self.assertEqual(self.run_c('verify', self.path, self.db, 1)[0], '8')
+        self.assert_recovery_report(3, 2, 1, 1)
+        result = self.recover()
+        self.assertEqual(result[:3], ['0', '1', '0'])
+        self.assertEqual(result[4], '1')
+
+    def test_partial_audio_recovery_reports_confirmed_repairs_after_restart(self):
+        self.recovery_fixture()
+        self.set_track_type(0)
+        self.assertEqual(self.recover(kind=0, fault=1)[:3], ['0', '2', '1'])
+        self.assertEqual(self.recovery_status(kind=0)[:5], ['0', '3', '2', '1', '1'])
+        self.assertEqual(self.run_c('verify', self.path, self.db, 1)[0], '8')
+        self.assert_recovery_report(3, 2, 1, 1)
+        result = self.recover(kind=0)
+        self.assertEqual(result[:3], ['0', '1', '0'])
+        self.assertEqual(result[4], '2')
+
+    def test_interrupted_last_repair_requires_finalization_for_data_and_audio(self):
+        for kind in (4, 0):
+            with self.subTest(kind=kind):
+                # Independent fixtures for each track type.
+                for suffix in ('.recovery-base', '.recovery-audio', '.repair-backup'):
+                    self.track.with_name(self.track.name + suffix).unlink(missing_ok=True)
+                self.set_track_type(kind)
+                self.recovery_fixture()
+                self.assertEqual(self.recover(kind=kind, stop=3)[:3], ['-1', '3', '0'])
+                status = self.recovery_status(kind=kind)
+                self.assertEqual(status[:5], ['0', '3', '3', '0', '1'])
+                self.assertEqual(status[7], 'Finish recovery')
+                # An interrupted session has no final CRC journal yet. Either
+                # integrity failure or unavailable CRC must withhold approval.
+                self.assertIn(self.run_c('verify', self.path, self.db, 1)[0], ['-1', '8'])
+                self.assert_recovery_report(3, 3, 0, 1)
+                result = self.recover(kind=kind)
+                self.assertEqual(result[:3], ['0', '0', '0'])
+                self.assertEqual(result[4], '0')  # Finalization needs no new disc reads.
+                self.assertEqual(self.recovery_status(kind=kind)[:5], ['0', '3', '3', '0', '0'])
+                self.run_c('verify', self.path, self.db, 1)
+                self.assert_recovery_report(3, 3, 0, 0)
+
+    def test_recovery_counts_do_not_trust_changed_saved_sector(self):
+        self.recovery_fixture()
+        self.recover(fault=1)
+        data = bytearray(self.track.read_bytes())
+        data[3*2352+100] ^= 1
+        self.track.write_bytes(data)
+        self.assertEqual(self.recovery_status()[:5], ['0', '3', '1', '2', '1'])
+
+    def test_audio_counts_require_intact_confirmation_and_matching_saved_bytes(self):
+        self.recovery_fixture()
+        self.recover(kind=0, fault=1)
+        data = bytearray(self.track.read_bytes())
+        data[3*2352+100] ^= 1
+        self.track.write_bytes(data)
+        self.assertEqual(self.recovery_status(kind=0)[:5], ['0', '3', '1', '2', '1'])
+        journal = self.path/'track03.bin.recovery-audio'
+        journal.write_bytes(journal.read_bytes()[:-4])
+        self.assertEqual(self.recovery_status(kind=0)[:5], ['0', '3', '0', '3', '1'])
+
+    def test_invalid_recovery_metadata_reports_unavailable_not_zero_errors(self):
+        self.recovery_fixture()
+        self.recover(stop=1)
+        baseline = self.path/'track03.bin.recovery-base'
+        data = bytearray(baseline.read_bytes()); data[-1] ^= 1
+        baseline.write_bytes(data)
+        self.assertEqual(self.recovery_status()[0], '-1')
+        self.assertEqual(self.run_c('verify', self.path, self.db, 1)[0], '-1')
+        self.assertIn('recovery_counts UNAVAILABLE', (self.path/'verify.log').read_text())
+        self.assertNotIn('bad_sectors 0', (self.path/'verify.log').read_text())
+
+    def test_recovery_count_inspection_is_cancellable(self):
+        self.recovery_fixture()
+        self.recover(fault=1)
+        self.assertEqual(self.recovery_status(scan_fault=6)[0], '-1')
+        self.assertEqual(self.run_c('verify', self.path, self.db, 1, 6)[0], '0')
+
+    def test_live_counts_keep_other_tracks_and_saved_repairs_during_reconciliation(self):
+        self.assertEqual(self.run_c('recovery-live-counts'), ['ok'])
+
     def test_replacement_crc_includes_large_suffix_and_many_patches(self):
         data = bytearray(self.disc_data)
         crc = zlib.crc32(data)
