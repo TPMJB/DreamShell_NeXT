@@ -1,6 +1,9 @@
 name: Full NeXT release
 
 on:
+  push:
+    branches:
+      - codex/maintenance-0.9.1
   workflow_dispatch:
 
 concurrency:
@@ -24,6 +27,20 @@ jobs:
       REQUIRE_EXFAT_TESTS: "1"
 
     steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Read release version
+        id: release
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          existing="$(git ls-remote --tags origin "refs/tags/${version}")"
+          test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
+
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
@@ -48,20 +65,6 @@ jobs:
           cmake -S /tmp/tolua -B /tmp/tolua/build
           make -C /tmp/tolua/build -j"$(nproc)"
           sudo make -C /tmp/tolua/build install
-
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Read release version
-        id: release
-        run: |
-          set -euo pipefail
-          version="$(cat VERSION)"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          existing="$(git ls-remote --tags origin "refs/tags/${version}")"
-          test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
 
       - name: Test storage interoperability and GD Ripper
         run: python3 -m unittest discover -s utils/tests -v
