@@ -4,7 +4,7 @@ Optional tips help support development, testing and documentation. Downloads rem
 
 # DreamShell NeXT — by TPMJB
 
-A Dreamcast tools environment built on [SWAT's DreamShell](https://github.com/DC-SWAT/DreamShell)
+A Dreamcast tools environment inspired by DreamShell
 and KallistiOS. NeXT adds exFAT boot/storage support, a controller-friendly app
 launcher, a QWERTY keyboard and directory browser, and reliable GD ripping with
 checkpoints, catalog verification and targeted recovery.
@@ -186,10 +186,6 @@ scan saved dumps, and reread flagged sectors while backing up replaced bytes.
 See [the ripper/verifier guide](utils/README.gd-verify.md) for installation,
 recovery steps, catalog limitations, and the included desktop tools.
 
-## Links
-- Website: http://www.dc-swat.ru/ 
-- Forum: http://www.dc-swat.ru/forum/ 
-- Support upstream DreamShell (SWAT): http://www.dc-swat.ru/page/donate/
 
 ## Licensing
 
