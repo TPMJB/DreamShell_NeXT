@@ -227,9 +227,11 @@ void ActivateItem(int index) {
     ds_sfx_play(DS_SFX_CLICK);
     is_script = self.items[index].type == LAUNCH_ITEM_SCRIPT;
     if(is_script && self.items[index].script) {
+        MenuMusicSuspend(1);
         snprintf(path, sizeof(path), "%s", self.items[index].script->file);
         if(!strcasecmp(path + strlen(path) - 4, ".lua")) LuaDo(LUA_DO_FILE, path, GetLuaState());
         else dsystem_script(path);
+        MenuMusicSuspend(0);
     } else {
         app = GetAppById(self.items[index].app_id);
         if(app) OpenApp(app, NULL);

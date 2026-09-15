@@ -34,6 +34,13 @@ static uint64_t now = 1000;
 static DIR *directories[32];
 static DSApp host_scene;
 static Event_t input;
+static int music_opened, music_cycles, music_suspended;
+void MenuMusicOpen(const char *path) { assert(path); music_opened=1; }
+void MenuMusicClose(void) { music_opened=0; }
+void MenuMusicPoll(void) {}
+void MenuMusicCycle(void) { assert(!lock_depth); music_cycles++; }
+void MenuMusicSuspend(int value) { music_suspended=value; }
+void MenuMusicLabel(char *text,size_t size) { assert(!lock_depth); snprintf(text,size,"Y Music 15%%"); }
 
 static void Register(Drawable *d) { int i; for(i=0;i<512;i++) if(!draws[i]) { draws[i]=d; return; } assert(0); }
 static void Unregister(Drawable *d) { int i; for(i=0;i<512;i++) if(draws[i]==d) draws[i]=NULL; }
@@ -180,6 +187,10 @@ static void Mouse(int type,int x,int y) {SDL_Event e={0};e.type=type;if(type==SD
 static void Behavior(void) {
  int initial=self.item_count,last=self.item_count-1,i;float w,h;
  assert(initial>=17);assert(!strcmp(self.items[0].name,"GD Ripper"));assert(self.focused_index==0);
+ assert(music_opened);Button(SDL_DC_Y);assert(music_cycles==1&&self.focused_index==0&&!opened);
+ Mouse(SDL_MOUSEBUTTONDOWN,170,421);Mouse(SDL_MOUSEBUTTONUP,170,421);assert(music_cycles==2&&!opened);
+ Mouse(SDL_MOUSEBUTTONDOWN,170,421);Mouse(SDL_MOUSEBUTTONUP,300,421);assert(music_cycles==2&&!opened);
+ FitLabel(self.music_label,"Y Music unavailable",122);TSU_LabelGetSize(self.music_label,&w,&h);assert(w<=122);
  MoveFocus(1000);assert(self.focused_index==last&&self.first_visible==last-LIST_ROWS+1);MoveFocus(-1000);assert(self.focused_index==0&&self.first_visible==0);
  Hat(SDL_HAT_DOWN);assert(self.focused_index==1);Hat(0);
  assert(!self.mouse_visible);Button(SDL_DC_B);assert(!deleted&&!TSU_DialogIsVisible(self.delete_dialog));

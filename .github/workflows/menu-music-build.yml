@@ -1,0 +1,59 @@
+name: Launcher music preview
+
+on:
+  pull_request:
+    branches: [codex/iso-loader-next]
+    paths:
+      - 'applications/launch_app/**'
+      - 'utils/*menu_music*'
+      - 'utils/README.menu-music.md'
+      - 'utils/tests/**'
+      - '.github/workflows/menu-music-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: menu-music-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test launcher and music
+        run: |
+          python3 -m unittest discover -s utils/tests -p test_launcher.py -v
+          python3 -m unittest discover -s utils/tests -p test_menu_music.py -v
+      - name: Prepare toolchain directory
+        run: |
+          sudo mkdir -p /opt/toolchains/dc
+          sudo chown -R "$(id -u):$(id -g)" /opt/toolchains/dc
+      - uses: actions/cache/restore@v5
+        with:
+          path: /opt/toolchains/dc
+          key: dc-toolchain-${{ runner.os }}-${{ hashFiles('sdk/toolchain/Makefile.cfg', 'sdk/toolchain/patches/*.diff', 'sdk/doc/KallistiOS.txt') }}
+          fail-on-cache-miss: true
+      - name: Prepare pinned KOS headers and module tools
+        run: bash .github/scripts/dev-build.sh prepare
+      - name: Compile and validate launcher module
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          make -C applications/launch_app/modules NO_LD_DEBUG=1
+          python3 utils/package_menu_music.py check-imports "$KOS_BASE" "$KOS_CC_BASE/bin/sh-elf-nm"
+      - name: Package launcher update
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 utils/package_menu_music.py menu-music-update
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DreamShell-NeXT-Launcher-2.1.0-Music
+          path: menu-music-update/
+          if-no-files-found: error
+          retention-days: 30
