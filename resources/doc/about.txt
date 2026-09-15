@@ -1,4 +1,8 @@
-DreamShell 4.0.4.Release
+DreamShell NeXT
+NeXT enhancements and branding by TPMJB
+https://github.com/TPMJB/DreamShell_NeXT
+
+Based on DreamShell 4.0.5 Beta 3
 Copyright (C) 2004-2026 Ruslan Rostovtsev (a.k.a SWAT, DC-SWAT, JSysTeam)
 
 http://www.dc-swat.ru
