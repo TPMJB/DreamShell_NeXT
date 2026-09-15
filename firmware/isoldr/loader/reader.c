@@ -6,6 +6,7 @@
 
 #include <main.h>
 #include <mmu.h>
+#include <limits.h>
 #ifdef HAVE_LZO
 #include <minilzo.h>
 #endif
@@ -259,6 +260,8 @@ int ReadSectors(uint8 *buf, int sec, int num, fs_callback_f *cb) {
 
 	DBGFF("%d from %d\n", num, sec);
 
+	if(num < 0 || sec < 0 || num > INT_MAX - sec || !buf) return FAILED;
+	if(num == 0) return COMPLETED;
 	int rv;
 	gd_state_t *GDS = get_GDS();
 	GDS->lba = sec + num;
@@ -282,6 +285,7 @@ int ReadSectors(uint8 *buf, int sec, int num, fs_callback_f *cb) {
 			if(sec) {
 
 				switch_gdi_data_track(sec, GDS);
+				if(iso_fd < 0) return FAILED;
 
 				if(IsoInfo->track_lba[0] != 45150) {
 					/* ISO in GDI format */
@@ -295,7 +299,7 @@ int ReadSectors(uint8 *buf, int sec, int num, fs_callback_f *cb) {
 				/* Check for data exists */
 				if(GDS->data_track > 3 && lba > IsoInfo->track_lba[1] + (total(iso_fd) / IsoInfo->sector_size)) {
 					LOGFF("ERROR! Track %d LBA %d\n", GDS->data_track, sec);
-					return COMPLETED;
+					return FAILED;
 				}
 			}
 
@@ -306,10 +310,12 @@ int ReadSectors(uint8 *buf, int sec, int num, fs_callback_f *cb) {
 		case IMAGE_TYPE_ROM_NAOMI:
 		default:
 		{
-			size_t offset = (sec - IsoInfo->track_lba[0]) * IsoInfo->sector_size;
-			size_t len = num * IsoInfo->sector_size;
-
-			lseek(iso_fd, offset, SEEK_SET);
+			if((uint32)sec < IsoInfo->track_lba[0] || iso_fd < 0) return FAILED;
+            uint64_t off64 = (uint64_t)((uint32)sec - IsoInfo->track_lba[0]) * IsoInfo->sector_size;
+            uint64_t len64 = (uint64_t)num * IsoInfo->sector_size;
+            if(off64 > INT_MAX || len64 > INT_MAX || off64 + len64 > total(iso_fd)) return FAILED;
+            size_t offset = (size_t)off64, len = (size_t)len64;
+            if(lseek(iso_fd, offset, SEEK_SET) != (long)offset) return FAILED;
 
 #ifdef _FS_ASYNC
 			if(cb != NULL) {
@@ -324,7 +330,7 @@ int ReadSectors(uint8 *buf, int sec, int num, fs_callback_f *cb) {
 			else
 #endif
 			{
-				if(read(iso_fd, buf, len) < 0) {
+				if(read(iso_fd, buf, len) != (int)len) {
 					rv = FAILED;
 				} else {
 					rv = COMPLETED;
@@ -375,7 +381,7 @@ static int _read_sector_by_sector(uint8 *buff, uint cnt, int old_dma) {
 
 	while(cnt-- > 0) {
 
-		lseek(iso_fd, b_seek, SEEK_CUR);
+		if(lseek(iso_fd, b_seek, SEEK_CUR) < 0) goto raw_error;
 
 #if defined(DEV_TYPE_IDE) || defined(DEV_TYPE_GD)
 		if(!cnt && old_dma) {
@@ -384,26 +390,40 @@ static int _read_sector_by_sector(uint8 *buff, uint cnt, int old_dma) {
 #else
 		(void)old_dma;
 #endif
-		if(read(iso_fd, buff, sec_size) < 0) {
-			return FAILED;
+		if(read(iso_fd, buff, sec_size) != sec_size) {
+			goto raw_error;
 		}
 		if(a_seek) {
-			lseek(iso_fd, a_seek, SEEK_CUR);
+			if(lseek(iso_fd, a_seek, SEEK_CUR) < 0) goto raw_error;
 		}
 		buff += sec_size;
 	}
 
-	return COMPLETED;
+#if defined(DEV_TYPE_IDE) || defined(DEV_TYPE_GD)
+    if(old_dma) fs_enable_dma(old_dma);
+#endif
+    return COMPLETED;
+raw_error:
+#if defined(DEV_TYPE_IDE) || defined(DEV_TYPE_GD)
+    if(old_dma) fs_enable_dma(old_dma);
+#endif
+    return FAILED;
 }
 
 
 static int read_data_sectors(uint8 *buff, uint sector, uint cnt, fs_callback_f *cb) {
 
-	int tmps = sec_size * cnt;
+	int tmps;
+	if((uint64_t)sec_size * cnt > INT_MAX) return FAILED;
+	tmps = sec_size * cnt;
 	int old_dma = 0;
 	uint8 *tmpb;
 
-	lseek(iso_fd, IsoInfo->track_offset + (sector * IsoInfo->sector_size), SEEK_SET);
+	uint64_t offset = (uint64_t)IsoInfo->track_offset + (uint64_t)sector * IsoInfo->sector_size;
+    uint64_t raw_bytes = (uint64_t)cnt * IsoInfo->sector_size;
+    if(iso_fd < 0 || offset > INT_MAX || (uint64_t)sec_size * cnt > INT_MAX ||
+       offset + raw_bytes > total(iso_fd) ||
+       lseek(iso_fd, (long)offset, SEEK_SET) != (long)offset) return FAILED;
 
 	/* Reading normal data sectors */
 	if(IsoInfo->sector_size <= sec_size) {
@@ -418,7 +438,7 @@ static int read_data_sectors(uint8 *buff, uint sector, uint cnt, fs_callback_f *
 		else
 #endif
 		{
-			if(read(iso_fd, buff, tmps) < 0) {
+			if(read(iso_fd, buff, tmps) != tmps) {
 				return FAILED;
 			}
 		}
@@ -442,7 +462,10 @@ static int read_data_sectors(uint8 *buff, uint sector, uint cnt, fs_callback_f *
 		tmpb = buff;
 		tmps = (tmps / IsoInfo->sector_size);
 
-		if(read(iso_fd, tmpb, tmps * IsoInfo->sector_size) < 0) {
+		if(read(iso_fd, tmpb, tmps * IsoInfo->sector_size) != (int)(tmps * IsoInfo->sector_size)) {
+#if defined(DEV_TYPE_IDE) || defined(DEV_TYPE_GD)
+            if(old_dma) fs_enable_dma(old_dma);
+#endif
 			return FAILED;
 		}
 

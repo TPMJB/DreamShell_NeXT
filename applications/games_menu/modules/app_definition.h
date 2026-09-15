@@ -27,6 +27,7 @@
 #define PSYCHEDELIC_THEME "PSYCHEDELIC"
 #define MINT_THEME "MINT"
 #define CUSTOM_THEME "CUSTOM"
+#define NEXT_THEME "TPMJB NeXT"
 
 #include <stdbool.h>
 #include <uthash.h>
@@ -179,6 +180,7 @@ typedef struct ThemeStructure
 
 static const ThemeStruct ThemeList[] = 
 {
+    { NEXT_THEME, 0xFF101923, 0xFF304657, 0xFFEDF5FC, 0xFF192A39, 0xFFEDF5FC, 0xFF294C60, 0xFF192A39, 0xFF294C60 },
 	{ DEFAULT_THEME, 0xFF00A8E2, 0xFF00A8E2, 0xFFA5D3EF, 0xFFA5D3EF, 0xFF0086B3, 0xFF0086B3, 0xFF0F6683, 0xFF0086B3 },
 	{ PSYCHEDELIC_THEME, 0xFF4B0082, 0xFFFFFF35, 0xFF380F40, 0xFF7D2181, 0xFF380F40, 0xFF380F40, 0xFF380F40, 0xFF380F40 },
 	{ MINT_THEME, 0xFF1BAAC9, 0xFF9BFAB0, 0xFFD0DDD7, 0xFFD0DDD7, 0xFF3EA99B, 0xFF1BAAC9, 0xFF1BAAC9, 0xFF1BAAC9 }
@@ -215,12 +217,12 @@ typedef struct PresetStructure
 	uint32 pa[2];
 	uint32 pv[2];
 
-	char title[32];
+	char title[129];
 	char device[FIRMWARE_SIZE+1];	
 	char memory[12];
 	char custom_memory[12];
 	char heap_memory[12];
-	char bin_file[12];
+	char bin_file[16];
 	char patch_a[2][10];
 	char patch_v[2][10];
 	char vmu_file[32];
@@ -343,6 +345,7 @@ typedef struct isoldr_conf_structure
 	const char *name;
 	int conf_type;
 	void *pointer;
+	size_t capacity; /* Required for CONF_STR destinations. */
 } isoldr_conf;
 
 typedef isoldr_conf GenericConfigStruct;

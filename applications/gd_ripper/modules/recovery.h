@@ -8,6 +8,11 @@ typedef struct {
     const char *error;
 } gd_recovery_result_t;
 
+typedef struct {
+    uint32_t flagged, recovered, remaining;
+    bool pending; /* The original queue still needs recovery/finalization. */
+} gd_recovery_status_t;
+
 /* read_sector returns 0 for a read, 1 for an ordinary read failure, -1 for a
  * fatal drive/media failure. The engine itself checks Mode 1 EDC/ECC/address,
  * and requires two matching reads for audio. */
@@ -19,8 +24,16 @@ typedef void (*gd_recovery_progress_t)(void *data, uint32_t pass,
 int gd_recovery_count(const char *path, uint32_t track, uint32_t first,
     uint32_t count, uint32_t *targets);
 
-/* Requires a full-sized raw track. Never publishes rip.complete. Unresolved
- * sectors remain in .bad; successful patches and their CRC survive restart.
+/* Read-only accounting of existing repairs, including interrupted sessions.
+ * Only original targets are read. Data needs valid EDC/ECC/address; audio
+ * needs a valid confirmation record matching the saved bytes. Never removes
+ * the original queue or publishes a CRC/completion marker. */
+int gd_recovery_inspect(const char *path, uint32_t track, uint32_t first,
+    uint32_t count, uint32_t type, uint32_t sector_size, volatile int *active,
+    gd_recovery_status_t *status);
+
+/* Requires a full-sized raw track. Never publishes rip.complete. The original
+ * .bad queue remains until all targets are resolved; repairs survive restart.
  * Storage/memory faults are fatal, not additional disc retry candidates. */
 int gd_recover_track(const char *path, uint32_t track, uint32_t first,
     uint32_t count, uint32_t type, bool sync, unsigned passes,

@@ -1,0 +1,7 @@
+include kos/exports.h
+include app_module.h
+
+FileManagerApp_Init
+FileManagerApp_Open
+FileManagerApp_Close
+FileManagerApp_Shutdown

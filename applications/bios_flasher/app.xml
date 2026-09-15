@@ -1,206 +1,207 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<app extensions=".bios .bin .rom .img" icon="images/icon_small.png" name="BIOS Flasher" version="2.1.1">
-	<resources>
-		<module src="../../modules/bflash.klf" />
-		<module src="modules/app_bios_flasher.klf" />
-
-		<image name="logo" src="images/logo.png" />
-		<image name="progressbar_back" src="../../gui/bars/progressbar_back.png" />
-		<image name="progressbar_fore" src="../../gui/bars/progressbar_fore.png" />
-
-		<image name="button_exit" src="images/btn_close_norm.png" />
-		<image name="button_exit_hl" src="images/btn_close_over.png" />
-		<image name="button_settings" src="images/btn_settings_norm.png" />
-		<image name="button_settings_hl" src="images/btn_settings_over.png" />
-
-		<font  src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="15" name="arial" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="22" name="comic-22" />
-		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="16" name="comic-16" />
-
-		<surface height="480" name="page1" width="100%">
-			<fill color="#DDDDDD" height="366" />
-			<fill color="#31799F" height="114" width="100%" y="366" />
-
-			<fill color="#EEEEEE" height="305" width="50%" x="3%" y="120" />
-			<fill color="#61BDEC" height="292" width="48%" x="4%" y="127" />
-
-			<fill color="#EEEEEE" height="305" width="43%" x="54%" y="120" />
-			<fill color="#61BDEC" height="292" width="41%" x="55%" y="127" />
-			
-			<blit height="84" surface="logo" width="16%" x="3%" y="14" />
-		</surface>
-
-		<surface height="480" name="page2" width="100%">
-			<fill color="#DDDDDD" height="366" />
-			<fill color="#31799F" height="114" width="100%" y="366" />
-			<fill color="#EEEEEE" height="318" width="69%" x="14%" y="55" />
-			<fill color="#CCE4F0" height="298" width="67%" x="15%" y="66" />
-		</surface>
-
-		<surface height="480" name="page3" width="100%">
-			<fill color="#DDDDDD" height="366" />
-			<fill color="#31799F" height="114" width="100%" y="366" />
-
-			<fill color="#EEEEEE" height="274" width="92%" x="4%" y="106" />
-			<fill color="#61BDEC" height="260" width="90%" x="5%" y="113" />
-			
-			<blit height="84" surface="logo" width="16%" x="3%" y="14" />
-		</surface>
-
-		<surface height="30" name="item-normal" width="70%">
-			<fill color="#CCE4F0" height="28" />
-			<fill color="#EEEEEE" height="2" width="100%" y="28" />
-		</surface>
-		<surface height="30" name="item-focus" width="70%">
-			<fill color="#85C4E2" height="28" />
-			<fill color="#EEEEEE" height="2" width="100%" y="28" />
-		</surface>
-		<surface height="30" name="item-selected" width="70%">
-			<fill color="#D4F129" height="28" />
-			<fill color="#EEEEEE" height="2" width="100%" y="28" />
-		</surface>
-
-		<surface height="72" name="button_large" width="46%">
-			<fill color="#EEEEEE" />
-			<fill color="#31799F" height="60" width="96%" x="2%" y="6" />
-		</surface>
-		<surface height="72" name="button_large_hl" width="46%">
-			<fill color="#EEEEEE" />
-			<fill color="#61BDEC" height="60" width="96%" x="2%" y="6" />
-		</surface>
-
-		<surface height="72" name="button_small" width="38%">
-			<fill color="#EEEEEE" />
-			<fill color="#31799F" height="60" width="96%" x="2%" y="6" />
-		</surface>
-		<surface height="72" name="button_small_hl" width="38%">
-			<fill color="#EEEEEE" />
-			<fill color="#61BDEC" height="60" width="96%" x="2%" y="6" />
-		</surface>
-
-	</resources>
-
-	<body height="480" onload="export:BiosFlasher_Init()" width="100%">
-		<cardstack height="480" name="pages" width="100%">
-
-			<panel background="page1" name="main_page">	
-				<input disabled="button_settings" height="30" highlight="button_settings_hl" normal="button_settings" onclick="export:BiosFlasher_OnSettingsPressed()" pressed="button_settings" type="button" width="5%" x="86%" y="45" />
-
-				<input disabled="button_exit" height="31" highlight="button_exit_hl" normal="button_exit" onclick="export:BiosFlasher_OnExitPressed()" pressed="button_exit" type="button" width="5%" x="92%" y="45" />
-
-				<input disabled="button_large" height="72" highlight="button_large_hl" normal="button_large" onclick="export:BiosFlasher_OnWritePressed()" pressed="button_large_hl" type="button" width="46%" x="5%" y="140">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Write" width="100%" y="10" />
-				</input>
-
-				<input disabled="button_large" height="72" highlight="button_large_hl" normal="button_large" onclick="export:BiosFlasher_OnReadPressed()" pressed="button_large_hl" type="button" width="46%" x="5%" y="233">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Read" width="100%" y="10" />
-				</input>
-
-				<input disabled="button_large" height="72" highlight="button_large_hl" normal="button_large" onclick="export:BiosFlasher_OnComparePressed()" pressed="button_large_hl" type="button" width="46%" x="5%" y="330">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Compare" width="100%" y="10" />
-				</input>
-
-				<input disabled="button_small" height="72" highlight="button_small_hl" normal="button_small" onclick="export:BiosFlasher_OnDetectPressed()" pressed="button_small_hl" type="button" width="38%" x="57%" y="330">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Detect" width="100%" y="10" />
-				</input>
-
-				<panel height="50" width="40%" x="56%" y="130">	
-					<label color="#FFFFFF" font="comic-22" name="label_flash_name" text="Macronix" y="3" />
-				</panel>
-				<panel height="50" width="40%" x="56%" y="175">	
-					<label color="#FFFFFF" font="comic-22" name="label_flash_size" text="Size: 1024Kb" y="3" />
-				</panel>
-				<panel height="50" width="40%" x="56%" y="220">	
-					<label color="#FFFFFF" font="comic-22" name="label_flash_voltage" text="Voltage: 3V" y="3" />
-				</panel>
-				<panel height="50" width="40%" x="56%" y="265">	
-					<label color="#FFFFFF" font="comic-22" name="label_flash_access" text="Read/Write" y="3" />
-				</panel>
-			</panel> 
-
-			<panel background="page2" name="filemanager_page">
-				<label align="center" color="#31799F" font="comic-22" height="50"
-					name="page2_info_label" text="Chose bios file (*.bios, *.bin, *.img)" y="10" />
-				<filemanager height="299"
-					item_disabled="item-normal"
-					item_font="comic-22"
-					item_font_color="#333333"
-					item_highlight="item-focus"
-					item_normal="item-normal"
-					item_pressed="item-focus"
-					name="file_browser"
-					onclick="export:BiosFlasher_ItemClick()"
-					path="../../firmware/bios"
-					width="70%" x="15%" y="66" />
-				<input disabled="button_large" height="72" highlight="button_large_hl" normal="button_large"
-					onclick="export:BiosFlasher_OnBackPressed()" pressed="button_large_hl"
-					type="button" width="46%" x="3%" y="385">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" name="back_label"
-						text="Back" width="100%" y="10" />
-				</input>
-				<input disabled="button_large" height="72" highlight="button_large_hl" normal="button_large"
-					onclick="export:BiosFlasher_OnConfirmPressed()" pressed="button_large_hl" type="button"
-					width="46%" x="50%" y="385">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" name="confirm_label"
-					text="Confirm" width="100%" y="10" />
-				</input>
-			</panel> 
-
-			<panel background="page3" name="progress_page">	
-
-				<panel height="50" width="90%" x="5%" y="170">	
-					<label color="#EEEEEE" font="comic-22" height="50" name="progress_text" text="10%%" width="100%" />
-				</panel>
-				<panel height="50" width="90%" x="5%" y="220">	
-					<progressbar bimage="progressbar_back" height="41" name="progressbar" pimage="progressbar_fore" pos="0.3" width="76%" x="12%" />
-				</panel>
-				<panel height="50" width="90%" x="5%" y="270">	
-					<label color="#EEEEEE" font="comic-22" height="50" name="progress_desc" text="Don't touch the Dreamcast and even don't breathe J" width="100%" />
-				</panel>
-
-			</panel> 
-
-			<panel background="page3" name="result_page">	
-
-				<panel height="50" width="90%" x="5%" y="170">	
-					<label color="#EEEEEE" font="comic-22" height="50" name="result_title_text" text="10%%" width="100%" />
-				</panel>
-				<panel height="50" width="90%" x="5%" y="220">	
-					<label color="#EEEEEE" font="comic-22" height="50" name="result_desc_text" text="Don't touch the Dreamcast and even don't breathe J" width="100%" />
-				</panel>
-
-				<input disabled="button_large" height="72" highlight="button_large_hl" normal="button_large" onclick="export:BiosFlasher_OnBackPressed()" pressed="button_large_hl" type="button" width="46%" x="27%" y="290">
-
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" name="ok_label" text="OK" width="100%" y="10" />
-				</input>
-
-			</panel> 
-
-			<panel background="page3" name="settings_page">	
-				<panel height="50" width="31%" x="9%" y="150">
-					<label align="left" color="#FFFFFF" font="comic-16" height="20" text="Start address, 0 to default" width="100%" />
-					<input font="arial" fontcolor="#333333" height="20" name="start_addresss" size="30" type="text" value="0" width="75%" y="20" />
-				</panel>
-
-				<panel height="50" width="31%" x="9%" y="200">
-					<label align="left" color="#FFFFFF" font="comic-16" height="20" text="Data length, 0 to default" width="100%" />
-					<input font="arial" fontcolor="#333333" height="20" name="data_length" size="30" type="text" value="0" width="75%" y="20" />
-				</panel>
-				
-				<input disabled="button_small" height="72" highlight="button_small_hl" normal="button_small" onclick="export:BiosFlasher_OnSupportedPressed()" pressed="button_small_hl" type="button" width="38%" x="51%" y="170">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Flash list" width="100%" y="10" />
-				</input>
-
-				<input disabled="button_small" height="72" highlight="button_small_hl" normal="button_small" onclick="export:BiosFlasher_OnBackPressed()" pressed="button_small_hl" type="button" width="38%" x="9%" y="290">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Cancel" width="100%" y="10" />
-				</input>
-
-				<input disabled="button_small" height="72" highlight="button_small_hl" normal="button_small" onclick="export:BiosFlasher_OnSaveSettingsPressed()" pressed="button_small_hl" type="button" width="38%" x="51%" y="290">
-					<label align="center" color="#EEEEEE" font="comic-22" height="50" text="Save" width="100%" y="10" />
-				</input>
-
-			</panel> 
-
-		</cardstack>
-	</body>
+<?xml version='1.0' encoding='UTF-8'?>
+<app name="BIOS Flasher" version="3.0.1" icon="images/icon_small.png">
+  <resources>
+    <module src="../../modules/bflash.klf" />
+    <module src="modules/app_bios_flasher.klf" />
+    <font name="body" size="16" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="small" size="14" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
+    <surface name="bg" width="640" height="480">
+      <fill color="#101923" />
+    </surface>
+    <surface name="b116x32-normal" width="116" height="32">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b116x32-highlight" width="116" height="32">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-pressed" width="116" height="32">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+    </surface>
+    <surface name="b116x32-disabled" width="116" height="32">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="maintenance-panel" width="576" height="252">
+      <fill color="#1B2A39" />
+    </surface>
+    <surface name="b576x30-normal" width="576" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b576x30-highlight" width="576" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="572" height="26" color="#155B71" />
+    </surface>
+    <surface name="b576x30-pressed" width="576" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="572" height="26" color="#155B71" />
+    </surface>
+    <surface name="b576x30-disabled" width="576" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b186x30-normal" width="186" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b186x30-highlight" width="186" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="182" height="26" color="#155B71" />
+    </surface>
+    <surface name="b186x30-pressed" width="186" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="182" height="26" color="#155B71" />
+    </surface>
+    <surface name="b186x30-disabled" width="186" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b188x30-normal" width="188" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b188x30-highlight" width="188" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="184" height="26" color="#155B71" />
+    </surface>
+    <surface name="b188x30-pressed" width="188" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="184" height="26" color="#155B71" />
+    </surface>
+    <surface name="b188x30-disabled" width="188" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="picker-bg" width="576" height="188">
+      <fill color="#14212E" />
+    </surface>
+    <surface name="picker-row" width="556" height="28">
+      <fill color="#182838" />
+    </surface>
+    <surface name="picker-focus" width="556" height="28">
+      <fill color="#225765" />
+    </surface>
+    <surface name="picker-select" width="556" height="28">
+      <fill color="#155B71" />
+    </surface>
+    <surface name="b80x30-normal" width="80" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b80x30-highlight" width="80" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="76" height="26" color="#155B71" />
+    </surface>
+    <surface name="b80x30-pressed" width="80" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="76" height="26" color="#155B71" />
+    </surface>
+    <surface name="b80x30-disabled" width="80" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b116x30-normal" width="116" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b116x30-highlight" width="116" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="112" height="26" color="#155B71" />
+    </surface>
+    <surface name="b116x30-pressed" width="116" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="112" height="26" color="#155B71" />
+    </surface>
+    <surface name="b116x30-disabled" width="116" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b192x30-normal" width="192" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b192x30-highlight" width="192" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="188" height="26" color="#155B71" />
+    </surface>
+    <surface name="b192x30-pressed" width="192" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="188" height="26" color="#155B71" />
+    </surface>
+    <surface name="b192x30-disabled" width="192" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="b164x30-normal" width="164" height="30">
+      <fill color="#223548" />
+    </surface>
+    <surface name="b164x30-highlight" width="164" height="30">
+      <fill color="#53E1E3" />
+      <fill x="2" y="2" width="160" height="26" color="#155B71" />
+    </surface>
+    <surface name="b164x30-pressed" width="164" height="30">
+      <fill color="#ACFFFF" />
+      <fill x="2" y="2" width="160" height="26" color="#155B71" />
+    </surface>
+    <surface name="b164x30-disabled" width="164" height="30">
+      <fill color="#26313B" />
+    </surface>
+    <surface name="progress-bg" width="576" height="4">
+      <fill color="#263749" />
+    </surface>
+    <surface name="progress-fill" width="576" height="4">
+      <fill color="#53E1E3" />
+    </surface>
+  </resources>
+  <body width="640" height="480" background="bg" onload="export:BiosFlasher_Init()" onopen="export:BiosFlasher_Open()" onclose="export:BiosFlasher_Close()" onunload="export:BiosFlasher_Shutdown()">
+    <label name="heading" text="BIOS Flasher" x="32" y="32" width="440" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
+    <label name="subtitle" text="DreamShell NeXT  /  Inspect. Back up. Write. Verify." x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <input name="menu" type="button" x="492" y="32" width="116" height="32" onclick="export:BiosFlasher_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
+      <label name="menu-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="main-panel" x="32" y="88" width="576" height="252" background="maintenance-panel">
+      <input name="row-0" type="button" x="0" y="0" width="576" height="30" onclick="export:BiosFlasher_Row()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+        <label name="row-0-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-1" type="button" x="0" y="34" width="576" height="30" onclick="export:BiosFlasher_Row()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+        <label name="row-1-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-2" type="button" x="0" y="68" width="576" height="30" onclick="export:BiosFlasher_Row()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+        <label name="row-2-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-3" type="button" x="0" y="102" width="576" height="30" onclick="export:BiosFlasher_Row()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+        <label name="row-3-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-4" type="button" x="0" y="136" width="576" height="30" onclick="export:BiosFlasher_Row()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+        <label name="row-4-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="row-5" type="button" x="0" y="170" width="576" height="30" onclick="export:BiosFlasher_Row()" normal="b576x30-normal" highlight="b576x30-highlight" pressed="b576x30-pressed" disabled="b576x30-disabled">
+        <label name="row-5-caption" text="" x="12" y="0" width="552" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <label name="detail-0" text="" x="12" y="208" width="552" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+      <label name="detail-1" text="" x="12" y="229" width="552" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    </panel>
+    <input name="action-0" type="button" x="32" y="398" width="186" height="30" onclick="export:BiosFlasher_Action()" normal="b186x30-normal" highlight="b186x30-highlight" pressed="b186x30-pressed" disabled="b186x30-disabled">
+      <label name="action-0-caption" text="Back up BIOS" x="12" y="0" width="162" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-1" type="button" x="226" y="398" width="186" height="30" onclick="export:BiosFlasher_Action()" normal="b186x30-normal" highlight="b186x30-highlight" pressed="b186x30-pressed" disabled="b186x30-disabled">
+      <label name="action-1-caption" text="Compare image" x="12" y="0" width="162" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <input name="action-2" type="button" x="420" y="398" width="188" height="30" onclick="export:BiosFlasher_Action()" normal="b188x30-normal" highlight="b188x30-highlight" pressed="b188x30-pressed" disabled="b188x30-disabled">
+      <label name="action-2-caption" text="Write BIOS" x="12" y="0" width="164" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+    </input>
+    <panel name="browser-panel" x="32" y="88" width="576" height="252" background="maintenance-panel">
+      <label name="picker-path" text="/" x="8" y="0" width="560" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+      <input name="up" type="button" x="0" y="28" width="80" height="30" onclick="export:BiosFlasher_Up()" normal="b80x30-normal" highlight="b80x30-highlight" pressed="b80x30-pressed" disabled="b80x30-disabled">
+        <label name="up-caption" text="Up" x="10" y="0" width="60" height="30" font="small" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="devices" type="button" x="88" y="28" width="116" height="30" onclick="export:BiosFlasher_Devices()" normal="b116x30-normal" highlight="b116x30-highlight" pressed="b116x30-pressed" disabled="b116x30-disabled">
+        <label name="devices-caption" text="Devices" x="12" y="0" width="92" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="choose-folder" type="button" x="212" y="28" width="192" height="30" onclick="export:BiosFlasher_Folder()" normal="b192x30-normal" highlight="b192x30-highlight" pressed="b192x30-pressed" disabled="b192x30-disabled">
+        <label name="choose-folder-caption" text="Use folder (X)" x="12" y="0" width="168" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <input name="picker-cancel" type="button" x="412" y="28" width="164" height="30" onclick="export:BiosFlasher_Back()" normal="b164x30-normal" highlight="b164x30-highlight" pressed="b164x30-pressed" disabled="b164x30-disabled">
+        <label name="picker-cancel-caption" text="Cancel" x="12" y="0" width="140" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
+      </input>
+      <filemanager name="file-picker" path="/" x="0" y="64" width="576" height="188" background="picker-bg" item_font="small" item_font_color="#EFF5FC" item_normal="picker-row" item_highlight="picker-focus" item_pressed="picker-select" item_disabled="picker-row" item_selected_normal="picker-select" item_selected_highlight="picker-focus" item_selected_pressed="picker-select" item_selected_disabled="picker-row" onclick="export:BiosFlasher_Item()" />
+    </panel>
+    <label name="status" text="Ready." x="32" y="344" width="576" height="20" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="note" text="" x="32" y="365" width="576" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <panel x="32" y="388" width="576" height="4" background="progress-bg" />
+    <panel name="progress" x="32" y="388" width="576" height="4" background="progress-fill" />
+    <label name="controls" text="D-pad Select / Adjust     A Choose     B Back / Stop     START Menu" x="32" y="432" width="576" height="16" font="tiny" color="#A7B9CB" align="left" valign="center" />
+    <dialog name="dialog" font="body" x="50" y="80" width="540" height="326" onconfirm="export:BiosFlasher_Confirm()" oncancel="export:BiosFlasher_Cancel()" />
+  </body>
 </app>

@@ -16,3 +16,10 @@ VMU_Manager_sel_dst_vmu
 VMU_Manager_make_folder
 VMU_Manager_clr_name
 VMU_Manager_ItemSelect
+
+VMU_Manager_Action
+VMU_Manager_BrowseClick
+VMU_Manager_BrowseSelect
+VMU_Manager_Confirm
+VMU_Manager_Close
+VMU_Manager_Shutdown

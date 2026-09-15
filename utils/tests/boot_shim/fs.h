@@ -1,0 +1,1 @@
+int RootDeviceIsSupported(const char *);

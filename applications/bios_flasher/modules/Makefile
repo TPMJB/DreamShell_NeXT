@@ -12,9 +12,9 @@ DBG_LIBS = -lds -lbflash
 EXPORTS_FILE = exports.txt
 #KOS_CFLAGS += $(KOS_CSTD)
 
-VER_MAJOR = 2
-VER_MINOR = 2
-VER_MICRO = 0
+VER_MAJOR = 3
+VER_MINOR = 0
+VER_MICRO = 1
 
 KOS_CFLAGS += -I./
 

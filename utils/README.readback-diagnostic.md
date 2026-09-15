@@ -1,9 +1,19 @@
-# GD Ripper 2.1.1 saved-read diagnostic
+# GD Ripper saved-read diagnostics
 
-This is a diagnostic build for a confirmed console/PC discrepancy, not a claim
-that the underlying storage or memory fault has been fixed. It is based on the
-working exFAT preview at `6958fdc`. The update contains only GD Ripper and this
-guide. Keep the installed DreamShell core, boot disc and launcher for this test.
+These diagnostics remain in GD Ripper 2.2.2 and NeXT 1.0. They detect disagreements
+between saved-file reads; the recovery-count reporting fix does not establish
+a cause for earlier intermittent console/PC discrepancies.
+
+## Collect a report
+
+1. Use the complete current NeXT installation. Select the existing dump through
+   **Destination**, then **Advanced features > Scan saved dump**. No disc is needed.
+2. Preserve `verify.log`, `readback.log`, `readback.bin` and suspect maps before
+   scanning the same folder again. Compare track hashes independently on a PC.
+3. If reads disagree, retain the dump and diagnostics. A storage-inconsistency
+   guard blocks disc repair until a consistent manual scan clears it.
+
+## Earlier EGG observation
 
 Two copies of Elemental Gimmick Gear Track 1 (`CC11` and `CC22`) both have PC
 CRC32 `85e929ab` and size 26,721,072. On Dreamcast, CC11 returned that CRC with
@@ -12,23 +22,6 @@ console runs used storage read-back, not CRC journals. This rules out a stale
 journal as the sole cause. It does not yet identify the faulty instruction,
 prove the filesystem is responsible, or distinguish repeatable bad reads from
 intermittent corruption. The new launcher was not involved in those tests.
-
-## Install and run the short test
-
-1. Power down. Extract `DreamShell-crc-diagnostic-update.zip` and merge its `DS`
-   folder onto the card, overwriting the GD Ripper files. Confirm **2.1.1 diagnostic**.
-2. Select destination `/sd`, folder `CC22`, then **Advanced features > Scan saved
-   dump**. No disc is required. Do not use Start / Resume on these single-track
-   diagnostic folders.
-3. Save `verify.log`, `readback.log`, `readback.bin` and `track01.bin.suspect`
-   from CC22 before scanning that folder again. Then scan CC11 and save the same
-   files from its folder. Preserve the folder names when zipping the reports.
-4. Both original track files should still hash to `85e929ab` on the PC.
-
-The scan opens tracks read-only. It never changes their bytes, CRC journals,
-`rip.state` or `rip.complete`. The normal scan's suspect map and verification
-report are still rewritten. `readback.log` and `readback.bin` are new diagnostic
-outputs and are replaced by the next manual scan in that folder.
 
 ## What the diagnostic measures
 

@@ -1,0 +1,101 @@
+/* Exercise production music code with real files and a recording AICA backend. */
+#include <assert.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "../../applications/launch_app/modules/music.c"
+static kthread_t worker;
+static int active, allocs, destroys, master=200, volume, queued, started;
+static int fail_alloc, fail_poll, fail_thread;
+static snd_stream_callback_t callback;
+kthread_t *thd_create(int detached,void *(*fn)(void *),void *arg) {
+    (void)fn; (void)arg; assert(!detached && !worker.live);
+    if(fail_thread) return NULL;
+    worker.live=1; return &worker;
+}
+int thd_join(kthread_t *t,void **result) {
+    (void)result; assert(t==&worker && worker.live && !music_mutex);
+    worker.live=0; return 0;
+}
+void thd_sleep(int ms) { assert(ms==25); }
+int GetVolumeFromSettings(void) { return master; }
+void ds_printf(const char *fmt,...) { (void)fmt; }
+snd_stream_hnd_t snd_stream_alloc(snd_stream_callback_t cb,int size) {
+    assert(!active && size==MUSIC_BUFFER); allocs++;
+    if(fail_alloc) return -1;
+    active=1; callback=cb; return 3; /* Another app could own stream zero. */
+}
+void snd_stream_destroy(snd_stream_hnd_t h) { assert(h==3 && active); active=0; destroys++; }
+void snd_stream_queue_enable(snd_stream_hnd_t h) { assert(h==3); queued=1; started=0; volume=-1; }
+void snd_stream_queue_disable(snd_stream_hnd_t h) { assert(h==3); queued=0; }
+void snd_stream_queue_go(snd_stream_hnd_t h) { assert(h==3 && queued && started && volume>=0); }
+void snd_stream_start(snd_stream_hnd_t h,unsigned rate,int stereo) {
+    int count; assert(h==3 && active && queued && rate==22050 && !stereo);
+    assert(callback(h,8192,&count) && count==8192);
+    assert(callback(h,8192,&count) && count==8192); started=1;
+}
+void snd_stream_volume(snd_stream_hnd_t h,int value) { assert(h==3 && value>=0 && value<=255); volume=value; }
+int snd_stream_poll(snd_stream_hnd_t h) {
+    int count; assert(h==3 && active);
+    unsigned char *p=callback(h,8192,&count);
+    assert(p && count==8192 && (uintptr_t)p%32==2);
+    return fail_poll ? -1 : 0;
+}
+static void Write(const char *path,const void *data,size_t size) {
+    FILE *f=fopen(path,"wb"); assert(f); assert(fwrite(data,1,size,f)==size); assert(!fclose(f));
+}
+static unsigned char wav[54] = {
+    'R','I','F','F',46,0,0,0,'W','A','V','E','f','m','t',' ',16,0,0,0,
+    1,0,1,0,0x22,0x56,0,0,0x44,0xac,0,0,2,0,16,0,'d','a','t','a',10,0,0,0,
+    1,2,3,4,5,6,7,8,9,10
+};
+int main(int argc,char **argv) {
+    char track[512],folder[512],label[64],config[512];
+    size_t off=0,len=0; unsigned rate=0;
+    assert(argc==2);
+    assert(MusicWav(wav,sizeof(wav),&off,&len,&rate) && off==44 && len==10 && rate==22050);
+    for(size_t n=0;n<sizeof(wav);n++) assert(!MusicWav(wav,n,&off,&len,&rate));
+    unsigned char bad[54]; memcpy(bad,wav,sizeof(wav));
+    bad[16]=255; assert(!MusicWav(bad,sizeof(bad),&off,&len,&rate));
+    memcpy(bad,wav,sizeof(wav)); bad[22]=2; assert(!MusicWav(bad,sizeof(bad),&off,&len,&rate));
+    memcpy(bad,wav,sizeof(wav)); bad[34]=8; assert(!MusicWav(bad,sizeof(bad),&off,&len,&rate));
+    memcpy(bad,wav,sizeof(wav)); bad[40]=0xff; assert(!MusicWav(bad,sizeof(bad),&off,&len,&rate));
+    snprintf(folder,sizeof(folder),"%s/music",argv[1]); assert(!mkdir(folder,0700));
+    snprintf(track,sizeof(track),"%s/menu.wav",folder);
+    snprintf(config,sizeof(config),"%s/music.cfg",argv[1]);
+    Write(track,wav,sizeof(wav));
+    MenuMusicOpen(argv[1]); MenuMusicPoll(); assert(active && volume==30 && allocs==1);
+    music.position=8;
+    int count; unsigned char *p=callback(3,1024,&count);
+    assert(count==1024);
+    for(int i=0;i<count;i++) assert(p[i]==wav[44+(8+i)%10]);
+    assert(!unlink(track)); /* Playback must not consult storage again. */
+    for(int i=0;i<20;i++) MenuMusicPoll();
+    assert(allocs==1 && active);
+    MenuMusicCycle(); MenuMusicPoll(); assert(volume==60 && allocs==1);
+    MenuMusicClose(); assert(!active && !worker.live && !music.file && !music.feed);
+    Write(track,wav,sizeof(wav));
+    MenuMusicOpen(argv[1]); assert(music.level==30); MenuMusicPoll(); assert(active);
+    MenuMusicSuspend(1); assert(!active && !music.file); MenuMusicPoll(); assert(!active);
+    MenuMusicSuspend(0); MenuMusicPoll(); assert(active);
+    MenuMusicCycle(); MenuMusicPoll(); assert(volume==100);
+    MenuMusicCycle(); MenuMusicPoll(); assert(!active && music.level==0);
+    MenuMusicClose(); MenuMusicOpen(argv[1]); MenuMusicPoll(); assert(!active && music.level==0);
+    MenuMusicCycle(); master=0; MenuMusicPoll(); assert(!active);
+    master=200; MenuMusicPoll(); assert(active);
+    fail_poll=1; MenuMusicPoll(); assert(!active && music.failed); fail_poll=0;
+    int previous=allocs; for(int i=0;i<10;i++) MenuMusicPoll(); assert(allocs==previous);
+    MenuMusicClose(); fail_alloc=1; MenuMusicOpen(argv[1]); MenuMusicPoll();
+    assert(!active && !music.file && !music.feed && music.failed); fail_alloc=0;
+    MenuMusicClose(); Write(track,bad,sizeof(bad)); MenuMusicOpen(argv[1]);
+    previous=allocs; MenuMusicPoll(); assert(music.failed && allocs==previous);
+    MenuMusicLabel(label,sizeof(label)); assert(strstr(label,"unavailable"));
+    MenuMusicClose(); Write(track,wav,sizeof(wav));
+    fail_thread=1; MenuMusicOpen(argv[1]); MenuMusicPoll();
+    assert(music.failed && !active); MenuMusicClose(); fail_thread=0;
+    Write(config,"unexpected config\n",18); MenuMusicOpen(argv[1]); assert(music.level==15);
+    MenuMusicClose(); MenuMusicOpen("/nonexistent/next-music-test"); MenuMusicCycle();
+    MenuMusicLabel(label,sizeof(label)); assert(strchr(label,'*'));
+    MenuMusicClose(); MenuMusicClose(); assert(!active && !worker.live && destroys>0);
+    puts("Music loop, bounded WAV parsing, settings, mute, ownership and failure cleanup passed");
+    return 0;
+}

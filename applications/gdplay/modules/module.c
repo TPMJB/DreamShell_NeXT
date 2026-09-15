@@ -1,405 +1,224 @@
-/* DreamShell ##version##
-
-   module.c - GDPlay app module
-   Copyright (C)2014 megavolt85
-   Copyright (C)2024 SWAT
-
-*/
-
+/* GD Play: original (C) 2014 megavolt85, 2024 SWAT.
+ * NeXT interface and bounded drive worker (C) 2026 TPMJB and contributors. */
 #include "ds.h"
 #include <dc/sound/sound.h>
-
+#include "../../utility_ui.h"
+#include "disc_metadata.h"
+#include "disc_poll.h"
 DEFAULT_MODULE_EXPORTS(app_gdplay);
 
-typedef struct ip_meta
-{
-	char hardware_ID[16];
-	char maker_ID[16];
-	char ks[5];
-	char disk_type[6];
-	char disk_num[5];
-	char country_codes[8];
-	char ctrl[4];
-	char dev[1];
-	char VGA[1];
-	char WinCE[1];
-	char unk[1];
-	char product_ID[10];
-	char product_version[6];
-	char release_date[8];
-	char unk2[8];
-	char boot_file[16];
-	char software_maker_info[16];
-	char title[128];
-} ip_meta_t;
-
-enum
-{
-	SURF_GDROM 		= 0,
-	SURF_MILCD 		= 1,
-	SURF_AUDIOCD 	= 2,
-	SURF_CDROM 		= 3,
-	SURF_NODISC 	= 4,
-	SURF_ONCD 		= 5,
-};
-
-enum
-{
-	TXT_REGION 	= 0,
-	TXT_VGA 	= 1,
-	TXT_DATE 	= 2,
-	TXT_DISCNUM = 3,
-	TXT_VERSION = 4,
-	TXT_TITLE1 	= 5,
-	TXT_TITLE2 	= 6,
-	TXT_TITLE3 	= 7,
-	TXT_TITLE4 	= 8,
-	TXT_TITLE5 	= 9,
-	TXT_END 	= 10,
-};
-
-#define COLUMN_LEN 26
-
-static struct self 
-{
-	App_t *app;
-	ip_meta_t *info;
-	
-	GUI_Widget 	*play_btn;
-	GUI_Widget 	*text[10];
-	GUI_Surface *gdtex[6];
-	GUI_Surface *play;
-	
-	void *bios_patch;
+#define DRIVE_TIMEOUT_MS 5000
+#define PATCH_SIZE 0xff00 /* exec.s copies 0x3fc0 32-bit words. */
+typedef struct {
+    disc_metadata_t info;
+    int ready;
+    char type[32],state[32],message[160];
+} disc_result_t;
+static struct {
+    App_t *app;
+    Event_t *input,*video;
+    kthread_t *worker;
+    volatile int stop,request,pending;
+    disc_result_t result;
+    GUI_Widget *buttons[3],*title[3],*fields[6],*type,*state,*message;
+    int focus,ready;
+    void *bios_patch;
 } self;
+void gdplay_run_game(void *patch);
+static mutex_t result_lock = MUTEX_INITIALIZER;
 
-void gdplay_run_game(void *param);
-
-static void clear_text(void)
-{
-	int i;
-	
-	for(i=0; i<TXT_END; i++)
-		GUI_LabelSetText(self.text[i], " ");
-	
-	self.info = NULL;
+static void publish(const disc_result_t *result) {
+    mutex_lock(&result_lock); self.result=*result; self.pending=1; mutex_unlock(&result_lock);
 }
-
-static char *trim_spaces(char *txt, int len)
-{
-	int32_t i;
-	
-	while(txt[0] == ' ')
-	{
-		txt++;
-	}
-	
-	if(!len)
-		len = strlen(txt);
-	
-	for(i=len; i ; i--)
-	{
-		if(txt[i] > ' ') break;
-		txt[i] = '\0';
-	}
-	
-	return txt;
+static void report(const char *type,const char *state,const char *message) {
+    disc_result_t result={0};
+    snprintf(result.type,sizeof(result.type),"%s",type);
+    snprintf(result.state,sizeof(result.state),"%s",state);
+    snprintf(result.message,sizeof(result.message),"%s",message);
+    publish(&result);
 }
-
-static void set_img(GUI_Surface *surface, int enable)
-{
-	GUI_ButtonSetNormalImage(self.play_btn, surface);
-	GUI_ButtonSetHighlightImage(self.play_btn, self.play);
-	GUI_ButtonSetPressedImage(self.play_btn, surface);
-	GUI_ButtonSetDisabledImage(self.play_btn, surface);
-	GUI_WidgetSetEnabled(self.play_btn, enable);
+static void scan_disc(void) {
+    int status=-1,type=-1;
+    if(self.stop) return;
+    report("DISC DRIVE","Reading disc...","Reading disc details. B returns to the menu.");
+    int rv=cdrom_exec_cmd_timed(CD_CMD_INIT,NULL,DRIVE_TIMEOUT_MS);
+    if(self.stop) return;
+    if(rv!=ERR_OK) { report("DISC DRIVE","Not ready","Close the lid, then select Read disc again."); return; }
+    rv=cdrom_get_status(&status,&type);
+    if(rv!=ERR_OK || status==CD_STATUS_NO_DISC || status==CD_STATUS_OPEN) {
+        report("DISC DRIVE","No disc","Insert a disc and close the lid. B returns to the menu."); return;
+    }
+    if(type==CD_CDDA) { report("AUDIO CD","Audio disc","This app boots Dreamcast game discs. B returns to the menu."); return; }
+    if(type!=CD_GDROM && type!=CD_CDROM_XA) { report("DATA CD","Not bootable","No supported Dreamcast disc found. Try another disc."); return; }
+    if(self.stop) return;
+    if(cdrom_change_datatype(CDROM_READ_DEFAULT,-1,2048)!=ERR_OK) {
+        report("DISC DRIVE","Read error","Could not select the disc read mode. Try reading again."); return;
+    }
+    uint32_t fad=45150;
+    if(type==CD_CDROM_XA) {
+        cd_toc_t toc;
+        cd_cmd_toc_params_t params={.area=CD_AREA_LOW,.buffer=&toc};
+        rv=cdrom_exec_cmd_timed(CD_CMD_GETTOC2,&params,DRIVE_TIMEOUT_MS);
+        if(self.stop) return;
+        if(rv!=ERR_OK || !(fad=cdrom_locate_data_track(&toc))) {
+            report("DATA CD","Read error","Could not read the disc table. Select Read disc again."); return;
+        }
+    }
+    unsigned char *buffer=memalign(32,2048);
+    if(!buffer) { report("DISC DRIVE","No memory","Could not allocate a disc buffer. Reopen GD Play."); return; }
+    cd_read_params_t params={.start_sec=fad,.num_sec=1,.buffer=buffer,.is_test=0};
+    rv=cdrom_exec_cmd_timed(CD_CMD_PIOREAD,&params,DRIVE_TIMEOUT_MS);
+    disc_result_t result={0};
+    if(!self.stop) {
+        if(rv==ERR_OK && disc_metadata_read(&result.info,buffer,2048)) {
+            result.ready=self.bios_patch!=NULL;
+            snprintf(result.type,sizeof(result.type),"%s",type==CD_GDROM?"GD-ROM":"MIL-CD");
+            snprintf(result.state,sizeof(result.state),"%s",result.ready?"Ready to play":"Boot file missing");
+            snprintf(result.message,sizeof(result.message),"%s",result.ready?
+                "A plays the disc. B returns to the menu. DreamShell closes when a game starts.":
+                "firmware/rungd.bin is missing or incomplete. Menu remains available.");
+            publish(&result);
+        } else report("DISC DRIVE","Read error","Could not read a valid Dreamcast header. Clean the disc, then retry.");
+    }
+    free(buffer);
 }
-
-static void set_info(int disc_type)
-{
-	int lba = 45150;
-	char tmp[NAME_MAX];
-	static char pbuff[2048];
-
-	if(FileExists("/cd/0gdtex.pvr"))
-	{
-		self.gdtex[SURF_ONCD] = GUI_SurfaceLoad("/cd/0gdtex.pvr");
-		set_img(self.gdtex[SURF_ONCD], 1);
-		GUI_ObjectDecRef((GUI_Object *)self.gdtex[SURF_ONCD]);
-	}
-	else
-	{
-		set_img(self.gdtex[(disc_type == CD_CDROM_XA)], 1);
-	}
-	
-	if(disc_type == CD_CDROM_XA)
-	{
-		cd_toc_t toc;
-
-		if(cdrom_read_toc(&toc, false) != CMD_OK)
-		{ 
-			set_img(self.gdtex[SURF_CDROM], 0);
-			ds_printf("DS_ERROR: Toc read error\n"); 
-			return; 
-		}
-		if(!(lba = cdrom_locate_data_track(&toc))) 
-		{
-			set_img(self.gdtex[SURF_CDROM], 0);
-			ds_printf("DS_ERROR: Error locate data track\n"); 
-			return;
-		}
-	}
-
-	if (cdrom_read_sectors(pbuff, lba , 1))
-	{
-		ds_printf("DS_ERROR: CD read error %d\n",lba); 
-		set_img(self.gdtex[SURF_CDROM], 0);
-		return;
-	}
-
-	self.info = (ip_meta_t *) pbuff;
-
-	if(strncmp(self.info->hardware_ID, "SEGA", 4))
-	{
-		set_img(self.gdtex[SURF_CDROM], 0);
-		return;
-	}
-	
-	if(strlen(trim_spaces(self.info->country_codes, sizeof(self.info->country_codes))) > 1)
-	{
-		strcpy(tmp, "FREE");
-	}
-	else
-	{
-		switch(self.info->country_codes[0])
-		{
-			case 'J':
-				strcpy(tmp, "JAPAN");
-				break;
-			case 'U':
-				strcpy(tmp, "USA");
-				break;
-			case 'E':
-				strcpy(tmp, "EUROPE");
-				break;
-		}
-	}
-	
-	GUI_LabelSetText(self.text[TXT_REGION], tmp);
-	
-	GUI_LabelSetText(self.text[TXT_VGA], self.info->VGA[0] == '1'? "YES":"NO");
-	
-	memset(tmp, 0, NAME_MAX);
-	
-	snprintf(tmp, COLUMN_LEN, "%c%c%c%c-%c%c-%c%c", self.info->release_date[0], 
-													self.info->release_date[1], 
-													self.info->release_date[2], 
-													self.info->release_date[3], 
-													self.info->release_date[4], 
-													self.info->release_date[5], 
-													self.info->release_date[6], 
-													self.info->release_date[7]);
-	
-	GUI_LabelSetText(self.text[TXT_DATE], trim_spaces(tmp, 8));
-	
-	snprintf(tmp, COLUMN_LEN, "%c OF %c", self.info->disk_num[0], self.info->disk_num[2]);
-	
-	GUI_LabelSetText(self.text[TXT_DISCNUM], tmp);
-	
-	memset(tmp, 0, NAME_MAX);
-	memcpy(tmp, self.info->product_version, 6);
-	
-	GUI_LabelSetText(self.text[TXT_VERSION], tmp);
-	
-	memset(tmp, 0, NAME_MAX);
-	strncpy(tmp, trim_spaces(self.info->title, 128), 128);
-	
-	int num_column = strlen(tmp) / COLUMN_LEN;
-	
-	if((strlen(tmp) % COLUMN_LEN))
-		num_column++;
-	
-	char column_txt[COLUMN_LEN+1];
-	
-	for(int i=0; i<num_column; i++)
-	{
-		strncpy(column_txt, &tmp[i*COLUMN_LEN], COLUMN_LEN);
-		GUI_LabelSetText(self.text[TXT_TITLE1 + i], column_txt);
-	}
+static void *worker(void *unused) {
+    (void)unused;
+    gdplay_poll_t poll={.disc_type=-1};
+    while(!self.stop) {
+        int status=-1,type=-1;
+        int rv=cdrom_get_status(&status,&type);
+        mutex_lock(&result_lock);
+        int request=self.request; self.request=0;
+        mutex_unlock(&result_lock);
+        if(self.stop) break;
+        int operation=gdplay_poll(&poll,rv,status,type,request);
+        if(operation==GDPLAY_POLL_EMPTY)
+            report("DISC DRIVE","No disc","Insert a disc and close the lid. B returns to the menu.");
+        else if(operation==GDPLAY_POLL_READ) scan_disc();
+        thd_sleep(150);
+    }
+    return NULL;
 }
-
-static void check_cd(void)
-{
-	int status, disc_type, cd_status;
-	clear_text();
-getstatus:	
-	if((cd_status = cdrom_get_status(&status, &disc_type)) != ERR_OK) 
-	{
-		switch(cd_status)
-		{
-			case ERR_DISC_CHG:
-				cdrom_reinit();
-				goto getstatus;
-				break;
-			default:
-				set_img(self.gdtex[SURF_NODISC], 0);
-				return;
-		}
-	}
-	
-	switch(status)
-	{
-		case CD_STATUS_OPEN:
-		case CD_STATUS_NO_DISC:
-			set_img(self.gdtex[SURF_NODISC], 0);
-			return;
-	}
-		
-	switch(disc_type)
-	{
-		case CD_CDDA:
-			set_img(self.gdtex[SURF_AUDIOCD], 0);
-			break;
-		case CD_GDROM:
-		case CD_CDROM_XA:
-			set_info(disc_type);
-			break;
-		case CD_CDROM:
-		case CD_CDI:
-		default:
-			set_img(self.gdtex[SURF_CDROM], 0);
-			break;
-	}
-	
-	cdrom_spin_down();
+static void focus(int value) {
+    self.focus=(value+3)%3;
+    if(self.focus==0 && !self.ready) self.focus=1;
+    for(int i=0;i<3;i++) GUI_WidgetClearFlags(self.buttons[i],WIDGET_INSIDE);
+    GUI_WidgetSetFlags(self.buttons[self.focus],WIDGET_INSIDE);
 }
-
-static void *check_gdrom(void *arg)
-{
-	int status, disc_type, cd_status;
-	(void)arg;
-
-	while(self.app != NULL && (self.app->state & APP_STATE_OPENED))
-	{
-		cd_status = cdrom_get_status(&status, &disc_type);
-
-		if(self.app == NULL || !(self.app->state & APP_STATE_OPENED)) {
-			break;
-		}
-
-		switch(cd_status)
-		{
-			case ERR_DISC_CHG:
-				check_cd();
-				break;
-			default:
-				switch(status)
-				{
-					case CD_STATUS_OPEN:
-					case CD_STATUS_NO_DISC:
-						if(self.info) {
-							clear_text();
-						}
-						set_img(self.gdtex[SURF_NODISC], 0);
-						break;
-					default:
-						if(!self.info) {
-							check_cd();
-						}
-						break;
-				}
-		}
-		thd_sleep(100);
-	}
-
-	return NULL;
+static void title(const char *value) {
+    const char *p=value;
+    for(int line=0;line<3;line++) {
+        char text[132]; size_t n=0,space=0;
+        GUI_Font *font=APP_GET_FONT(line<2?"heading":"body");
+        int width=GUI_WidgetGetArea(self.title[line]).w;
+        while(*p==' ') p++;
+        while(p[n] && n<128) {
+            text[n]=p[n]; n++; text[n]=0;
+            if(GUI_FontGetTextSize(font,text).w>width) { n--; break; }
+            if(text[n-1]==' ') space=n-1;
+        }
+        if(p[n] && space) n=space;
+        if(!n && *p) n=1;
+        memcpy(text,p,n); text[n]=0;
+        if(line==2 && p[n]) {
+            int dots=GUI_FontGetTextSize(font,"...").w;
+            while(n && GUI_FontGetTextSize(font,text).w>width-dots) text[--n]=0;
+            strcat(text,"...");
+        }
+        GUI_LabelSetText(self.title[line],text); p+=n;
+    }
 }
-
-void gdplay_play(GUI_Widget *widget)
-{
-	(void) widget;
-
-	ShutdownDS(true);
+static void render(void *event,void *param,int action) {
+    (void)event;(void)param;
+    if(action!=EVENT_ACTION_RENDER || !self.app || !(self.app->state&APP_STATE_OPENED) || !self.pending) return;
+    mutex_lock(&result_lock);
+    disc_result_t result=self.result; self.pending=0;
+    mutex_unlock(&result_lock);
+    int was_ready=self.ready;
+    self.ready=result.ready;
+    GUI_WidgetSetEnabled(self.buttons[0],self.ready);
+    title(*result.info.title?result.info.title:"Insert a Dreamcast disc");
+    const char *fields[]={result.info.region,result.info.vga,result.info.date,result.info.number,result.info.version,result.info.product};
+    for(int i=0;i<6;i++) GUI_LabelSetText(self.fields[i],*fields[i]?fields[i]:"--");
+    GUI_LabelSetText(self.type,result.type); GUI_LabelSetText(self.state,result.state);
+    GUI_LabelSetText(self.message,result.message);
+    focus(self.ready && !was_ready && self.focus==1 ? 0 : self.focus);
+    /* Present each metadata snapshot together, including erased old text.
+     * This callback runs after the regular GUI dirty-rectangle update. */
+    GUI_ScreenDoUpdate(GUI_GetScreen(),1);
+}
+static void stop_worker(void) {
+    self.stop=1;
+    if(self.worker) { thd_join(self.worker,NULL); self.worker=NULL; }
+}
+void gdplay_Back(GUI_Widget *widget) { (void)widget; OpenMainApp(); }
+void gdplay_Refresh(GUI_Widget *widget) {
+    (void)widget;
+    if(self.worker) {
+        self.ready=0; GUI_WidgetSetEnabled(self.buttons[0],0);
+        mutex_lock(&result_lock); self.request=1; mutex_unlock(&result_lock);
+    }
+    else GUI_LabelSetText(self.message,"Drive worker is unavailable. Reopen GD Play.");
+}
+void gdplay_play(GUI_Widget *widget) {
+    (void)widget;
+    if(!self.ready || !self.bios_patch) return;
+    stop_worker();
+    int status=-1,type=-1;
+    if(cdrom_get_status(&status,&type)!=ERR_OK || status==CD_STATUS_OPEN || status==CD_STATUS_NO_DISC) {
+        self.ready=0; self.stop=0; self.request=1;
+        self.worker=thd_create(0,worker,NULL); return;
+    }
+    utility_close(self.input);
+    ShutdownDS(true);
     arch_shutdown();
-
-	gdplay_run_game(self.bios_patch);
+    gdplay_run_game(self.bios_patch);
 }
-
-void gdplay_Init(App_t *app) 
-{	
-	if(app != NULL) 
-	{
-		memset(&self, 0, sizeof(self));
-		self.app = app;
-
-		self.play_btn 			= APP_GET_WIDGET("play-btn");
-		self.text[TXT_REGION] 	= APP_GET_WIDGET("region-txt");
-		self.text[TXT_VGA] 		= APP_GET_WIDGET("vga-txt");
-		self.text[TXT_DATE] 	= APP_GET_WIDGET("date-txt");
-		self.text[TXT_DISCNUM] 	= APP_GET_WIDGET("disk-num-txt");
-		self.text[TXT_VERSION] 	= APP_GET_WIDGET("version-txt");
-		self.text[TXT_TITLE1] 	= APP_GET_WIDGET("title1-txt");
-		self.text[TXT_TITLE2] 	= APP_GET_WIDGET("title2-txt");
-		self.text[TXT_TITLE3] 	= APP_GET_WIDGET("title3-txt");
-		self.text[TXT_TITLE4] 	= APP_GET_WIDGET("title4-txt");
-		self.text[TXT_TITLE5] 	= APP_GET_WIDGET("title5-txt");
-
-		self.gdtex[SURF_GDROM] 	= APP_GET_SURFACE("gdrom");
-		self.gdtex[SURF_MILCD] 	= APP_GET_SURFACE("milcd");
-		self.gdtex[SURF_AUDIOCD]= APP_GET_SURFACE("cdaudio");
-		self.gdtex[SURF_CDROM] 	= APP_GET_SURFACE("cdrom");
-		self.gdtex[SURF_NODISC] = APP_GET_SURFACE("nodisc");
-		self.play 				= APP_GET_SURFACE("play");
-
-		char path[NAME_MAX];
-		snprintf(path, NAME_MAX, "%s/firmware/rungd.bin", getenv("PATH"));
-
-		file_t fd = fs_open(path, O_RDONLY);
-
-		if(fd < 0)
-		{
-			ds_printf("DS_ERROR: Can't open %s\n", path);
-			ShowConsole();
-			return;
-		}
-		size_t size = fs_total(fd);
-		self.bios_patch = memalign(32, size);
-
-		if(self.bios_patch == NULL)
-		{
-			fs_close(fd);
-			return;
-		}
-		fs_read(fd, self.bios_patch, size);
-		fs_close(fd);
-
-		check_cd();
-	}
-	else
-	{
-		ds_printf("DS_ERROR: %s: Attempting to call %s is not by the app initiate.\n",
-					lib_get_name(), __func__);
-	}
+static void input(void *event,void *param,int action) {
+    (void)event;
+    SDL_Event *e=param;
+    if(action!=EVENT_ACTION_UPDATE || !e || !self.app || !(self.app->state&APP_STATE_OPENED) || utility_global_input(e)) return;
+    int key=utility_key(e);
+    if(key==UI_BACK || key==UI_START) gdplay_Back(NULL);
+    else if(key==UI_X) gdplay_Refresh(NULL);
+    else if(key==UI_LEFT || key==UI_UP) focus(self.focus-1);
+    else if(key==UI_RIGHT || key==UI_DOWN) focus(self.focus+1);
+    else if(key==UI_OK) GUI_WidgetClicked(self.buttons[self.focus],0,0);
+    else utility_forward(e);
+    e->type=SDL_NOEVENT;
 }
-
-void gdplay_Open(App_t *app)
-{
-	(void)app;
-
-	if(self.app == NULL || self.app->thd != NULL) {
-		return;
-	}
-
-	self.app->thd = thd_create(0, check_gdrom, NULL);
+void gdplay_Init(App_t *app) {
+    memset(&self,0,sizeof(self)); self.app=app;
+    self.buttons[0]=APP_GET_WIDGET("play-btn");self.buttons[1]=APP_GET_WIDGET("refresh-btn");self.buttons[2]=APP_GET_WIDGET("exit-btn");
+    const char *fields[]={"region-txt","vga-txt","date-txt","disk-num-txt","version-txt","product-txt"};
+    for(int i=0;i<6;i++) self.fields[i]=APP_GET_WIDGET(fields[i]);
+    for(int i=0;i<3;i++) { char name[24]; snprintf(name,sizeof(name),"title%d-txt",i+1); self.title[i]=APP_GET_WIDGET(name); }
+    self.type=APP_GET_WIDGET("disc-type");self.state=APP_GET_WIDGET("disc-state");self.message=APP_GET_WIDGET("status");
+    char path[NAME_MAX]; snprintf(path,sizeof(path),"%s/firmware/rungd.bin",getenv("PATH"));
+    file_t fd=fs_open(path,O_RDONLY);
+    if(fd>=0) {
+        if(fs_total(fd)>=PATCH_SIZE) {
+            self.bios_patch=memalign(32,PATCH_SIZE);
+            if(self.bios_patch && fs_read(fd,self.bios_patch,PATCH_SIZE)!=PATCH_SIZE) { free(self.bios_patch); self.bios_patch=NULL; }
+        }
+        fs_close(fd);
+    }
+    self.input=AddEvent("NextGDPlayInput",EVENT_TYPE_INPUT,EVENT_PRIO_DEFAULT,input,NULL);
+    self.video=AddEvent("NextGDPlayRender",EVENT_TYPE_VIDEO,EVENT_PRIO_DEFAULT,render,NULL);
+    if(self.input) SetEventActive(self.input,0);
 }
-
+void gdplay_Open(App_t *app) {
+    (void)app;
+    self.stop=0; self.request=1;self.ready=0;
+    mutex_lock(&result_lock); self.pending=0; mutex_unlock(&result_lock);
+    GUI_WidgetSetEnabled(self.buttons[0],0);
+    utility_open(self.input); focus(1);
+    if(!self.worker) self.worker=thd_create(0,worker,NULL);
+    if(!self.worker) report("DISC DRIVE","Unavailable","Drive worker could not start. B returns to the menu.");
+}
+void gdplay_Close(App_t *app) { (void)app; utility_close(self.input); stop_worker(); }
 void gdplay_Shutdown(App_t *app) {
-	(void)app;
-
-	if(self.bios_patch != NULL) {
-		free(self.bios_patch);
-		self.bios_patch = NULL;
-	}
-
-	self.app = NULL;
+    (void)app; stop_worker(); utility_remove(&self.input); utility_remove(&self.video);
+    free(self.bios_patch); self.bios_patch=NULL; self.app=NULL;
 }

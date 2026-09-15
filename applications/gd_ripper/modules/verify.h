@@ -35,6 +35,9 @@ typedef struct {
 	bool report_written;
 	uint32_t track_count;
 	uint32_t bad_sector_count;
+
+    bool recovery_counts_valid, recovery_pending;
+    uint32_t recovery_flagged, recovery_recovered;
 	char game_name[192];
 	char report_path[NAME_MAX];
 } gd_verify_summary_t;

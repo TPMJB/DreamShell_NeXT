@@ -49,16 +49,11 @@ PARTITION VolToPart[_VOLUMES] = {
 PARTITION VolToPart[_VOLUMES] = {{0, 0}};
 #endif
 
-#ifdef LOG
-#	define CHECK_FD() \
-		if(fd < 0 || fd > (MAX_OPEN_FILES - 1) || _files[fd].state == FILE_STATE_UNUSED) { \
-			LOGFF("Bad fd = %d\n", fd); \
-			return FS_ERR_NOFILE; \
-		} \
-		FILE *file = &_files[fd]
-#else
-#	define CHECK_FD() FILE *file = &_files[fd]
-#endif
+#define CHECK_FD() \
+    if(!_files || fd < 0 || fd >= MAX_OPEN_FILES || \
+       _files[fd].state == FILE_STATE_UNUSED) return FS_ERR_NOFILE; \
+    FILE *file = &_files[fd]
+
 
 
 static int fs_get_fd() {
@@ -570,26 +565,18 @@ int write(int fd, void *ptr, unsigned int size) {
 #endif
 
 long int lseek(int fd, long int offset, int whence) {
-
-	FRESULT r = FR_OK;
-	CHECK_FD();
-
-	switch(whence) {
-		case SEEK_SET:
-			if(file->fp.fptr != (uint32)offset)
-				r = f_lseek(&file->fp, offset);
-			break;
-		case SEEK_CUR:
-			r = f_lseek(&file->fp, file->fp.fptr + offset);
-			break;
-		case SEEK_END:
-			r = f_lseek(&file->fp, file->fp.obj.objsize + offset);
-			break;
-		default:
-			break;
-	}
-
-	return r == FR_OK ? (long int)file->fp.fptr : FS_ERR_SYSERR;
+    CHECK_FD();
+    int64_t target;
+    switch(whence) {
+        case SEEK_SET: target = offset; break;
+        case SEEK_CUR: target = (int64_t)file->fp.fptr + offset; break;
+        case SEEK_END: target = (int64_t)file->fp.obj.objsize + offset; break;
+        default: return FS_ERR_PARAM;
+    }
+    if(target < 0 || target > 0x7fffffff) return FS_ERR_PARAM;
+    if(f_lseek(&file->fp, (FSIZE_t)target) != FR_OK ||
+       file->fp.fptr != (FSIZE_t)target) return FS_ERR_SYSERR;
+    return (long)target;
 }
 
 long int tell(int fd) {

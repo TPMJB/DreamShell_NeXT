@@ -1,7 +1,8 @@
 # DreamShell NeXT exFAT support
 
-NeXT 1.0.0 includes exFAT to bootloader **3.0**, the DreamShell core,
-ISO Loader **0.9.0**, and the optional HollySH BIOS loader. It uses a pinned FatFs R0.16 engine. FAT16/FAT32
+NeXT 1.0 includes exFAT in bootloader **3.1**, the DreamShell core,
+standalone ISO Loader firmware **0.9.2**, and the optional HollySH BIOS loader.
+It uses a pinned FatFs R0.16 engine with official patches 1 and 2. FAT16/FAT32
 remain supported. GD Ripper uses the core's filesystem services; its existing
 logging, CRC checkpoints and targeted recovery work through the same interface.
 
@@ -9,8 +10,9 @@ logging, CRC checkpoints and targeted recovery work through the same interface.
 
 1. Keep the working FAT32 card and boot disc as a fallback. Test with a spare
    card first; save any existing files elsewhere before formatting it.
-2. Burn the included `DreamShell_bootloader_v3.0.cdi` as a disc image. The old
-   2.9 bootloader cannot read an exFAT card just because its DS folder is updated.
+2. For a new installation, burn `DreamShell_bootloader_v3.1.cdi` as a disc image.
+   A working NeXT 3.0/3.1 disc can be reused. The old 2.9 bootloader cannot read
+   an exFAT card just because its DS folder is updated.
 3. Use a **512-byte-sector device**, either with an **MBR primary partition**
    formatted exFAT or formatted as a whole-device exFAT volume. GPT and devices
    at or above 2 TiB are not supported by this first build.
@@ -18,7 +20,7 @@ logging, CRC checkpoints and targeted recovery work through the same interface.
    `DS_CORE.BIN`, the modules, and `DS/firmware/isoldr/`; replacing only GD Ripper
    is insufficient. Preserve your dumps in their existing folders.
 5. Safely unmount the card, install it in the powered-off Dreamcast, and boot
-   with the new CD. The boot screen identifies version 3.0 and exFAT support.
+   with the compatible CD. The included bootloader identifies version 3.1.
 
 For Linux, `mkfs.exfat` and `fsck.exfat` are provided by **exfatprogs**. A
 128 KiB cluster is a reasonable starting point; it is not a special DreamShell

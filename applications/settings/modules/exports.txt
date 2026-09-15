@@ -1,32 +1,13 @@
 include kos/exports.h
 include app_module.h
 
-# Main
 SettingsApp_Init
-SettingsApp_ShowPage
-SettingsApp_ResetSettings
-SettingsApp_SaveSettings
-SettingsApp_DialogConfirm
-SettingsApp_DialogCancel
-SettingsApp_Reboot
-# Video
-SettingsApp_ToggleNativeMode
-SettingsApp_ToggleScreenMode
-SettingsApp_ToggleScreenFilter
-# Boot
-SettingsApp_ToggleStartupApp
-SettingsApp_ToggleMainApp
-SettingsApp_ToggleRoot
-SettingsApp_ToggleStartup
-# Date
-SettingsApp_Time
-SettingsApp_Time_Clr
-SettingsApp_TimeChange
-SettingsApp_TimezoneChange
-SettingsApp_TimezoneClr
-# Audio
-SettingsApp_ToggleSfx
-SettingsApp_ToggleClick
-SettingsApp_ToggleHover
-SettingsApp_ToggleStartupSound
-SettingsApp_VolumeChange
+SettingsApp_Open
+SettingsApp_Close
+SettingsApp_Shutdown
+SettingsApp_Tab
+SettingsApp_Change
+SettingsApp_Save
+SettingsApp_Back
+SettingsApp_Confirm
+SettingsApp_Cancel

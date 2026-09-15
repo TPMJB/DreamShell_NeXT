@@ -1,15 +1,16 @@
 include kos/exports.h
 include app_module.h
 
-BiosFlasher_OnSaveSettingsPressed
-BiosFlasher_OnSettingsPressed
-BiosFlasher_OnWritePressed
-BiosFlasher_OnReadPressed
-BiosFlasher_OnComparePressed
-BiosFlasher_OnDetectPressed
-BiosFlasher_OnBackPressed
-BiosFlasher_OnConfirmPressed
-BiosFlasher_OnSupportedPressed
-BiosFlasher_OnExitPressed
 BiosFlasher_Init
-BiosFlasher_ItemClick
+BiosFlasher_Open
+BiosFlasher_Close
+BiosFlasher_Shutdown
+BiosFlasher_Row
+BiosFlasher_Action
+BiosFlasher_Back
+BiosFlasher_Confirm
+BiosFlasher_Cancel
+BiosFlasher_Item
+BiosFlasher_Up
+BiosFlasher_Devices
+BiosFlasher_Folder

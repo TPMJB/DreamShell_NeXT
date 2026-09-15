@@ -16,16 +16,17 @@
 #include "tsunami/tsudefinition.h"
 #include "tsunami/color.h"
 
-#define GAMES_FOLDER "games"
+#include "../../game_paths.h"
+#define GAMES_FOLDER NEXT_GAMES_FOLDER
 
 #define IDE_PATH "/ide"
 #define IDE_DS_PATH "/ide/DS"
-#define IDE_GAMES_PATH "/ide/games"
+#define IDE_GAMES_PATH NEXT_IDE_GAMES_PATH
 #define IDE_COVERS_PATH "/ide/DS/apps/games_menu/covers"
 
 #define SD_PATH "/sd"
 #define SD_DS_PATH "/sd/DS"
-#define SD_GAMES_PATH "/sd/games"
+#define SD_GAMES_PATH NEXT_SD_GAMES_PATH
 #define SD_COVERS_PATH "/sd/DS/apps/games_menu/covers"
 
 #define CD_PATH "/cd"
@@ -51,7 +52,10 @@ typedef void PostOptimizerCoverCallBack();
 
 struct MenuStructure
 {
-	bool rebuild_cache;
+    volatile bool artwork_done;
+    volatile int artwork_total, artwork_checked, artwork_extracted;
+    volatile int artwork_existing, artwork_unavailable;
+    bool rebuild_cache;
 	bool started_with_cache;
 	bool enable_cache;
 

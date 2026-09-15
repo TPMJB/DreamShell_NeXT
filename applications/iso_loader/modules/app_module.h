@@ -105,3 +105,12 @@ void isoLoader_FwItemClick(dirent_fm_t *fm_ent);
 void isoLoader_FwItemSelect(dirent_fm_t *fm_ent);
 
 void isoLoader_toggleRegion(GUI_Widget *widget);
+
+void isoLoader_Check(GUI_Widget *widget);
+void isoLoader_Baseline(GUI_Widget *widget);
+void isoLoader_RestoreProfile(GUI_Widget *widget);
+void isoLoader_Details(GUI_Widget *widget);
+void isoLoader_Dismiss(GUI_Widget *widget);
+void isoLoader_Up(GUI_Widget *widget);
+void isoLoader_Open(App_t *app);
+void isoLoader_Close(void);

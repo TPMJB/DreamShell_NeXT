@@ -1,4 +1,28 @@
-# DreamShell GD Ripper 2.1.0
+# DreamShell GD Ripper 2.2.2
+
+## Recovery reporting in 2.2.2
+
+Recovery, the Start / Resume prompt and on-console verification now distinguish
+**originally flagged**, **recovered** and **unresolved** sectors. Counts include
+repairs from earlier sessions, including interrupted recovery. `verify.log`'s
+`bad_sectors` field is the current unresolved count; `recovery_flagged`,
+`recovery_recovered`, `recovery_remaining` and `recovery_pending` record the details.
+Unreadable or invalid recovery metadata reports counts as unavailable, never zero.
+
+Existing dumps need no conversion. Reporting reads the original target list and
+validates saved data sectors or audio confirmation records. It does not rewrite
+tracks, delete recovery records or read the entire track. Stream CRC verification
+still does not reread untouched sectors. Keep `.bad`, `.recovery-base`,
+`.recovery-audio`, `.repair-backup` and CRC files with your dump.
+
+If the last sector was repaired before an interruption prevented the final
+checkpoint, the prompt shows **0 unresolved** and **Finish recovery**. The dump
+stays incomplete until finalization succeeds. Repeated recovery does not treat
+the original error total as the remaining workload.
+
+GD Ripper 2.2.2 is included in the complete NeXT 1.0 installation. See the
+[installation guide](../docs/installation.md). A working NeXT 3.0/3.1 boot disc
+can be reused. Existing partial dumps retain their saved recovery progress.
 
 ## First pass, then optional recovery
 
@@ -10,8 +34,8 @@ temporarily represented by zeros so the rest of the disc can be collected.
 These placeholders are unresolved holes, never recovered data. Normal ripping
 with this mode OFF retains its existing retry/stop behavior.
 
-After the first pass, a damaged dump displays **THIS DUMP'S A MESS.** with the
-flagged-sector count and **Try recovery / Later** buttons. The app does not
+After the first pass, a damaged dump displays **THIS DUMP'S A MESS.** with current
+unresolved and original/recovered counts, plus **Try recovery / Later** buttons. The app does not
 create `rip.complete` while recovery holes remain. A clean first pass goes
 straight to the normal catalog CRC check without a prompt.
 
@@ -48,35 +72,7 @@ completion marker and checks the resulting track CRCs against the catalogs.
 A remaining catalog mismatch stays a mismatch. A whole-track hash cannot tell
 us where to retry when every sector passes its internal checks.
 
-To upgrade a working 2.0.2/2.0.3 installation, replace the entire
-`DS/apps/gd_ripper` folder and confirm **2.1.0**. No bootloader change is needed.
-The new engine is covered by drive/storage fault tests and the pinned FAT16
-and FAT32 implementation, including interrupted recovery and remounts. Actual
-recovery yield and drive timing still require Dreamcast hardware testing.
-
-## Mandatory sector checks introduced in 2.0.3
-
-Merge the release's `DS/apps/gd_ripper` folder onto the card and confirm GD
-Ripper **2.1.0**. A working 2.0.2 installation already has the required core;
-no bootloader update is required. For older installations, merge the entire
-release `DS` folder so the core and app are updated together.
-
-The supplied Time Stalkers dump had 623 invalid data sectors, all at index 12
-within 16-sector read blocks. Each had bytes 368..375 overwritten with one of
-two repeating values. Recovering only those bytes from the unchanged P parity
-made every affected sector pass its original EDC, P and Q checks. Combining
-those corrections with the measured input CRC predicts `f92c1222`, the known
-TOSEC/Redump Track 3 CRC. This identifies recoverable corruption within the
-track files, not omitted lead-in or subchannel data.
-
-The two repeating values resemble a DreamShell video-global pointer followed
-by an SH-4 cache tag. That points toward corruption in the console's memory
-path, but does not establish the exact offending instruction or its timing.
-An initially suspected cache-tag race was not established: associative cache
-writes compare tags instead of blindly replacing them. No speculative kernel
-patch is included. Mandatory EDC checks close the confirmed unchecked-read
-gap; a fresh hardware rip and an independent PC CRC are still required to
-assess whether further corruption occurs, including after validation.
+## Sector validation
 
 Normal raw Mode 1 ripping now always checks sync, address and EDC and retries
 invalid reads. Advanced CRC adds ECC parity validation and repair of existing
@@ -90,71 +86,9 @@ untrusted output, not deliberate zero-fill. Both CRC samples still come from
 RAM: they do not replace storage read-back or detect every possible transient
 mutation, and old completed tracks are not revalidated on normal resume.
 
-### Recover the diagnosed Time Stalkers dump on a PC
-
-```sh
-python3 repair_timestalkers.py /path/to/TIME_STALKERS/track03.bin \
-  "$HOME/track03.repaired.bin"
-```
-
-This restricted tool requires the original 1,185,760,800-byte file with CRC
-`3303fcd5` and the diagnosed 623 overwrites. It opens the source read-only,
-recovers the eight missing payload bytes using existing ECC, and writes a new
-copy. The original EDC and ECC bytes are retained and must validate. Both the
-computed output CRC and a read-back of the saved output must equal `f92c1222`.
-An existing output is never overwritten; an unsuccessful partial copy is
-removed. Allow about 1.2 GB of free space for the new file. The program refuses
-other input CRCs, additional damage or a different number of repairs.
-
-After it prints `VERIFIED`, use the repaired file as `track03.bin` in a **PC
-copy** of the dump folder, alongside the matching Tracks 1 and 2 and its GDI.
-Keep the original folder intact. Do not copy the old `track03.bin.crc` into
-the repaired folder: that journal describes the original corrupted bytes.
-If putting a repaired copy back on the Dreamcast, its missing CRC journal will
-require one storage hash before fast resumed verification can be used.
-
-## Install and diagnose an early stop
-
-Version 2.0.2 fixes **Rip log creation failed** and the earlier stop at the end
-of Track 1. The pinned FAT implementation maps `O_CREAT` to `FA_OPEN_ALWAYS`,
-but omits that flag from the branch that creates a missing file. It can reopen
-an existing file, so 2.0.1's storage probe passed while the first log or CRC
-journal could not be created. The app now opens existing metadata for writing,
-or explicitly creates a missing file with `O_CREAT | O_EXCL`, then seeks to
-its end. Existing records are preserved. The fix is tested using the production
-logger/checkpoint code and the pinned FatFs on in-memory FAT16/FAT32 volumes.
-
-For current installations, follow the upgrade above. Keep the
-existing dump files; **Start / Resume** can continue a partial rip in the same
-folder. Previously written invalid sectors require a scan/repair or the
-restricted Time Stalkers recovery described above.
-
-For a first installation or an upgrade from an older recovery build:
-Merge the release's entire `DS` folder onto the SD card, including `DS_CORE.BIN`.
-The bootloader and the loaded DreamShell core are separate binaries. During
-boot, press/hold Start to enter the boot menu, select **Boot from SD**, and use
-left/right to show the full path. Confirm `/sd/DS/DS_CORE.BIN` before pressing A.
-Updating only the ripper or the bootloader can leave an older core running.
-
-The ripper checks create/reopen/seek/sync/read-back on a small temporary file
-before changing a dump. Old FAT handlers may reject append opens or refuse to
-reopen an existing file for writing. Metadata now uses explicit seek-to-end;
-cores that still cannot reopen files stop before track extraction with a core
-update hint. Successful probe files are removed. This is a capability check,
-not a test of the whole SD card.
-
-The rip log must be created and reopened successfully before tracks are read.
-Errors now distinguish log creation, CRC checkpoint, track sync/open/write,
-sector-mode selection and exhausted disc reads, with filesystem or drive error
-codes and the current track/FAD. Failed sector-mode selection gets bounded
-reinitialization/retry attempts. Error messages stay visible during cleanup.
-
-For Time Stalkers, the reported 300-sector Track 1 is exactly 705,600 bytes:
-that size means the track reached its expected length. An error there can be
-the final CRC checkpoint or the transition to Track 2, not necessarily a bad
-Track 1 read. Keep that file; resume can hash it once, save its missing CRC,
-skip Track 1, and proceed to Track 2. If the new build stops, preserve `rip.log`
-and photograph its specific error message rather than starting over.
+The narrowly targeted `repair_timestalkers.py` desktop tool remains included.
+Its exact-input requirements and earlier diagnosis are documented in
+[the historical recovery notes](../docs/timestalkers-recovery.md).
 
 ## Normal ripping
 
@@ -162,6 +96,11 @@ Insert a disc and wait for **Ready to rip**. GD Ripper detects the lid/disc
 state, lets the drive settle, and reads its title automatically. There is no
 manual Read Name button. Detection is suspended while ripping, repairing or
 verifying; one worker owns all of the app's drive commands.
+
+The default destination is `/ide/Games`, then `/sd/Games`, then `/pc/Games`,
+depending on available devices. Device buttons create/open their Games folder,
+and each disc gets its own folder. These locations are also scanned by Games.
+You can browse to another destination or select an existing dump to resume.
 
 Choose **Start / Resume**. CRC32 is calculated from the bytes successfully
 written while ripping. On completion, the saved CRCs and track sizes are

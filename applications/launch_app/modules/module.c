@@ -40,6 +40,10 @@ static int InOpenButton(int x, int y) {
     return x >= DETAIL_X && x < DETAIL_X + DETAIL_W && y >= OPEN_Y && y < OPEN_Y + OPEN_H;
 }
 
+static int InMusicButton(int x, int y) {
+    return x >= 122 && x < 248 && y >= 410 && y < 437;
+}
+
 static void HandleDialog(SDL_Event *event) {
     if(event->type == SDL_JOYBUTTONDOWN) {
         if(event->jbutton.button == SDL_DC_B) LaunchAppDeleteCancel(NULL);
@@ -63,7 +67,7 @@ static void HandleDialog(SDL_Event *event) {
 
 static void InputHandler(void *ds_event, void *param, int action) {
     SDL_Event *event = param;
-    int index, activate = -1, settings = 0, remove = 0;
+    int index, activate = -1, settings = 0, remove = 0, cycle_music = 0;
     (void)ds_event;
     if(action != EVENT_ACTION_UPDATE || !event || !self.app || !(self.app->state & APP_STATE_OPENED)) return;
     LockVideo();
@@ -85,6 +89,7 @@ static void InputHandler(void *ds_event, void *param, int action) {
                 if(index >= 0) SetFocusedIndex(index, 0);
                 else if(InOpenButton(event->button.x, event->button.y)) index = self.focused_index;
                 self.pending_activate_index = index;
+                if(InMusicButton(event->button.x,event->button.y)) self.pending_activate_index = -2;
             } else if(event->button.button == SDL_BUTTON_RIGHT) {
                 /* B/right click backs out; X/Delete explicitly requests deletion. */
                 self.pending_activate_index = -1;
@@ -92,6 +97,7 @@ static void InputHandler(void *ds_event, void *param, int action) {
             break;
         case SDL_MOUSEBUTTONUP:
             if(event->button.button == SDL_BUTTON_LEFT) {
+                if(self.pending_activate_index == -2 && InMusicButton(event->button.x,event->button.y)) cycle_music = 1;
                 index = HitTestItem(event->button.x, event->button.y);
                 if(InOpenButton(event->button.x, event->button.y)) index = self.focused_index;
                 if(index == self.pending_activate_index) activate = index;
@@ -103,6 +109,7 @@ static void InputHandler(void *ds_event, void *param, int action) {
             switch(event->jbutton.button) {
                 case SDL_DC_A: activate = self.focused_index; break;
                 case SDL_DC_START: settings = 1; break;
+                case SDL_DC_Y: cycle_music = 1; break;
                 case SDL_DC_X: ResetHeld(); RequestItemDelete(0, 0, 1); break;
                 case SDL_DC_B: self.pending_activate_index = -1; ResetHeld(); break;
                 case SDL_DC_L: MoveFocus(-LIST_ROWS); break;
@@ -135,6 +142,7 @@ static void InputHandler(void *ds_event, void *param, int action) {
                 case SDLK_ESCAPE: case SDLK_BACKSPACE: ResetHeld(); break;
                 case SDLK_DELETE: ResetHeld(); RequestItemDelete(0, 0, 1); break;
                 case SDLK_F1: settings = 1; break;
+                case SDLK_m: cycle_music = 1; break;
                 default: break;
             }
             break;
@@ -150,6 +158,7 @@ static void InputHandler(void *ds_event, void *param, int action) {
         remove = 1;
     }
     UnlockVideo();
+    if(cycle_music) MenuMusicCycle();
     if(remove) {
         /* Refresh even after partial deletion so stale application IDs disappear. */
         DeletePendingItem();
@@ -168,7 +177,10 @@ void *LaunchAppWorker(void *arg) {
     (void)arg;
     while(self.app && (self.app->state & APP_STATE_OPENED)) {
         uint64_t now = timer_ms_gettime64();
+        char music_text[48];
+        MenuMusicLabel(music_text,sizeof(music_text));
         LockVideo();
+        if(self.music_label) FitLabel(self.music_label,music_text,122);
         if(!self.busy && !TSU_DialogIsVisible(self.delete_dialog) && self.repeat_dir && now >= self.repeat_at) {
             MoveFocus(self.repeat_dir);
             self.repeat_at = now + REPEAT_INTERVAL_MS;
@@ -197,6 +209,7 @@ void LaunchApp_Init(App_t *app) {
     if(!app || !app->tsunami) return;
     GetAppPath(self.app_path, sizeof(self.app_path), app->fn);
     self.caption_font = APP_GET_TSU_FONT("caption_font");
+    self.music_label = (Label *)APP_GET_TSU_DRAWABLE("music-toggle");
     if(!self.caption_font) { ds_printf("DS_ERROR: Launcher font is missing\n"); return; }
     InitScene();
     BuildAppList();
@@ -210,12 +223,14 @@ void LaunchApp_Open(App_t *app) {
     self.pending_activate_index = -1;
     ResetHeld();
     if(self.focused_index < 0 && self.item_count) SetFocusedIndex(0, 0);
+    MenuMusicOpen(self.app_path);
     self.input_event = AddEvent("LaunchAppInput", EVENT_TYPE_INPUT, EVENT_PRIO_DEFAULT, InputHandler, NULL);
     self.app->thd = thd_create(0, LaunchAppWorker, NULL);
 }
 
 void LaunchApp_Close(App_t *app) {
     (void)app;
+    MenuMusicClose();
     RememberFocused();
     if(self.input_event) { RemoveEvent(self.input_event); self.input_event = NULL; }
     /* The core normally joins this worker before calling onclose. */
@@ -227,6 +242,7 @@ void LaunchApp_Close(App_t *app) {
 
 void LaunchApp_Shutdown(App_t *app) {
     (void)app;
+    MenuMusicClose();
     if(self.input_event) { RemoveEvent(self.input_event); self.input_event = NULL; }
     LockVideo();
     pvr_wait_ready();

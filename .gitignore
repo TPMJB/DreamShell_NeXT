@@ -24,6 +24,7 @@ build/
 release/
 *DS_CORE.BIN
 romdisk.img
+/romdisk/next-build.json
 exports.c
 exports_stubs.c
 exports_gcc.c

@@ -119,21 +119,30 @@ static int gzip_kmg_to_img(const char * fn, kos_img_t * rv) {
 	return 0;
 }
 
-static void load_txr(const char *fn, pvr_ptr_t *txr) {
+static int load_txr(const char *fn, pvr_ptr_t *txr) {
 	
 	char path[NAME_MAX];
 	sprintf(path, "%s/%s", RES_PATH, fn);
 	
 	kos_img_t img;
 	if (gzip_kmg_to_img(path, &img) < 0)
-		assert(0);
+		return -1;
 	dbglog(DBG_INFO, "Loaded %s: %dx%d, format %d\n",
 		path, (int)img.w, (int)img.h, (int)img.fmt);
 
-	assert((img.fmt & KOS_IMG_FMT_MASK) == KOS_IMG_FMT_ARGB4444);
+	if((img.fmt & KOS_IMG_FMT_MASK) != KOS_IMG_FMT_ARGB4444) {
+		free(img.data);
+		return -1;
+	}
 	*txr = pvr_mem_malloc(img.w * img.h * 2);
+	if(!*txr) {
+		free(img.data);
+		return -1;
+	}
 	pvr_txr_load_kimg(&img, *txr, 0);
-	//kos_img_free(&img, 0);
+	/* gzip_kmg_to_img owns this malloc buffer; flags=0 uploads synchronously. */
+	free(img.data);
+	return 0;
 }
 
 static void draw_one_dot(float x, float y, float z) {
@@ -224,8 +233,13 @@ static void draw_logo() {
 }
 
 int spiral_init() {
-	load_txr("dot.kmg.gz", &txr_dot);
-	load_txr("DreamShell.kmg.gz", &txr_logo);
+	if(load_txr("dot.kmg.gz", &txr_dot) ||
+	   load_txr("DreamShell.kmg.gz", &txr_logo)) {
+		if(txr_dot) pvr_mem_free(txr_dot);
+		if(txr_logo) pvr_mem_free(txr_logo);
+		txr_dot = txr_logo = NULL;
+		return -1;
+	}
 
 	phase = 0.0f;
 	frame = 0;
@@ -252,6 +266,7 @@ static void spiral_advance(void) {
 
 /* Call during trans poly */
 void spiral_frame() {
+	if(!txr_dot || !txr_logo) return;
 	spiral_advance();
 	draw_spiral(phase);
 	draw_logo();

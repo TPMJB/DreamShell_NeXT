@@ -1,33 +1,16 @@
-/* DreamShell ##version##
-
-   app_module.h - Bios flasher app module header
-   Copyright (C)2013 Yev
-   Copyright (C)2013, 2014, 2023, 2024 SWAT
-
-*/
-
+/* DreamShell NeXT maintenance app exports. */
 #include "ds.h"
 
-void BiosFlasher_ItemClick(dirent_fm_t *fm_ent);
-
-void BiosFlasher_OnWritePressed(GUI_Widget *widget);
-
-void BiosFlasher_OnReadPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnComparePressed(GUI_Widget *widget);
-
-void BiosFlasher_OnDetectPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnBackPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnSettingsPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnConfirmPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnSaveSettingsPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnSupportedPressed(GUI_Widget *widget);
-
-void BiosFlasher_OnExitPressed(GUI_Widget *widget);
-
-void BiosFlasher_Init(App_t* app);
+void BiosFlasher_Init(App_t *app);
+void BiosFlasher_Open(App_t *app);
+void BiosFlasher_Close(App_t *app);
+void BiosFlasher_Shutdown(App_t *app);
+void BiosFlasher_Row(GUI_Widget *widget);
+void BiosFlasher_Action(GUI_Widget *widget);
+void BiosFlasher_Back(GUI_Widget *widget);
+void BiosFlasher_Confirm(GUI_Widget *widget);
+void BiosFlasher_Cancel(GUI_Widget *widget);
+void BiosFlasher_Item(dirent_fm_t *entry);
+void BiosFlasher_Up(GUI_Widget *widget);
+void BiosFlasher_Devices(GUI_Widget *widget);
+void BiosFlasher_Folder(GUI_Widget *widget);

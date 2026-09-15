@@ -1,54 +1,17 @@
-# DreamShell NeXT launcher preview
+# DreamShell NeXT launcher 2.1.0
 
-Launch App 2.0.2 replaces the animated app grid with a controller-operated list and
-an app details pane. It uses DreamShell's existing Tsunami renderer at 640x480.
+Launch App provides a controller-operated list and details pane at 640x480.
 Installed apps and saved Lua/DSC shortcuts remain discoverable. The original
-Main application is available in the list as **Classic launcher**.
+Main application is available as **Classic launcher**. Layout, word wrapping,
+texture bounds and shutdown synchronization fixes from 2.0.x are retained.
 
-Version 2.0.2 keeps off-page rows hidden after their text colour is updated.
-Descriptions now recognise whitespace without depending on an imported ctype
-table offset that was lost when loading the SH-4 module. Words that fit in the
-pane wrap as whole words; names longer than the pane still use bounded fitting.
+The launcher is included in the complete NeXT 1.0 package; follow the
+[installation guide](../docs/installation.md). Preserve custom shortcuts and
+music. If the home screen uses Main, open **Launch App** or select it as the
+main application in Settings. Old grid `config.lua` files are ignored.
 
-Version 2.0.1 fixes a startup abort in 2.0.0: the launcher tried to upload the
-shared 48x48 SDL fallback icon as a native PVR texture before the splash was
-dismissed. The fallback now uses the bundled 64x64 launcher icon. Artwork with
-unsupported dimensions is rejected before decoding and GPU upload.
-
-This preview is based on exFAT commit `6958fdc`. It does not change the
-filesystem, bootloader, ISO Loader or GD Ripper behavior. The core adds the
-`pvr_wait_render_done` export so the launcher can wait until the GPU has finished
-sampling textures before freeing them. The separate `exfat` release
-remains available while the new launcher is tested on a console.
-
-## Install
-
-Already running launcher 2.0.1? Use **DreamShell-launcher-layout-update.zip**.
-After the current scan finishes, save its diagnostic reports and power down.
-Merge the update's `DS` folder onto the card. This package contains only
-`DS/apps/launch_app/` and this guide, so the installed CRC diagnostic module and
-core are preserved. Safely unmount and boot with the same boot disc.
-
-If you already have that working exFAT preview:
-
-1. Finish or stop the current rip, wait for the application to return to idle,
-   and power down before removing the card.
-2. Extract **DreamShell-launcher-update.zip**. Merge its `DS` folder onto the
-   card, overwriting matching files. This replaces `DS/apps/launch_app/` and
-   installs `DS/fonts/txf/helvetica.txf` and the accompanying `DS/DS_CORE.BIN`.
-   Copy the core too: the new launcher needs its graphics synchronization export.
-   Preserve your existing shortcuts.
-3. Safely unmount the card and boot with your existing bootloader 3.0 CD.
-   There is no need to burn another disc for this launcher update.
-
-The full **DreamShell-launcher.zip** includes the updated core and the existing exFAT boot files
-for a complete installation. Follow its `exfat-guide.md` if upgrading from an
-older core. The small launcher update assumes the current exFAT preview core.
-
-If your home screen is configured to use Main, open **Launch App**, or select it
-as the main application in Settings. To revert the UI, restore the previous
-`DS/apps/launch_app/` directory from DreamShell-exfat.zip. Old grid `config.lua`
-files left by a merge are ignored by the new launcher.
+The original *After Hours* loop is optional. Y or keyboard M cycles music
+volume/Off; the preference is saved. See [music settings](README.menu-music.md).
 
 ## Controls
 

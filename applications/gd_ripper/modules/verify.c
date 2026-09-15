@@ -8,6 +8,7 @@
 #include "verify.h"
 #include "checksum.h"
 #include "readback.h"
+#include "recovery.h"
 #include <zlib/zlib.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -151,33 +152,22 @@ static int load_rip_state(const char *folder, verify_track_t *tracks,
 	return CMD_OK;
 }
 
-static uint32_t count_bad_sectors(const char *folder, verify_track_t *tracks,
-		uint32_t track_count) {
-	uint32_t bad_count = 0;
-	char path[NAME_MAX];
-	char line[VERIFY_LINE_SIZE];
-
-	for (uint32_t index = 0; index < track_count; index++) {
-		FILE *fp;
-
-		if (snprintf(path, sizeof(path), "%s/%s.bad", folder,
-			tracks[index].filename) >= (int)sizeof(path)) {
-			continue;
-		}
-		fp = fopen(path, "r");
-		if (!fp) {
-			continue;
-		}
-		while (fgets(line, sizeof(line), fp)) {
-			char *cursor = line;
-			while (isspace((unsigned char)*cursor)) cursor++;
-			if (isdigit((unsigned char)*cursor)) {
-				bad_count++;
-			}
-		}
-		fclose(fp);
-	}
-	return bad_count;
+static int count_bad_sectors(const char *folder, verify_track_t *tracks,
+        uint32_t track_count, volatile int *active, gd_verify_summary_t *summary) {
+    char path[NAME_MAX];
+    for (uint32_t i = 0; i < track_count; ++i) {
+        gd_recovery_status_t status;
+        verify_track_t *t = &tracks[i];
+        if (snprintf(path, sizeof(path), "%s/%s", folder, t->filename) >= (int)sizeof(path) ||
+                gd_recovery_inspect(path, t->number, t->start, t->sector_count,
+                    t->control, t->sector_size, active, &status) != CMD_OK) return CMD_ERROR;
+        summary->recovery_flagged += status.flagged;
+        summary->recovery_recovered += status.recovered;
+        summary->bad_sector_count += status.remaining;
+        summary->recovery_pending |= status.pending;
+    }
+    summary->recovery_counts_valid = true;
+    return CMD_OK;
 }
 
 static bool completion_marker_is_valid(const char *folder,
@@ -536,7 +526,8 @@ static int write_report(const char *folder, const char *database_path,
 		gd_verify_result_text(summary->catalog_result));
 	status |= report_printf(hnd, "clean %d\n", summary->clean);
     status |= report_printf(hnd, "hash_origin %s\n", summary->streaming ?
-        "disc stream / saved checkpoint (no storage read-back)" : "storage read-back");
+        (summary->recovery_flagged ? "disc stream / saved checkpoint (recovery targets reread only)" :
+        "disc stream / saved checkpoint (no storage read-back)") : "storage read-back");
     status |= report_printf(hnd, "catalog %s\n", summary->catalog);
     status |= report_printf(hnd, "sector_scan %s\n", summary->sector_scan ? "enabled" : "NOT_RUN");
     if (!summary->streaming) {
@@ -554,8 +545,16 @@ static int write_report(const char *folder, const char *database_path,
     if (summary->catalog_result == GD_VERIFY_NO_MATCH) {
         status |= report_printf(hnd, "note No match is inconclusive: revision, catalog coverage, track boundaries, or read errors. Whole-track CRC cannot locate bad sectors. Use the sector scan or compare independent dumps.\n");
     }
-	status |= report_printf(hnd, "bad_sectors %lu\n",
-		(unsigned long)summary->bad_sector_count);
+    if (summary->recovery_counts_valid) {
+        status |= report_printf(hnd, "bad_sectors %lu\nrecovery_flagged %lu\nrecovery_recovered %lu\nrecovery_remaining %lu\nrecovery_pending %u\n",
+            (unsigned long)summary->bad_sector_count, (unsigned long)summary->recovery_flagged,
+            (unsigned long)summary->recovery_recovered, (unsigned long)summary->bad_sector_count,
+            summary->recovery_pending ? 1 : 0);
+        if (summary->recovery_flagged)
+            status |= report_printf(hnd, "note Recovery counts validate saved target sectors and audio confirmations; the original queue is retained until finalization.\n");
+    } else {
+        status |= report_printf(hnd, "recovery_counts UNAVAILABLE\n");
+    }
 	status |= report_printf(hnd, "database %s\n", database_path);
 	if (summary->game_name[0]) {
 		status |= report_printf(hnd, "game %s\n", summary->game_name);
@@ -609,9 +608,15 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
 		return summary->result;
 	}
 	summary->track_count = track_count;
-	summary->bad_sector_count = count_bad_sectors(folder, tracks, track_count);
+    if (count_bad_sectors(folder, tracks, track_count, active, summary) != CMD_OK) {
+        summary->result = *active ? GD_VERIFY_ERROR : GD_VERIFY_CANCELLED;
+        if (*active) summary->report_written = write_report(folder, database_path,
+            tracks, summary, sync_report) == CMD_OK;
+        free(tracks);
+        return summary->result;
+    }
 	summary->clean = completion_marker_is_valid(folder, total_sectors) &&
-		summary->bad_sector_count == 0;
+		summary->bad_sector_count == 0 && !summary->recovery_pending;
 
 	for (uint32_t index = 0; index < track_count; index++) {
 		char path[NAME_MAX];

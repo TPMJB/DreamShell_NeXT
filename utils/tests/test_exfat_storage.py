@@ -47,6 +47,11 @@ class ExfatStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             volume = Path(tmp) / 'volume.img'
             size = 6*1024**3 if large else 512*1024**2 if cluster > 131072 else 128*1024**2
+            if kind == 64:
+                # R0.16 patch 2 requires at least 256 data clusters. Keep the
+                # maximum-cluster DMA test valid, allowing room for metadata.
+                # truncate creates a sparse image rather than allocating GiBs.
+                size = max(size, 256 * cluster + 32 * 1024**2)
             with volume.open('wb') as f:
                 f.truncate(size)
             if kind == 64:

@@ -1,4 +1,9 @@
-# Upstream review for NeXT 1.0.0
+# Upstream review history carried into NeXT 1.0
+
+The entries below record the September 13 integration decisions. NeXT 0.9.1
+also added ChaN's official FatFs R0.16 patches 1 and 2 to the shared vendored
+engine; 1.0 retains those changes. See [the FatFs provenance](../lib/fatfs/README.md).
+This is not a claim to have merged or reviewed every later upstream commit.
 
 Reviewed DC-SWAT/DreamShell through `05b9ccbd6db97c253231f9cdb99be749db31f3b9`
 on 2026-09-13. The shared upstream base is

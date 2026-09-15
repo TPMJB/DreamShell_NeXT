@@ -97,7 +97,7 @@ void RefreshList(void) {
     i = self.focused_index - self.first_visible;
     Place((Drawable *)self.selection, LIST_X, LIST_Y + i * ROW_H + ROW_H - 2, 70, visible);
     Place((Drawable *)self.selection_edge, LIST_X, LIST_Y + i * ROW_H + ROW_H - 6, 71, visible);
-    snprintf(count, sizeof(count), "%d / %d apps", self.focused_index < 0 ? 0 : self.focused_index + 1, self.item_count);
+    snprintf(count, sizeof(count), "%d / %d", self.focused_index < 0 ? 0 : self.focused_index + 1, self.item_count);
     if(self.counter_label) TSU_LabelSetText(self.counter_label, count);
 }
 

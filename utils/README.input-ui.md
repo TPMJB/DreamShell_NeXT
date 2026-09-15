@@ -1,21 +1,9 @@
 # DreamShell NeXT keyboard and directory picker
 
-This build combines the exFAT storage support, launcher 2.0.2 layout fixes,
-GD Ripper's read-back diagnostics, and GD Ripper 2.2.0's directory picker.
-The diagnostic instrumentation remains enabled; an intermittent CRC/read-back
-fault has not been conclusively explained by the successful reruns.
-
-## Install
-
-Finish or Stop any current rip and wait for the worker to return to idle.
-Power down before moving the card to your computer.
-Merge the update ZIP's `DS` folder onto your existing `DS` folder, replacing
-matching files, then safely eject. Keep a copy of your previous DS files.
-
-This update replaces `DS_CORE.BIN`, `modules/vkb.klf`, and both the GD Ripper and
-launcher app folders. Copy the whole update together: the keyboard needs the
-new core's input dispatch and font support. Your current exFAT-capable boot
-CD/bootloader can continue loading the new core from SD; no new disc is needed.
+The complete NeXT 1.0 installation includes the QWERTY keyboard and modal input
+handling, plus GD Ripper 2.2.2's directory picker and Games destinations. Follow
+the [installation guide](../docs/installation.md) and copy the full DS folder
+so the core, keyboard module and apps match.
 
 ## Keyboard
 
@@ -53,11 +41,9 @@ root. The current path and page count appear above/below the list.
 own folder, initially named from the inserted disc. To resume or scan a saved
 rip, open the directory containing its `rip.state`, then choose **Select this
 dump**. Both the parent path and name are filled in for you. Cancel leaves your
-previous selection unchanged. This picker only selects existing directories;
-new dump directories are created when you Start.
-
-No disc reads, repair passes, CRC definitions, or exFAT allocation rules are
-changed by this UI update.
+previous selection unchanged. The device buttons open or create their Games
+folder. Other browsing selects existing directories; the new disc-title folder
+is created when you Start.
 
 ## Bounded FAT32 regression check
 

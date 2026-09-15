@@ -171,7 +171,18 @@ $(DS_BUILD)/sfx/%.wav: $(DS_RES)/sfx/%.wav
 	@mkdir -p $(DS_BUILD)/sfx
 	@$(KOS_BASE)/utils/wav2adpcm/wav2adpcm -t $< $@ 2>/dev/null
 
-make-build: $(DS_BUILD)/lua/startup.lua
+.PHONY: next-provenance
+next-provenance:
+	@$(PYTHON) utils/build_provenance.py
+
+# Generate the inert build record before KOS turns the ROM disk into an object.
+romdisk.img: next-provenance
+
+make-build: $(DS_BUILD)/lua/startup.lua next-provenance
+	@mkdir -p $(DS_BUILD)/doc
+	@cp LICENSE NOTICE $(DS_BUILD)/doc
+	@cp $(DS_RES)/doc/about.txt $(DS_BUILD)/doc/about.txt
+	@cp $(KOS_ROMDISK_DIR)/next-build.json $(DS_BUILD)/doc/next-build.json
 
 $(DS_BUILD)/lua/startup.lua: $(DS_RES)/lua/startup.lua $(SFX_TARGETS)
 	@echo Creating build directory...
@@ -182,7 +193,6 @@ $(DS_BUILD)/lua/startup.lua: $(DS_RES)/lua/startup.lua $(SFX_TARGETS)
 	@mkdir -p $(DS_BUILD)/screenshot
 	@mkdir -p $(DS_BUILD)/vmu
 	@cp -R $(DS_RES)/doc $(DS_BUILD)
-	@cp LICENSE NOTICE $(DS_BUILD)/doc
 	@cp -R $(DS_RES)/firmware $(DS_BUILD)
 	@rm -rf $(DS_BUILD)/firmware/bios/ds/patches
 	@mkdir -p $(DS_BUILD)/firmware/eeprom

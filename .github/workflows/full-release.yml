@@ -1,13 +1,16 @@
 name: Full NeXT release
 
 on:
-  push:
-    branches:
-      - codex/release-1.0
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a GitHub release
+        type: boolean
+        required: true
+        default: false
 
 concurrency:
-  group: dreamshell-next-release
+  group: dreamshell-next-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -16,7 +19,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and publish full release
+    name: Build complete NeXT package
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     permissions:
@@ -27,6 +30,25 @@ jobs:
       REQUIRE_EXFAT_TESTS: "1"
 
     steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Read release version
+        id: release
+        env:
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$PUBLISH_RELEASE" == true ]]; then
+            test "$GITHUB_REF" = refs/heads/master || { echo 'Publish from the reviewed master branch.'; exit 1; }
+            existing="$(git ls-remote --tags origin "refs/tags/${version}")"
+            test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
+          fi
+
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
@@ -43,7 +65,7 @@ jobs:
             build-essential diffutils curl python3 rake zlib1g-dev exfatprogs dosfstools \
             genisoimage squashfs-tools texinfo git zip \
             libgmp-dev libmpfr-dev libmpc-dev libelf-dev libisofs-dev \
-            libpng-dev libjpeg-dev liblzo2-dev liblua5.2-dev lua5.2
+            libpng-dev libjpeg-dev liblzo2-dev liblua5.2-dev lua5.2 python3-pil
 
       - name: Install tolua
         run: |
@@ -52,12 +74,13 @@ jobs:
           make -C /tmp/tolua/build -j"$(nproc)"
           sudo make -C /tmp/tolua/build install
 
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
       - name: Test storage interoperability and GD Ripper
         run: python3 -m unittest discover -s utils/tests -v
+
+      - name: Check TV-safe app previews
+        run: |
+          python3 utils/preview_maintenance_apps.py /tmp/maintenance-preview
+          python3 utils/preview_utility_apps.py /tmp/utility-preview
 
       - name: Prepare directories
         run: |
@@ -98,14 +121,24 @@ jobs:
       - name: Verify toolchain
         run: test -x /opt/toolchains/dc/sh-elf/bin/sh-elf-gcc
 
-      - name: Check integrated apps and boot code
+      - name: Check utility apps SH-4 compilation
         run: |
           source /usr/local/dc/kos/kos/environ.sh
-          make -C modules/vkb module.o vkb.o exports.o
+          make -C applications/settings/modules module.o exports.o
+          make -C applications/gdplay/modules module.o exec.o exports.o
+          make -C applications/filemanager/modules module.o exports.o
+          make -C applications/bios_flasher/modules module.o exports.o
+          make -C applications/region_changer/modules module.o exports.o
           make -C applications/speedtest/modules module.o exports.o
-          make src/sfx.o src/video.o
+          make -C applications/memtest/modules module.o exports.o
+          make -C applications/network/modules module.o exports.o
           make -C applications/gd_ripper/modules module.o exports.o
-          make -C applications/launch_app/modules module.o items.o scene.o manage.o exports.o
+          make -C applications/vmu_manager/modules module.o exports.o
+          make -C applications/iso_loader/modules module.o utils.o exports.o
+          make -C applications/games_menu/modules module.o utils.o menu.o system_menu.o preset.o exports.o
+          make -C applications/launch_app/modules module.o items.o scene.o manage.o music.o exports.o
+          make -C modules/isoldr module.o preset.o elf.o exports.o
+          make -C modules/isofs gdi.o
 
       - name: Check ISO Loader SH-4 builds
         run: bash .github/scripts/dev-build.sh loaders
@@ -130,29 +163,51 @@ jobs:
           path: /usr/local/dc/kos/kos-ports
           key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
 
-      - name: Build DreamShell release
+      - name: Build complete DreamShell bundle
         run: bash .github/scripts/dev-build.sh release
 
-      - name: Validate and seal the full release
-        run: python3 utils/package_release.py
+      - name: Validate and seal complete build
+        run: |
+          python3 utils/package_release.py
+          python3 - <<'PY_BUILD'
+          from pathlib import Path
+          from zipfile import ZipFile
+          version = Path('VERSION').read_text().strip()
+          with ZipFile(f'DreamShell-NeXT-v{version}.zip') as package:
+              assert package.testzip() is None
+              package.extractall('full-build')
+          PY_BUILD
 
-      - name: Publish versioned full release
+      - name: Validate launcher runtime imports
+        run: |
+          source /usr/local/dc/kos/kos/environ.sh
+          python3 utils/package_menu_music.py check-imports "$KOS_BASE" "$KOS_CC_BASE/bin/sh-elf-nm"
+
+      - name: Upload complete build contents
+        uses: actions/upload-artifact@v4
+        with:
+          name: DreamShell-NeXT-v${{ steps.release.outputs.version }}
+          path: full-build/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish versioned GitHub release
+        if: ${{ inputs.publish_release }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           version="$(cat VERSION)"
-          tag="v${version}"
-          # A stable release is immutable. Never delete/move an existing tag.
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
-            echo "Release tag ${tag} already exists; refusing to overwrite it."
-            exit 1
-          fi
           current="$(git ls-remote origin "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
-          test "$current" = "$GITHUB_SHA" || { echo 'A newer source commit is waiting; do not publish this build.'; exit 1; }
+          test "$current" = "$GITHUB_SHA" || { echo 'Source branch changed during the build; refusing to publish stale files.'; exit 1; }
+          existing="$(git ls-remote --tags origin "refs/tags/${version}")"
+          test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
           cp RELEASE-NOTES.md /tmp/next-release-notes.md
-          printf '\nBuilt from [%s](%s/%s/commit/%s). [Successful build](%s/%s/actions/runs/%s).\n' \
+          printf '\nBuilt from [%s](%s/%s/commit/%s). [Build and test results](%s/%s/actions/runs/%s).\n' \
             "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/next-release-notes.md
-          gh release create "$tag" "DreamShell-NeXT-v${version}.zip" SHA256SUMS \
-            --title "DreamShell NeXT ${version} — by TPMJB" \
-            --latest --target "$GITHUB_SHA" --notes-file /tmp/next-release-notes.md
+          # Upload assets as a draft first; publish only once both uploads finish.
+          gh release create "$version" "DreamShell-NeXT-v${version}.zip" SHA256SUMS \
+            --draft --title "DreamShell NeXT ${version} — by TPMJB" \
+            --target "$GITHUB_SHA" --notes-file /tmp/next-release-notes.md
+          gh release edit "$version" --draft=false --latest
