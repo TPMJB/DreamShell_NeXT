@@ -1,22 +1,44 @@
-# DreamShell NeXT 0.9 — by TPMJB
+# DreamShell NeXT 0.9.1 — by TPMJB
+
+## Maintenance changes since 0.9
+
+- Apply ChaN's official FatFs R0.16 patches 1 and 2 to the shared engine.
+  This corrects small FAT volume handling, rejects invalid FAT/exFAT geometry,
+  and bounds reads of malformed exFAT volume labels.
+- Retain the NeXT storage adapter, write/flush error checks, and ISO Loader's
+  asynchronous read extension. This update does not add GPT or change supported
+  partition layouts.
+- Add behavioral regression cases for the patched mount, format and label APIs.
+
+**An existing NeXT 0.9 boot disc can load the updated DS folder; reburning is
+optional.** The rebuilt bootloader disc includes these fixes in its own storage
+reader too. Booting the complete distribution from CD requires burning the new
+complete CDI to update that CD's contents.
+
+To build and publish 0.9.1 yourself, open GitHub Actions → **Full NeXT release** →
+**Run workflow**, select **codex/maintenance-0.9.1**, then run it. The workflow
+builds and tests the complete distribution and publishes a new **0.9.1** release
+with its ZIP and checksums. It does not overwrite the existing 0.9 release.
+
+## Included 0.9 features
 
 This complete release collects the bootloader, launcher/music, ISO Loader/Games,
 VMU Manager and utility app work, plus the screen-edge and Region Changer fixes.
-The project build number is 0.9; the underlying core/API remains DreamShell
+The project build number is 0.9.1; the underlying core/API remains DreamShell
 4.0.5 Beta 3. Individual applications retain their own version numbers.
 
 ## Install
 
 1. Finish or stop any current operation and wait for idle. Power down before
    moving the SD/CF card to your computer.
-2. Extract **DreamShell-NeXT-v0.9.zip**. Copy the complete **DS** folder to the
+2. Extract **DreamShell-NeXT-v0.9.1.zip**. Copy the complete **DS** folder to the
    device root, replacing matching files. Preserve your existing configuration,
    custom music, game dumps and other personal files; keep the previous DS folder
    as a backup. Safely unmount the device.
 3. Boot normally. A working NeXT exFAT bootloader 3.0 CD can load the new core.
    The included bootloader CD adds the newer boot menu and recovery controls.
 
-The ZIP contains both the bootloader CDI and **DreamShell-NeXT-v0.9.cdi**, the
+The ZIP contains both the bootloader CDI and **DreamShell-NeXT-v0.9.1.cdi**, the
 complete CD distribution. Burn CDI files as disc images. No BIOS flashing is
 required to install this build. `host-tools/` stays on your computer.
 Use `DS_CORE.BIN` on a console; DEBUG/EMU variants are included for diagnostics.
