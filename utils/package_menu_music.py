@@ -13,8 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def check_imports(module, kos, nm):
     allowed = set()
+    # KOS builds kernel, architecture and selected subarchitecture tables.
+    # Retail Dreamcast drive APIs live in exports-pristine.txt.
+    subarch = os.environ.get('KOS_SUBARCH', 'pristine')
     for file in [ROOT/'exports.txt', ROOT/'exports_gcc.txt',
-                 kos/'kernel/exports.txt',kos/'kernel/arch/dreamcast/exports.txt']:
+                 kos/'kernel/exports.txt',kos/'kernel/arch/dreamcast/exports.txt',
+                 kos/f'kernel/arch/dreamcast/exports-{subarch}.txt']:
         for line in file.read_text().splitlines():
             line = line.split('#',1)[0].strip()
             if line and not line.startswith('include '):
