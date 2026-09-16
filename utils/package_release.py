@@ -13,6 +13,7 @@ import wave
 from generate_menu_music import TRACKS
 from zipfile import ZipFile, ZIP_DEFLATED
 from package_boot_branding import VERSION as BOOT_VERSION, verify_cdi
+from boot_disc import verify_boot_payload
 from build_provenance import validate_archive
 from release_docs import GUIDES, render_guide
 
@@ -53,6 +54,10 @@ def main():
             raise ValueError(f'Incomplete full release: {sorted(missing)}')
         info['provenance'] = validate_archive(source, ROOT, commit, version)
         verify_cdi(source.read(f'K-UI_bootloader_v{BOOT_VERSION}.cdi'))
+        verify_boot_payload(source.read(f'K-UI_bootloader_v{BOOT_VERSION}.cdi'),
+                            '1DS_BOOT.BIN', (ROOT/'firmware/bootloader/bootloader.bin').read_bytes())
+        verify_boot_payload(source.read(f'K-UI-v{version}.cdi'),
+                            '1DS_CORE.BIN', source.read('DS/DS_CORE.BIN'))
         for path in names:
             if path.startswith('/') or '..' in Path(path).parts:
                 raise ValueError(f'Unsafe archive path: {path}')

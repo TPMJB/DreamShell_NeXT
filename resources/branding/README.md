@@ -3,6 +3,8 @@
 Approved K-UI (Katana User Interface) identity, created with image-generation
 assistance for TPMJB: chrome lettering, a woman's profile with VR visor, dark
 navy, electric cyan and magenta. The PNGs here are the source artwork.
+The small boot-disc badge instead uses `resources/boot-disc-badge.svg`: vector
+outlines and native-size text keep `github.com/TPMJB` readable at 320x90.
 
 `utils/build_kui_artwork.py --makeip PATH --kmgenc PATH` performs the hardware
 format conversion using Pillow, CairoSVG and the KallistiOS host encoders.

@@ -6,7 +6,6 @@ apply the committed badge to a copy of IP.BIN. The tracked bootstrap is unchange
 MR format: https://github.com/KallistiOS/KallistiOS/tree/master/utils/makeip
 """
 import argparse
-import base64
 import io
 from pathlib import Path
 import struct
@@ -28,6 +27,29 @@ def validate_badge(data):
         raise ValueError('Unsupported MR dimensions or palette')
     if offset != 30 + 4 * colors or offset >= size:
         raise ValueError('Invalid MR palette offset')
+    cursor, pixels = offset, 0
+    while cursor < size:
+        tag = data[cursor]
+        cursor += 1
+        if tag < 128:
+            run, color = 1, tag
+        else:
+            if cursor >= size:
+                raise ValueError('Truncated MR run')
+            if tag == 0x81 or (tag == 0x82 and data[cursor] >= 128):
+                run = data[cursor] if tag == 0x81 else 256 + (data[cursor] & 127)
+                cursor += 1
+                if cursor >= size:
+                    raise ValueError('Truncated MR run color')
+            else:
+                run = tag & 127
+            color = data[cursor]
+            cursor += 1
+        pixels += run
+        if not run or color >= colors or pixels > width * height:
+            raise ValueError('MR pixels exceed their palette or image bounds')
+    if pixels != width * height:
+        raise ValueError('MR image does not contain every pixel')
 
 
 def inject_badge(bootstrap, badge):
@@ -66,17 +88,14 @@ def main():
     from PIL import Image
 
     art = ROOT / 'resources/boot-disc-badge.svg'
-    svg = art.read_bytes().replace(b'branding/k-ui-badge.png',
-        b'data:image/png;base64,' + base64.b64encode(
-            (ROOT/'resources/branding/k-ui-badge.png').read_bytes()))
-    rendered = cairosvg.svg2png(bytestring=svg)
+    rendered = cairosvg.svg2png(url=str(art))
     image = Image.open(io.BytesIO(rendered)).convert('RGB')
     assert image.size == (320, 90)
     # A compact palette and no dithering keep the MR within its 8 KiB budget.
-    indexed = image.quantize(colors=8, method=Image.Quantize.MEDIANCUT,
+    indexed = image.quantize(colors=32, method=Image.Quantize.MEDIANCUT,
                              dither=Image.Dither.NONE)
     palette = indexed.getpalette()
-    transparent = next(i for i in range(8) if palette[3*i:3*i+3] == [192, 192, 192])
+    transparent = next(i for i in range(32) if palette[3*i:3*i+3] == [192, 192, 192])
     with tempfile.TemporaryDirectory() as temp:
         png = Path(temp) / 'badge.png'
         mr = Path(temp) / 'badge.mr'

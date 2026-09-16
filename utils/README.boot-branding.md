@@ -1,9 +1,12 @@
 # K-UI — bootloader 3.3
 
 This boot disc adds checked core loading, an immediate recovery menu, and
-settings you can edit on SD. The corner badge on the SEGA startup screen now shows the K-UI visor portrait,
-wordmark and TPMJB credit. The core splash uses the matching full artwork.
-The new 3.3 CDI retains the tested 3.2 recovery menu and font fix.
+settings you can edit on SD. The corner badge on the SEGA startup screen uses
+native-size vector artwork with a visor profile, large K-UI lettering and
+`github.com/TPMJB`. The core splash uses the matching full artwork.
+The new 3.3 CDI retains the tested 3.2 recovery menu and font fix. A maintainer
+reported a freeze at the SEGA screen on the first K-UI disc. This remains an
+open hardware issue; the sharper badge is not a confirmed fix for that freeze.
 
 ## Install
 
@@ -117,10 +120,12 @@ python3 utils/build_boot_disc_branding.py --makeip /path/to/kos/utils/makeip/mak
 ```
 
 This host step requires CairoSVG and Pillow. It uses KallistiOS's `makeip`
-encoder, enforces the MR image size limit, and replaces only the old logo
-region of the existing `resources/IP.BIN`. Normal builds use the committed
+encoder, validates every decoded MR pixel, enforces the image size limit, and
+replaces only the logo region in a build copy of `resources/IP.BIN`. Normal builds use the committed
 assets and do not need an image renderer. The package check reads the logo
 back from the generated CDI and verifies the surrounding bootstrap bytes.
+The complete packager also follows the ISO9660 boot-file entry in each CDI,
+descrambles its contents and compares it with the compiled executable.
 
 Branding and NeXT enhancements: **TPMJB**, https://github.com/TPMJB.
 Built on SWAT's DreamShell, KallistiOS, FatFs, and their contributors' work.
