@@ -16,13 +16,16 @@ The older tag `v1.0.0` is a historical development milestone preceding 0.9 and
 
 ## Release gates
 
-- [x] Run the full host suite on the integrated source, including Linux exFAT
-  checks: 167 tests passed on 2026-09-15. Local LeakSanitizer detection was
-  disabled for the host environment; CI uses the test defaults.
+- [x] Run the full host suite on the bootloader 3.2 source: all 167 tests passed
+  on 2026-09-16, including Linux FAT32/exFAT, font upload, geometry and recovery
+  checks. CI uses the sanitizer defaults; local LeakSanitizer detection is
+  disabled for the host environment.
 - [ ] Run **Full NeXT release** from `master` with publication disabled; retain
   the successful run URL and exact source commit.
 - [ ] Confirm complete SH-4 build, runtime imports, package contents, attribution
   records, and both CDI checks pass in that run.
+- [ ] Boot the 3.2 CD with no SD: check readable NeXT recovery text, insert SD,
+  press X, then A to boot; also check Start-held recovery and a failed core load.
 - [ ] On the candidate, check Settings save/reboot, GD Play disc changes/exit,
   ISO Loader navigation and launching a known-working game from Games.
 - [ ] Check rip destination discovery, recovery counts across reopen, a file copy

@@ -9,7 +9,7 @@ versioned GitHub release is published. Use the files and notes from the same bui
 | Item | Purpose |
 | --- | --- |
 | `DS/` | Complete installation for your SD or IDE/CF device. |
-| `DreamShell_bootloader_v3.1.cdi` | Boot CD that loads `DS` from storage. |
+| `DreamShell_bootloader_v3.2.cdi` | Boot CD that loads `DS` from storage. |
 | `DreamShell-NeXT-v1.0.cdi` | Full CD distribution for this prepared version. |
 | `boot.cfg.example` | Optional boot menu/device settings; copy to `DS/boot.cfg` only when wanted. |
 | `host-tools/` | Python verification and recovery tools for your computer. |
@@ -53,8 +53,12 @@ to make an incomplete dump appear complete.
 ## Do I need another CD?
 
 A working NeXT **3.0 or 3.1** boot disc can load the updated `DS` folder.
-Burning the included 3.1 disc is optional for those installations; it includes
+Burning the included 3.2 disc is optional for those installations; it includes
 the current boot reader fixes, recovery menu and TPMJB startup badge.
+The 3.2 disc fixes garbled recovery text and the old background when no core is
+found. Receiving that fix requires burning the new CDI; an SD update cannot
+change the code on an existing CD-R.
+
 An old bootloader that cannot read exFAT needs updating before it can boot an
 exFAT device. Updating `DS` cannot change that disc's filesystem reader or logo.
 

@@ -10,13 +10,9 @@
 #include <zlib/zlib.h>
 #include "boot.h"
 
-/* spiral.c */
-int spiral_init();
-void spiral_frame();
-
 /* menu.c */
 int menu_init();
-void menu_graphics_init();
+bool menu_graphics_init(void);
 void menu_update();
 void menu_frame();
 void menu_autoboot();
@@ -30,7 +26,6 @@ int DirExists(const char *dir);
 int flashrom_get_region_only();
 
 extern const char	title[];
-extern uint32 spiral_color;
 extern volatile int start_pressed;
 extern uint32 boot_detect_ms;
 

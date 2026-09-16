@@ -23,7 +23,7 @@ static int executions, joins, detections;
 static void *(*thread_fn)(void *);
 static void *thread_arg;
 static kthread_t fake_thread;
-const char title[]="DreamShell NeXT boot v3.1";
+const char title[]="DreamShell NeXT boot v3.2";
 volatile int start_pressed;
 uint32 boot_detect_ms=17;
 
@@ -107,22 +107,85 @@ void *maple_dev_status(maple_device_t *device) { (void)device; return &input; }
 uint64 timer_ms_gettime64(void) { return clock_ms; }
 void arch_exec(const void *data,uint32 size) { assert(data && size); ++executions; }
 uint32 boot_detect_devices(bool rescan) { assert(rescan); ++detections; return 23; }
+static void *texture_memory;
+static bool texture_failure;
+static unsigned glyph_count, texture_uploads;
+static int textured;
+static FILE *frame_trace;
 void pvr_poly_cxt_txr(pvr_poly_cxt_t *a,int b,int c,int d,int e,void *f,int g) {
-    a->unused=0;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g;
+    assert(c==(PVR_TXRFMT_ARGB1555|PVR_TXRFMT_NONTWIDDLED));
+    assert(d==256 && e==256 && f==texture_memory && g==PVR_FILTER_BILINEAR);
+    a->unused=1;(void)b;
 }
 void pvr_poly_cxt_col(pvr_poly_cxt_t *a,int b) { a->unused=0;(void)b; }
 void pvr_poly_compile(pvr_poly_hdr_t *a,pvr_poly_cxt_t *b) { a->unused=b->unused; }
 void pvr_prim(const void *p,size_t size) {
+    if(size==sizeof(pvr_poly_hdr_t)) textured=((const pvr_poly_hdr_t *)p)->unused;
     if(size==sizeof(pvr_vertex_t)) {
         const pvr_vertex_t *v=p;
         assert(isfinite(v->x) && isfinite(v->y));
-        assert(v->x>=0 && v->x<=640 && v->y>=0 && v->y<=480);
+        assert(v->x>=24 && v->x<=616 && v->y>=24 && v->y<=456);
+        assert((v->argb>>24)==255); /* No legacy background can bleed through. */
+        static pvr_vertex_t quad[4];
+        static unsigned index;
+        assert(index<4); quad[index++]=*v;
+        if(v->flags==PVR_CMD_VERTEX_EOL) {
+            assert(index==4);
+            if(frame_trace) {
+                unsigned c=textured ? (unsigned)lroundf(quad[1].u*256/16)+
+                    16*(unsigned)lroundf(quad[1].v*256/32) : 0;
+                fprintf(frame_trace,"%c,%u,%.3f,%.3f,%.3f,%.3f,%08x\n",
+                    textured ? 'G' : 'B',c,quad[1].x,quad[1].y,
+                    quad[2].x-quad[1].x,quad[0].y-quad[1].y,quad[1].argb);
+            }
+            index=0;
+        }
     }
 }
-pvr_ptr_t pvr_mem_malloc(size_t size) { return malloc(size); }
-void bfont_draw(void *a,int b,int c,int d) { (void)a;(void)b;(void)c;(void)d; }
+pvr_ptr_t pvr_mem_malloc(size_t size) {
+    assert(size==256*256*2);
+    if(texture_failure) return NULL;
+    texture_memory=malloc(size); memset(texture_memory,0xcc,size);
+    return texture_memory;
+}
+size_t bfont_draw_ex(void *buffer,uint32 width,uint32 fg,uint32 bg,uint8 bpp,
+                     bool opaque,uint32 c,bool wide,bool kana) {
+    assert((uintptr_t)buffer<(uintptr_t)texture_memory ||
+           (uintptr_t)buffer>=(uintptr_t)texture_memory+256*256*2);
+    assert(width==256 && fg==0xffff && bg==0 && bpp==16 && opaque && !wide && !kana);
+    assert(c>=32 && c<127);
+    uint16 *pixels=buffer;
+    /* Asymmetric pixels catch lost halfwords and incorrect row/glyph stride. */
+    for(unsigned y=0;y<24;++y) for(unsigned x=0;x<12;++x)
+        pixels[y*width+x]=(x+y+c)%3 ? fg : bg;
+    ++glyph_count;
+    return 24;
+}
+void pvr_txr_load(const void *source,pvr_ptr_t dest,size_t size) {
+    assert(dest==texture_memory && source!=dest && (uintptr_t)source%32==0);
+    assert(size==256*256*2 && glyph_count==95);
+    const uint16 *atlas=source;
+    for(unsigned y=0;y<256;++y) for(unsigned x=0;x<256;++x) {
+        unsigned c=(y/32)*16+x/16;
+        uint16 expected=c>=32 && c<127 && x%16<12 && y%32<24 && (x%16+y%32+c)%3 ? 0xffff : 0;
+        assert(atlas[y*256+x]==expected);
+    }
+    memcpy(dest,source,size); ++texture_uploads;
+}
 
+#define aligned_alloc boot_test_alloc
 #include "../../firmware/bootloader/src/menu.c"
+#undef aligned_alloc
+
+static void capture_frame(const char *name) {
+    const char *directory=getenv("BOOT_PREVIEW_DIR");
+    if(directory) {
+        char path[2048]; snprintf(path,sizeof(path),"%s/%s.csv",directory,name);
+        frame_trace=fopen(path,"w"); assert(frame_trace);
+    }
+    menu_frame();
+    if(frame_trace) { fclose(frame_trace); frame_trace=NULL; }
+}
 
 static void reset_faults(void) {
     assert(open_count==close_count);
@@ -229,6 +292,7 @@ static void add_map(const char *path,const char *file) {
 static void ui_reset(void) {
     assert(!worker && !thread_fn);
     free(txr_font); txr_font=NULL;
+    texture_memory=NULL; texture_failure=false; glyph_count=texture_uploads=0;
     reset_faults(); map_count=0; device_count=0; input.buttons=last_buttons=0;
     start_pressed=0; executions=joins=detections=0; clock_ms=1000;
     memset(&job,0,sizeof(job));
@@ -243,6 +307,13 @@ static void run_worker(void) {
     thread_fn=NULL; fn(arg);
 }
 static void ui_tests(void) {
+    ui_reset(); no_memory=true;
+    /* The menu must report allocation failure so main can show a text fallback. */
+    fail_allocation=0; allocation_count=0;
+    assert(!menu_graphics_init() && !txr_font && !texture_uploads);
+    ui_reset(); texture_failure=true;
+    assert(!menu_graphics_init() && !txr_font && !texture_uploads);
+
     ui_reset(); devices[device_count++]="sd";
     add_map("/sd/DS/DS_CORE.BIN","raw.bin");
     menu_init(); menu_autoboot(); assert(executions==1 && !worker);
@@ -263,7 +334,7 @@ static void ui_tests(void) {
     add_map("/sd/DS/DS_CORE.BIN","raw.bin");
     menu_init(); read_limit=37; menu_autoboot(); menu_graphics_init();
     assert(!executions && !countdown.armed && strstr(job.message,"incomplete"));
-    assert(job.count==37); menu_frame(); clock_ms+=60000; menu_update(); assert(!worker);
+    assert(job.count==37); capture_frame("read-error"); clock_ms+=60000; menu_update(); assert(!worker);
     reset_faults();
     press(CONT_A); assert(worker); press(CONT_B); run_worker(); menu_update();
     assert(!executions && job.image.error==BOOT_CANCELLED);
@@ -280,10 +351,13 @@ static void ui_tests(void) {
     press(CONT_A); run_worker(); menu_update(); assert(executions==1);
 
     ui_reset(); menu_init(); menu_graphics_init();
+    assert(texture_uploads==1);
+    capture_frame("no-storage");
     press(CONT_A); menu_frame(); assert(!worker && !executions);
     devices[device_count++]="sd"; add_map("/sd/DS/DS_CORE.BIN","raw.bin");
     press(CONT_X); assert(worker); run_worker(); menu_update();
     assert(inventory.count==1 && !countdown.armed && detections==1);
+    capture_frame("storage-found");
     press(CONT_A); run_worker(); menu_update(); assert(executions==1);
 
     ui_reset(); devices[device_count++]="ide"; devices[device_count++]="sd";

@@ -62,23 +62,29 @@ int show_message(const char *fmt, ...) {
     return result;
 }
 
-void menu_graphics_init(void) {
-    txr_font=pvr_mem_malloc(256*256*2);
-    if(!txr_font) return;
-    uint16 *vram=(uint16 *)txr_font;
-    memset(vram,0,256*256*2);
-    for(int y=0; y<8; ++y) {
-        for(int x=0; x<16; ++x) {
-            bfont_draw(vram,256,0,y*16+x);
-            vram+=16;
-        }
-        vram+=23*256;
-    }
+bool menu_graphics_init(void) {
+    /* BIOS font rendering writes individual 16-bit pixels. Build in system
+     * RAM, then upload through KOS: direct halfword stores to texture VRAM
+     * can corrupt adjacent pixels on real hardware. Explicit ARGB1555 colors
+     * and depth also keep the atlas independent of framebuffer settings. */
+    const size_t bytes=256*256*sizeof(uint16);
+    uint16 *atlas=aligned_alloc(32,bytes);
+    if(!atlas) return false;
+    txr_font=pvr_mem_malloc(bytes);
+    if(!txr_font) { free(atlas); return false; }
+    memset(atlas,0,bytes);
+    /* Four transparent columns and eight rows prevent filtered glyph bleed. */
+    for(unsigned c=32; c<127; ++c)
+        bfont_draw_ex(atlas+(c/16)*32*256+(c%16)*16,256,
+                      0xffff,0,16,true,c,false,false);
+    pvr_txr_load(atlas,txr_font,bytes);
+    free(atlas);
     last_buttons=buttons();
     if(last_buttons) countdown.armed=false;
+    return true;
 }
 
-/* Draw one font character (6x12) */
+/* Draw one BIOS glyph (12x24 before scaling). */
 static void draw_char(float x1, float y1, float z1, float a, float r,
 	float g, float b, int c, float scale) {
 	pvr_vertex_t	vert;
@@ -91,7 +97,7 @@ static void draw_char(float x1, float y1, float z1, float a, float r,
 	if(c > ' ' && c < 127) {
 	
 		ix = (c % 16) * 16;
-		iy = (c / 16) * 24;
+		iy = (c / 16) * 32;
 		u1 = ix * 1.0f / 256.0f;
 		v1 = iy * 1.0f / 256.0f;
 		u2 = (ix+12) * 1.0f / 256.0f;
@@ -136,7 +142,7 @@ static void draw_string(float x, float y, float z, float a, float r, float g,
 	pvr_poly_hdr_t poly;
 
 	pvr_poly_cxt_txr(&cxt, PVR_LIST_TR_POLY, PVR_TXRFMT_ARGB1555 | PVR_TXRFMT_NONTWIDDLED,
-		256, 256, txr_font, PVR_FILTER_NONE);
+		256, 256, txr_font, PVR_FILTER_BILINEAR);
 	pvr_poly_compile(&poly, &cxt);
 	pvr_prim(&poly, sizeof(poly));
 
@@ -496,55 +502,67 @@ void menu_frame(void) {
     stage=job.stage; kind=job.kind;
     mutex_unlock(&job_mutex);
 
-    draw_box(20,18,600,444,100,0.97f,0.035f,0.075f,0.13f);
-    draw_box(20,18,600,3,100.5f,1,0.3f,0.9f,0.86f);
-    line(36,31,0.85f,0.9f,0.98f,1,title,56);
+    const float body=0.75f; /* Integer 9x18 glyphs, including on interlaced TV. */
+    draw_box(24,24,592,432,100,1,0.035f,0.075f,0.13f);
+    draw_box(24,24,592,3,100.5f,1,0.3f,0.9f,0.86f);
+    line(40,36,1,0.9f,0.98f,1,title,46);
+    line(40,67,body,0.6f,0.8f,0.85f,"TPMJB  /  github.com/TPMJB/DreamShell_NeXT",62);
     if(countdown.armed) {
         uint64_t now=timer_ms_gettime64();
         unsigned seconds=now<countdown.deadline ? (unsigned)((countdown.deadline-now+999)/1000) : 0;
         snprintf(info,sizeof(info),"Booting in %us - any button opens the menu",seconds);
-    } else snprintf(info,sizeof(info),"%d core%s available",inventory.count,inventory.count==1 ? "" : "s");
-    line(36,63,0.6f,0.6f,0.8f,0.85f,info,78);
+    } else if(!inventory.count) snprintf(info,sizeof(info),"Waiting for storage with DreamShell installed");
+    else snprintf(info,sizeof(info),"%d core%s available",inventory.count,inventory.count==1 ? "" : "s");
+    line(40,92,body,0.6f,0.8f,0.85f,info,62);
 
     int first=inventory.selected>=VISIBLE_ITEMS ? inventory.selected-VISIBLE_ITEMS+1 : 0;
-    draw_box(32,90,576,150,100.2f,1,0.055f,0.11f,0.18f);
-    if(!inventory.count) line(44,116,0.75f,0.8f,0.85f,0.9f,"No readable boot cores found",60);
+    draw_box(32,118,576,152,100.2f,1,0.055f,0.11f,0.18f);
+    if(!inventory.count) {
+        line(44,134,1,0.93f,0.97f,1,"Storage not ready",46);
+        line(44,173,body,0.8f,0.85f,0.9f,"Insert your SD card, then press X to rescan.",61);
+        line(44,197,body,0.8f,0.85f,0.9f,"It should contain DS/DS_CORE.BIN.",61);
+        line(44,224,body,0.65f,0.8f,0.85f,"IDE / CF: connect before power-on.",61);
+        line(44,246,body,0.65f,0.8f,0.85f,"No files are changed by this screen.",61);
+    }
     for(int n=0; n<VISIBLE_ITEMS && first+n<inventory.count; ++n) {
         int index=first+n;
-        float y=94+n*24;
+        float y=122+n*24;
         if(index==inventory.selected) draw_box(34,y,572,23,100.5f,1,0.13f,0.29f,0.36f);
-        line(44,y+2,0.75f,0.93f,0.97f,1,inventory.items[index].label,61);
+        line(44,y+2,body,0.93f,0.97f,1,inventory.items[index].label,61);
     }
     if(inventory.count>VISIBLE_ITEMS) {
         snprintf(info,sizeof(info),"%d / %d",inventory.selected+1,inventory.count);
-        line(532,246,0.5f,0.55f,0.8f,0.85f,info,12);
+        line(532,272,0.5f,0.55f,0.8f,0.85f,info,12);
     }
     const char *selected=inventory.count ? inventory.items[inventory.selected].path : "";
     const char *shown=worker && kind==JOB_LOAD ? path : selected;
-    line(36,264,0.5f,0.65f,0.9f,0.94f,shown,94);
-    if(strlen(shown)>94) line(36,280,0.5f,0.65f,0.9f,0.94f,shown+94,94);
-    if(strlen(shown)>188) line(36,296,0.5f,0.65f,0.9f,0.94f,shown+188,94);
+    line(40,286,0.5f,0.65f,0.9f,0.94f,shown,94);
+    if(strlen(shown)>94) line(40,300,0.5f,0.65f,0.9f,0.94f,shown+94,94);
+    if(strlen(shown)>188) line(40,314,0.5f,0.65f,0.9f,0.94f,shown+188,94);
 
     if(details) {
         snprintf(info,sizeof(info),"Detection %lu ms   Last load %lu ms",
                  (unsigned long)inventory.detect_ms,(unsigned long)load_ms);
-        line(36,314,0.5f,0.7f,0.8f,0.9f,info,94);
+        line(40,332,0.5f,0.7f,0.8f,0.9f,info,94);
         snprintf(info,sizeof(info),"Last read %lu / %lu bytes",(unsigned long)count,(unsigned long)total);
-        line(36,331,0.5f,0.7f,0.8f,0.9f,info,94);
-        line(36,348,0.5f,0.55f,0.75f,0.82f,
+        line(40,346,0.5f,0.7f,0.8f,0.9f,info,94);
+        line(40,360,0.5f,0.55f,0.75f,0.82f,
              *inventory.config_path ? inventory.config_path : "Default settings (no boot.cfg)",94);
     }
     if(worker && kind==JOB_LOAD)
         snprintf(status,sizeof(status),"%s  %lu / %lu KiB",
                  stage==BOOT_DECODING ? "Decoding" : "Reading",
                  (unsigned long)(count/1024),(unsigned long)(total/1024));
-    draw_box(32,362,576,40,100.2f,1,0.06f,0.13f,0.2f);
+    draw_box(32,380,576,36,100.2f,1,0.06f,0.13f,0.2f);
     if(total) {
         float width=576.0f*(float)count/(float)total;
         if(width>576) width=576;
-        draw_box(32,398,width,3,100.5f,1,0.3f,0.9f,0.86f);
+        draw_box(32,413,width,3,100.5f,1,0.3f,0.9f,0.86f);
     }
-    line(40,373,0.6f,0.95f,0.98f,1,status,78);
-    line(36,416,0.65f,0.8f,0.92f,0.95f,"A Boot / Retry    B Cancel    X Rescan",70);
-    line(36,440,0.55f,0.55f,0.75f,0.82f,"Up/Down Choose core    Y Details    Start Stay in menu",84);
+    line(40,389,body,0.95f,0.98f,1,status,62);
+    line(40,424,body,0.8f,0.92f,0.95f,
+         !inventory.count && !worker ? "X Rescan    Y Details" : "A Boot / Retry    B Cancel    X Rescan",62);
+    line(40,444,0.5f,0.55f,0.75f,0.82f,
+         !inventory.count ? "No automatic boot until a core is available." :
+         "Up/Down Choose core    Y Details    Start Stay in menu",94);
 }

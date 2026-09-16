@@ -81,6 +81,7 @@ jobs:
         run: |
           python3 utils/preview_maintenance_apps.py /tmp/maintenance-preview
           python3 utils/preview_utility_apps.py /tmp/utility-preview
+          python3 utils/preview_bootloader.py /tmp/bootloader-preview
 
       - name: Prepare directories
         run: |

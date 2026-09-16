@@ -39,7 +39,7 @@ These are layout previews from the released 0.9 source, with sample data.
   game and storage hardware.
 - **NeXT utilities:** File Manager, VMU Manager, GD Play, Settings, BIOS Flasher,
   Region Changer, Speedtest, Memtest and Network, plus the other standard apps.
-- **Bootloader 3.1 and launcher music:** checked core loading, recovery menu,
+- **Bootloader 3.2 and launcher music:** checked core loading, recovery menu,
   optional boot settings, TPMJB branding and the original *After Hours* loop.
 
 A working NeXT 3.0/3.1 boot disc can load the updated DS folder. The project

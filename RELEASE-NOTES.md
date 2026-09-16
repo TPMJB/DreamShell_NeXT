@@ -7,6 +7,11 @@ attribution and contribution-policy cleanup.
 
 ## Changes since 0.9.1
 
+- **Bootloader 3.2 recovery display:** fixes the font upload, removes the legacy
+  animated background, and adds a TV-safe NeXT missing-storage screen with SD
+  insertion/rescan instructions. Burn the updated bootloader CDI to receive
+  this fix; it cannot be installed by updating the SD card alone.
+
 - **Accurate recovery totals:** GD Ripper shows originally flagged, recovered
   and unresolved sectors across recovery sessions, Start / Resume and
   verification. Saved repairs remain counted after reopening. Invalid records
@@ -41,7 +46,7 @@ attribution and contribution-policy cleanup.
 | BIOS Flasher | 3.0.1 | Verified backups, full-bank bounds and post-write comparison. |
 | Region Changer | 2.0.1 | Physical flash reads, draft settings, checked backup/restore and write verification. |
 | Speedtest / Memtest / Network | 2.0.1 | Diagnostic options/reports and clearer connection/server controls. |
-| Bootloader | 3.1 | Checked loading, recovery menu, optional storage settings and TPMJB badge. |
+| Bootloader | 3.2 | Checked loading, recovery menu, optional storage settings and TPMJB badge. |
 | Standalone ISO Loader firmware | 0.9.2 | ELF payloads and retained WinCE SD DMA-address correction. |
 
 The complete standard app set remains installed, including utilities for other
@@ -61,7 +66,7 @@ startup chime and bounded drive handling are included.
    no dump conversion is needed.
 
 **You can keep a working NeXT 3.0 or 3.1 boot disc.** It can load the updated DS
-folder. Burning **DreamShell_bootloader_v3.1.cdi** is optional for those users
+folder. Burning **DreamShell_bootloader_v3.2.cdi** is optional for those users
 and updates the disc's own reader, recovery menu and branding. Older loaders
 without exFAT support need updating to boot an exFAT device.
 
