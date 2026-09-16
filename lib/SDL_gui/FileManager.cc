@@ -426,7 +426,10 @@ void GUI_FileManager::LoadScanEntries()
 	int count = 0;
 
 	strncpy(path, cur_path, NAME_MAX);
-	SetPendingScan(ReadDirEntries(path, &count), count);
+	path[NAME_MAX - 1] = '\0';
+	/* Argument evaluation order must not snapshot count before the read. */
+	dirent_t *entries = ReadDirEntries(path, &count);
+	SetPendingScan(entries, count);
 }
 
 void GUI_FileManager::ScanApply(dirent_t *entries, int count)

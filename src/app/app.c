@@ -272,6 +272,9 @@ App_t *AddApp(const char *fn) {
 		goto error;
 	}
 
+	/* Ignore the retired desktop left on SD by an older installation. */
+	if(!strcasecmp(name, "Main")) goto error;
+
 	if((at = GetAppByName(name)) != NULL) {
 		mxmlDelete(tree);
 		FreeApp(a);

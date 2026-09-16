@@ -26,7 +26,7 @@ static const char *shape_names[] = {"4:3 (640 x 480)","3:2 (720 x 480)","16:10 (
 static const int widths[] = {640,720,768,854};
 static const char *roots[] = {"","/sd/DS","/ide/DS","/pc","/cd"};
 static const char *scripts[] = {"/lua/startup.lua","/lua/custom.lua"};
-static const char *homes[] = {"Launch App","Main","Games Menu"};
+static const char *homes[] = {"Launch App","Games Menu"};
 static const char *onoff(int value) { return value ? "On" : "Off"; }
 static int dirty(void) { return memcmp(&self.draft, &self.saved, sizeof(Settings_t)) != 0; }
 static void status(const char *message) { GUI_LabelSetText(self.status, message); }
@@ -244,7 +244,7 @@ static void change(int row,int step) {
             if(self.app_count) cycle_string(self.draft.startup_app,sizeof(self.draft.startup_app),names,self.app_count,step);
         } else if(row==1) {
             dst=self.draft.main_app;
-            for(int i=0;i<3;i++) { cycle_string(dst,sizeof(self.draft.main_app),homes,3,step); if(GetAppByName(dst)) break; }
+            for(unsigned i=0;i<sizeof(homes)/sizeof(*homes);i++) { cycle_string(dst,sizeof(self.draft.main_app),homes,sizeof(homes)/sizeof(*homes),step); if(GetAppByName(dst)) break; }
         } else if(row==2) cycle_string(self.draft.root,sizeof(self.draft.root),roots,5,step);
         else cycle_string(self.draft.startup,sizeof(self.draft.startup),scripts,2,step);
     } else if(self.page==3) {
@@ -299,9 +299,7 @@ static void input(void *event,void *param,int action) {
     if(action!=EVENT_ACTION_UPDATE || !e || !self.app || !(self.app->state&APP_STATE_OPENED) || utility_global_input(e)) return;
     int key=utility_key(e);
     if(!(GUI_WidgetGetFlags(self.dialog)&WIDGET_HIDDEN)) {
-        if(key==UI_OK) SettingsApp_Confirm(NULL);
-        else if(key==UI_BACK) SettingsApp_Cancel(NULL);
-        else if(e->type==SDL_MOUSEMOTION || e->type==SDL_MOUSEBUTTONDOWN || e->type==SDL_MOUSEBUTTONUP) utility_forward(e);
+        utility_dialog(e,key);
         e->type=SDL_NOEVENT; return;
     }
     if(key==UI_UP || key==UI_DOWN) {
@@ -328,7 +326,7 @@ void SettingsApp_Init(App_t *app) {
     Item_t *item=listGetItemFirst(GetAppList());
     while(item && self.app_count<32) {
         App_t *a=item->data;
-        if(strcmp(a->name,"Settings")) snprintf(self.apps[self.app_count++],64,"%s",a->name);
+        if(strcmp(a->name,"Settings") && strcasecmp(a->name,"Main")) snprintf(self.apps[self.app_count++],64,"%s",a->name);
         item=listGetItemNext(item);
     }
     self.input=AddEvent("NextSettingsInput",EVENT_TYPE_INPUT,EVENT_PRIO_DEFAULT,input,NULL);

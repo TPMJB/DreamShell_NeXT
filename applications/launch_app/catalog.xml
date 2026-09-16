@@ -16,5 +16,4 @@
   <entry app="Cart Ripper" order="140" category="Hardware tools" description="Dump cartridge data using a compatible cartridge interface." />
   <entry app="Arcade" order="150" category="Arcade tools" description="Configure arcade hardware and supported arcade game setups." />
   <entry app="MIE JVS" order="160" category="Arcade tools" description="Configure the MIE JVS interface for supported arcade controls and hardware." />
-  <entry app="Main" title="Classic launcher" order="190" category="System" description="Open K-UI's classic desktop launcher." />
 </catalog>

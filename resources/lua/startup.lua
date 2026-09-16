@@ -132,7 +132,7 @@ local DreamShell = {
 		local list = {};
 
 		for ent in lfs.dir(path) do
-			if ent ~= nil and ent.name ~= ".." and ent.name ~= "." and ent.attr ~= 0 then
+			if ent ~= nil and ent.name ~= ".." and ent.name ~= "." and ent.name ~= "main" and ent.attr ~= 0 then
 				table.insert(list, ent.name);
 			end
 		end

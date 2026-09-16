@@ -1297,6 +1297,12 @@ static uint32_t poll_aux_buttons(void) {
     MAPLE_FOREACH_BEGIN(MAPLE_FUNC_CONTROLLER, cont_state_t, c)
         if(c) {
             btns |= c->buttons;
+            /* Auxiliary controller navigation; leave JVS calibration values
+             * untouched. Use the same dead zone as the native launcher. */
+            if(c->joyx < -64) btns |= CONT_DPAD_LEFT;
+            if(c->joyx > 64) btns |= CONT_DPAD_RIGHT;
+            if(c->joyy < -64) btns |= CONT_DPAD_UP;
+            if(c->joyy > 64) btns |= CONT_DPAD_DOWN;
         }
     MAPLE_FOREACH_END()
 

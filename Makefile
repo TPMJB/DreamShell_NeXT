@@ -179,6 +179,7 @@ next-provenance:
 romdisk.img: next-provenance
 
 make-build: $(DS_BUILD)/lua/startup.lua next-provenance
+	@rm -rf "$(DS_BUILD)/apps/main"
 	@mkdir -p $(DS_BUILD)/doc
 	@cp LICENSE NOTICE $(DS_BUILD)/doc
 	@cp $(DS_RES)/doc/about.txt $(DS_BUILD)/doc/about.txt

@@ -1,7 +1,11 @@
 # Bootloader disc checks — 2026-09-16
 
-The reported console freeze on the SEGA license screen remains unresolved.
-The maintainer identified the original K-UI bootloader CDI as the burned image,
+The maintainer's follow-up confirms that the `87c47a5` startup-fix disc reaches
+the connect-SD menu and boots K-UI after the SD card is connected. Keep that
+working disc for the application test batch; no replacement disc is needed.
+This confirms that boot path on the tested console, not all bootloader modes.
+
+Before this successful retest, the maintainer identified the original K-UI bootloader CDI as the burned image,
 then reported that the old bootloader disc also failed and that startup still
 hung with the SD card removed. In the follow-up comparison, the old disc still
 hung with the entire SD adapter disconnected; a known retail game disc worked.
@@ -28,8 +32,8 @@ The latest badge is 5,220 bytes; the logo allowance is 8,192 bytes.
 SH-4 disassembly of the latest CDI's descrambled executable confirms that the
 early hook writes the master-device register directly. It no longer calls the
 KOS ATA driver before BSS initialization. The full build and host CI for that
-commit both succeeded. This verifies inclusion of the fix, not its effectiveness
-against the console report.
+commit both succeeded. Those checks establish inclusion of the fix; the later
+console retest above supplies the recovery-menu and SD-boot result.
 
 ## Emulation result and limit
 
@@ -123,5 +127,6 @@ direct master-device register write in both bootloader and core. Its actual
 CDI was verified to contain that change. The explicitly named test download
 `K-UI_bootloader_v3.3_startup-fix_87c47a5.cdi` is a byte-for-byte copy of that
 build's CDI, with SHA-256 `d641b815efcac2fc1754aa0310bb539656bb2527535fcb2fc3f5126da6e73ef2`.
-It includes the sharper K-UI badge and GitHub credit. It is a test candidate;
-its effect on the reported console freeze remains unconfirmed.
+It includes the sharper K-UI badge and GitHub credit. The maintainer subsequently
+confirmed recovery-menu startup and SD boot with this disc. The precise reason
+the older builds exposed the unsafe early call is still not reproduced.

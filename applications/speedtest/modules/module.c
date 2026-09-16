@@ -15,7 +15,7 @@ static const char *modes[] = {"File write + verify", "Read an existing file", "R
 static struct {
     int mode, size, repeat, runs;
     char folder[MA_PATH], file[MA_PATH], reports[MA_PATH];
-    char report[12288], summary[180];
+    char report[12288], summary[180], mismatch[96];
     double read, write;
 } self;
 static void refresh(void) {
@@ -83,8 +83,10 @@ static int file_pass(uint8_t *buffer, uint64_t *written, uint64_t *readbytes,
         if(ok < 0) { ma_status("Read failed before the expected end of the file.", 1); goto cleanup; }
         if(owned) for(size_t i = 0; i < n; i++) if(buffer[i] != maintenance_pattern(pos + i)) {
             ma_status("DATA MISMATCH. Read-back verification failed.", 1);
-            ma_append(self.report, sizeof(self.report), "Mismatch at byte %lu: expected %02X, got %02X\n",
-                (unsigned long)(pos + i), maintenance_pattern(pos + i), buffer[i]); goto cleanup;
+            snprintf(self.mismatch, sizeof(self.mismatch), "Byte %lu: expected %02X, got %02X. Save report for details.",
+                (unsigned long)(pos + i), maintenance_pattern(pos + i), buffer[i]);
+            ma_append(self.report, sizeof(self.report), "%s\n", self.mismatch);
+            goto cleanup;
         }
         *readbytes += n; ma_progress((owned ? limit : 0) + pos + n, limit * (owned ? 2 : 1));
     }
@@ -135,6 +137,7 @@ static void run(void) {
     }
     uint8_t *buffer = memalign(32, TEST_BUFFER);
     if(!buffer) { ma_status("Cannot allocate the test buffer.", 1); return; }
+    self.mismatch[0] = '\0';
     ma_busy(1);
     uint64_t written = 0, readbytes = 0, write_ns = 0, read_ns = 0;
     uint64_t start = timer_ns_gettime64();
@@ -161,6 +164,7 @@ static void run(void) {
     if(*leftover) ma_append(self.report, sizeof(self.report), "REMOVE TEMP FILE: %s\n", leftover);
     if(!rc || rc == -2) ma_status(self.summary, rc != 0);
     if(*leftover) ma_note(leftover);
+    else if(*self.mismatch) ma_note(self.mismatch);
     else ma_note("MiB/s measures IO calls plus close. Caches stay enabled; compare the same mode.");
     if(!rc) ma_progress(1, 1);
     free(buffer); ma_busy(0); refresh();
@@ -173,7 +177,7 @@ static void save_report(void) {
 }
 static void confirm(int action) {
     if(action == 2) {
-        self.runs = 0; self.write = self.read = 0; self.summary[0] = 0;
+        self.runs = 0; self.write = self.read = 0; self.summary[0] = self.mismatch[0] = 0;
         snprintf(self.report, sizeof(self.report), "K-UI Speedtest\nIO timings include close/flush, exclude pattern and GUI work.\nCaches remain enabled. Repeated reads may be cached.\nFailed/stopped runs contain partial timings, not successful benchmark results.\n");
         refresh(); ma_status("Results cleared.", 0); ma_note("");
     }

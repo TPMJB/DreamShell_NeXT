@@ -107,7 +107,7 @@ void BuildAppList(void) {
     }
     for(node = apps ? listGetItemFirst(apps) : NULL; node; node = listGetItemNext(node)) {
         app = node->data;
-        if(!app || app->id == self.app->id) continue;
+        if(!app || app->id == self.app->id || !strcasecmp(app->name, "Main")) continue;
         item = NewItem();
         if(!item) break;
         item->type = LAUNCH_ITEM_APP;

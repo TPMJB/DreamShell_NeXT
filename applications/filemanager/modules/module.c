@@ -45,10 +45,8 @@ static void input(void *event,void *param,int action) {
     int key=utility_key(e);
     if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) { utility_forward(e); return; }
     if(!(GUI_WidgetGetFlags(self.dialog)&WIDGET_HIDDEN)) {
-        if(key==UI_OK) run("FileManager:ModalClick(true)");
-        else if(key==UI_BACK) run("FileManager:ModalClick(false)");
-        else if(key==UI_X) run("FileManager:editPrompt()");
-        else utility_forward(e);
+        if(key==UI_X) run("FileManager:editPrompt()");
+        else utility_dialog(e,key);
         e->type=SDL_NOEVENT; return;
     }
     if(key==UI_Y) toolbar(!self.toolbar);

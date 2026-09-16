@@ -20,6 +20,19 @@ from release_docs import GUIDES, render_guide
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def release_app_xml(root=ROOT):
+    return sorted(p for p in (root/"applications").glob("*/app.xml") if p.parent.name != "main")
+
+
+def validate_app_set(names, root=ROOT):
+    if any(n.startswith("DS/apps/main/") for n in names):
+        raise ValueError("Retired Classic launcher is present in the K-UI build")
+    expected = {f"DS/apps/{p.parent.name}/app.xml" for p in release_app_xml(root)}
+    if not expected <= names:
+        raise ValueError(f"Missing standard apps: {sorted(expected - names)}")
+    return len(expected)
+
+
 def main():
     version = (ROOT/'VERSION').read_text().strip()
     if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', version):
@@ -84,7 +97,7 @@ def main():
         # Validate against the integrated source, not old release version
         # constants. A successful ZIP step must not hide stale app binaries/XML.
         versions = {}
-        for app_xml in sorted((ROOT/'applications').glob('*/app.xml')):
+        for app_xml in release_app_xml():
             app = app_xml.parent.name
             path = f'DS/apps/{app}/app.xml'
             xml = source.read(path)
@@ -114,10 +127,7 @@ def main():
                      'DS/modules/isoldr.klf', 'DS/modules/isofs.klf'):
             if path not in names or len(source.read(path)) < 1024:
                 raise ValueError(f'Missing integrated component: {path}')
-        expected_apps = {f'DS/apps/{p.parent.name}/app.xml' for p in (ROOT/'applications').glob('*/app.xml')}
-        if not expected_apps <= names:
-            raise ValueError(f'Missing standard apps: {sorted(expected_apps-names)}')
-        info['packaged_apps'] = len(expected_apps)
+        info['packaged_apps'] = validate_app_set(names)
         if source.read('DS/NEXT_VERSION').decode().strip() != version:
             raise ValueError('Packaged version differs from source')
         for variant in ['DS_CORE.BIN', 'DEBUG_DS_CORE.BIN', 'EMU_DS_CORE.BIN']:

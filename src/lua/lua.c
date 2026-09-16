@@ -397,7 +397,15 @@ void SetLuaState(lua_State *l) {
 }
 
 lua_State *NewLuaThread()  {
-	return lua_newthread(DSLua);
+	if (!DSLua) return NULL;
+	lua_State *thread = lua_newthread(DSLua);
+	/* App and config coroutines do not close in stack order. Keep each one
+	 * reachable independently, even when another Lua call clears the stack. */
+	lua_pushlightuserdata(DSLua, thread);
+	lua_pushvalue(DSLua, -2);
+	lua_rawset(DSLua, LUA_REGISTRYINDEX);
+	lua_pop(DSLua, 1);
+	return thread;
 }
 
 void ReleaseLuaThread(lua_State *L) {
@@ -406,6 +414,8 @@ void ReleaseLuaThread(lua_State *L) {
 	}
 	lua_settop(L, 0);
 	if (DSLua) {
-		lua_pop(DSLua, 1);
+		lua_pushlightuserdata(DSLua, L);
+		lua_pushnil(DSLua);
+		lua_rawset(DSLua, LUA_REGISTRYINDEX);
 	}
 }
