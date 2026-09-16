@@ -88,8 +88,40 @@ initialization, then waited at the same unsupported SCI receive operation
 (`PC 0x8c039896`). The run was stopped after 45 seconds. It does not reproduce
 the console failure and does not establish a complete menu boot.
 
-For the next physical comparison, use the diagnostic CDI with the entire SD
-adapter disconnected, matching the previous check. A successful boot would make
-the logo path worth investigating further, although a different CD-R/burn is
-also a variable. The same freeze would show that our custom badge is not required
-to trigger it; startup and CD-R reading would remain open possibilities.
+This control deliberately retains the old executable and does not test the
+early-init fix in `87c47a5`.
+
+## Source and binary regression trace
+
+Comparing the reference 3.2 build `0152a59` with the original 3.3 build, the
+bootloader source changes are
+all in rebrand commit `7d5b447`: title/version, menu text/colors, output name and
+ISO volume name. The bootloader's storage, loader and initialization logic,
+FatFs implementation, pinned KOS revision and KOS patches did not change.
+
+Disassembly of the actual CDI executables confirms that their CRT entry
+instruction bytes, early-hook instructions, `g1_ata_select_device()` instruction
+body and `thd_poll()` instruction body are identical. Literal addresses moved:
+
+| Compiled value | Bootloader 3.2 | Original K-UI 3.3 |
+| --- | --- | --- |
+| `g1_ata_select_device()` entry | `0x8c029968` | `0x8c029958` |
+| `dev_selected` byte in BSS | `0x8c072c6d` | `0x8c072c4d` |
+| IRQ-context state in BSS | `0x8c072ca8` | `0x8c072c88` |
+
+The unsafe `g1_ata_select_device(G1_ATA_MASTER)` call inside `KOS_INIT_EARLY`
+was introduced upstream by `4dd0f58b22cac620235535f76bb5bc4b298de3be`, before
+the NeXT changes. KOS invokes that hook before clearing BSS. If the stale
+`dev_selected` value has bit 4 set, the driver inspects uninitialized IRQ state
+and may enter thread polling or an unbounded drive-status wait. A change in
+memory layout can expose this defect despite unchanged startup instructions.
+That is a possible failure mechanism, not an established reproduction of the
+reported freeze. No specific regression-causing commit has been proven.
+
+The already completed build at `87c47a5` replaces the early driver call with a
+direct master-device register write in both bootloader and core. Its actual
+CDI was verified to contain that change. The explicitly named test download
+`K-UI_bootloader_v3.3_startup-fix_87c47a5.cdi` is a byte-for-byte copy of that
+build's CDI, with SHA-256 `d641b815efcac2fc1754aa0310bb539656bb2527535fcb2fc3f5126da6e73ef2`.
+It includes the sharper K-UI badge and GitHub credit. It is a test candidate;
+its effect on the reported console freeze remains unconfirmed.
