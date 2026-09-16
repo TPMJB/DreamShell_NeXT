@@ -3,8 +3,9 @@
 The reported console freeze on the SEGA license screen remains unresolved.
 The maintainer identified the original K-UI bootloader CDI as the burned image,
 then reported that the old bootloader disc also failed and that startup still
-hung with the SD card removed. Which disc was used for the no-SD comparison, and
-whether the adapter itself was removed, have not yet been established.
+hung with the SD card removed. In the follow-up comparison, the old disc still
+hung with the entire SD adapter disconnected; a known retail game disc worked.
+Retail-disc success does not establish CD-R readability.
 
 ## Actual build artifacts checked
 
@@ -46,7 +47,49 @@ receive operation, so these runs cannot establish whether the real console would
 reach the recovery menu. This emulator wait is not evidence of the cause of the
 reported console freeze.
 
-No additional firmware change or new disc burn is justified by these checks
-alone. The remaining useful physical comparisons are the previously working 3.2
-disc with the entire SD adapter disconnected, and a known-working pressed game
-disc. A pressed-game success alone would not verify CD-R readability.
+## Logo-only diagnostic control
+
+The old 3.2 disc also contains our custom DreamShell NeXT badge. It is therefore
+not an untouched-artwork control for the maintainer's question about the K-UI
+badge. Comparing `resources/IP.BIN` with its version before branding commit
+`544a633` confirms that all branding changes in the tracked bootstrap are inside
+the reserved logo region. The license/bootstrap program was not overwritten.
+The custom badges use the run encoding implemented by KOS makeip.
+
+`K-UI_bootloader_v3.3_stock-badge-control_826140e.cdi` restores the historical
+DreamShell logo region in the original K-UI build `826140e`, the build supplied
+for the reported failing disc. It intentionally does not incorporate the newer
+early-init fix or change the boot executable: doing so would confound the logo
+comparison. This is a diagnostic control, not a replacement release or a
+confirmed fix.
+
+| Property | Verified result |
+| --- | --- |
+| Control CDI SHA-256 | `b65e8633019a002a340489ba75561f35d4fd82c93378e8c588d31d6546a3acc8` |
+| Control CDI size | 2,224,787 bytes, identical to the source image size |
+| Historical bootstrap source | `git show 544a633^:resources/IP.BIN` |
+| Historical bootstrap SHA-256 | `414af0e9af32c96f51e229b5fad13d724c948a59e110ece53f5da0fa1ffdd47f` |
+| Replaced logical bytes | `[0x3820, 0x5820)` within IP.BIN, copied exactly from the historical bootstrap |
+| Physical sectors changed | Data-session sectors 7–11, zero-based; logo bytes and their EDC/P/Q ECC only |
+| Everything else | Byte-for-byte identical, including the session descriptor, filesystem, boot header and executable |
+| Descrambled executable SHA-256 | `762fff4611658023479c3c539aa7e87367ca928b555bee4fa446136e5fed34b2`, identical to the source build |
+| Integrity checks | EDC and P/Q ECC pass for all 195 bootstrap/metadata/executable sectors in both images |
+
+The historical 8,082-byte MR has a single trailing palette-index byte after
+all 28,800 pixels. KOS makeip's `gimp/file-mr.py` explicitly accommodates this
+legacy convention. Validation of the pixel stream excludes that byte; the
+diagnostic image preserves the original bytes exactly. The generated K-UI MR
+passes the existing strict validator without this accommodation. The production
+branding validator and tracked bootstrap are unchanged.
+
+The stock-badge control was run in the same Flycast harness with fresh state and
+the retail BIOS. It reached the KallistiOS banner, controller setup and video
+initialization, then waited at the same unsupported SCI receive operation
+(`PC 0x8c039896`). The run was stopped after 45 seconds. It does not reproduce
+the console failure and does not establish a complete menu boot.
+
+For the next physical comparison, use the diagnostic CDI with the entire SD
+adapter disconnected, matching the previous check. A successful boot would make
+the logo path worth investigating further, although a different CD-R/burn is
+also a variable. The same freeze would show that our custom badge is not required
+to trigger it; startup and CD-R reading would remain open possibilities.
