@@ -36,7 +36,7 @@ def main():
                 else:
                     glyph = Image.new('RGBA', (12, 24))
                     ImageDraw.Draw(glyph).text((0, 0), chr(int(character)), font=font, fill=(*rgb, 255))
-                    glyph = glyph.resize((width, height), Image.Resampling.BILINEAR)
+                    glyph = glyph.resize((width, height), getattr(Image, 'Resampling', Image).BILINEAR)
                     canvas.paste(glyph, (x, y), glyph)
         canvas.save(output/f'{name}.png')
         (output/f'{name}.csv').unlink()
