@@ -24,6 +24,7 @@ include netinet/in.h
 include kos/dbgio.h
 include arch/arch.h
 include dc/sound/sound.h
+include dc/cdrom.h
 
 include ds.h
 include naomi/bsram.h
@@ -55,6 +56,11 @@ include sfx.h
 include audio/snddrv.h
 
 start
+# GD Ripper uses the bounded KOS drive API directly.
+cdrom_change_datatype
+cdrom_exec_cmd_timed
+cdrom_get_status
+cdrom_locate_data_track
 pvr_wait_render_done
 expt_init
 expt_shutdown
