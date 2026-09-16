@@ -12,66 +12,66 @@
     <image name="logo" src="images/logo.png" />
     <image name="stdico" src="images/gd.png" />
     <surface name="head_bg" width="640" height="100">
-      <fill color="#101923" width="640" height="100" />
+      <fill color="#080F23" width="640" height="100" />
     </surface>
     <surface name="games_bg" width="640" height="380">
-      <fill color="#101923" width="640" height="380" />
+      <fill color="#080F23" width="640" height="380" />
     </surface>
     <surface height="380" name="settings_bg" width="640">
-      <fill color="#101923" height="266" />
-      <fill color="#101923" height="114" width="640" y="262" />
-      <fill color="#304657" x="20" y="14" width="601" height="309" />
-      <fill color="#304657" x="19" y="13" width="601" height="309" />
-      <fill color="#192A39" x="25" y="19" width="589" height="297" />
+      <fill color="#080F23" height="266" />
+      <fill color="#080F23" height="114" width="640" y="262" />
+      <fill color="#414269" x="20" y="14" width="601" height="309" />
+      <fill color="#414269" x="19" y="13" width="601" height="309" />
+      <fill color="#141D36" x="25" y="19" width="589" height="297" />
     </surface>
     <surface name="overlay_bg" width="269" height="269">
-      <fill color="#304657" width="269" height="269" />
+      <fill color="#414269" width="269" height="269" />
     </surface>
     <image name="overlay" src="images/cover_overlay.png" />
     <image name="cover" src="images/cover_image.png" />
     <surface height="30" name="item-normal" width="320">
-      <fill color="#192A39" />
+      <fill color="#141D36" />
       <fill color="#EDF5FC" height="1" y="28" />
-      <fill color="#304657" height="1" y="29" />
+      <fill color="#414269" height="1" y="29" />
     </surface>
     <surface height="30" name="item-focus" width="320">
-      <fill color="#294C60" />
+      <fill color="#472958" />
       <fill color="#EDF5FC" height="1" y="28" />
-      <fill color="#304657" height="1" y="29" />
+      <fill color="#414269" height="1" y="29" />
     </surface>
     <surface height="30" name="item-selected" width="320">
       <fill color="#245964" />
       <fill color="#EDF5FC" height="1" y="28" />
-      <fill color="#304657" height="1" y="29" />
+      <fill color="#414269" height="1" y="29" />
     </surface>
     <surface width="18" height="20" name="sbb-normal">
-      <fill color="#294C60" />
+      <fill color="#472958" />
     </surface>
     <surface width="18" height="20" name="sbb-focus">
-      <fill color="#53E1E3" />
+      <fill color="#65E8F2" />
     </surface>
     <surface width="18" height="20" name="sbb-pressed">
       <fill color="#245964" />
     </surface>
     <surface width="18" height="20" name="sbb-disabled">
-      <fill color="#192A39" />
+      <fill color="#141D36" />
     </surface>
     <surface width="18" height="40" name="sb-knob">
-      <fill color="#294C60" />
+      <fill color="#472958" />
     </surface>
     <surface width="18" height="260" name="sb-back">
       <fill color="#EDF5FC" />
-      <fill width="1" color="#192A39" />
+      <fill width="1" color="#141D36" />
     </surface>
     <surface width="18" height="158" name="sb-back-sm">
       <fill color="#EDF5FC" />
-      <fill width="1" color="#192A39" />
+      <fill width="1" color="#141D36" />
     </surface>
     <surface name="fm_background" width="314" height="246">
-      <fill color="#304657" width="314" height="246" />
+      <fill color="#414269" width="314" height="246" />
     </surface>
     <surface width="226" height="200" name="fw_browser_bg">
-      <fill color="#304657" />
+      <fill color="#414269" />
       <fill color="#EDF5FC" height="199" />
     </surface>
     <image name="btn_cd_norm" src="images/btn_cd_norm.png" />
@@ -104,49 +104,49 @@
     <image name="iRunHigh" src="images/btn_launch_over.png" />
     <image name="iRunDisabled" src="images/btn_launch_disabled.png" />
     <surface height="25" name="sw_btn" width="60">
-      <fill color="#304657" />
+      <fill color="#414269" />
       <fill color="#EDF5FC" width="59" height="24" />
-      <fill color="#53E1E3" height="20" width="55" x="2" y="2" />
+      <fill color="#65E8F2" height="20" width="55" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_hl" width="60">
-      <fill color="#304657" />
+      <fill color="#414269" />
       <fill color="#EDF5FC" width="59" height="24" />
-      <fill color="#53E1E3" height="20" width="55" x="2" y="2" />
+      <fill color="#65E8F2" height="20" width="55" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_on" width="60">
-      <fill color="#304657" />
-      <fill color="#53E1E3" width="59" height="24" />
-      <fill color="#53E1E3" height="20" width="55" x="2" y="2" />
+      <fill color="#414269" />
+      <fill color="#65E8F2" width="59" height="24" />
+      <fill color="#65E8F2" height="20" width="55" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_on_hl" width="60">
-      <fill color="#304657" />
-      <fill color="#53E1E3" width="59" height="24" />
-      <fill color="#53E1E3" height="20" width="55" x="2" y="2" />
+      <fill color="#414269" />
+      <fill color="#65E8F2" width="59" height="24" />
+      <fill color="#65E8F2" height="20" width="55" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_sm" width="40">
-      <fill color="#304657" />
+      <fill color="#414269" />
       <fill color="#EDF5FC" width="39" height="24" />
-      <fill color="#53E1E3" height="20" width="35" x="2" y="2" />
+      <fill color="#65E8F2" height="20" width="35" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_sm_hl" width="40">
-      <fill color="#304657" />
+      <fill color="#414269" />
       <fill color="#EDF5FC" width="39" height="24" />
-      <fill color="#53E1E3" height="20" width="35" x="2" y="2" />
+      <fill color="#65E8F2" height="20" width="35" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_sm_on" width="40">
-      <fill color="#304657" />
-      <fill color="#53E1E3" width="39" height="24" />
-      <fill color="#53E1E3" height="20" width="35" x="2" y="2" />
+      <fill color="#414269" />
+      <fill color="#65E8F2" width="39" height="24" />
+      <fill color="#65E8F2" height="20" width="35" x="2" y="2" />
     </surface>
     <surface height="25" name="sw_btn_sm_on_hl" width="40">
-      <fill color="#304657" />
-      <fill color="#53E1E3" width="39" height="24" />
-      <fill color="#53E1E3" height="20" width="35" x="2" y="2" />
+      <fill color="#414269" />
+      <fill color="#65E8F2" width="39" height="24" />
+      <fill color="#65E8F2" height="20" width="35" x="2" y="2" />
     </surface>
     <surface height="50" width="320" name="menu_bg">
-      <fill color="#304657" />
+      <fill color="#414269" />
       <fill color="#EDF5FC" height="49" />
-      <fill color="#294C60" height="47" x="1" y="1" />
+      <fill color="#472958" height="47" x="1" y="1" />
     </surface>
     <font name="title-24" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <font name="small-12" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
@@ -157,20 +157,20 @@
       <fill color="#367086" width="250" height="36" />
     </surface>
     <surface name="next-disabled" width="250" height="36">
-      <fill color="#192A39" width="250" height="36" />
+      <fill color="#141D36" width="250" height="36" />
     </surface>
     <surface name="next-primary" width="250" height="36">
       <fill color="#245964" width="250" height="36" />
     </surface>
     <surface name="next-message-bg" width="592" height="246">
-      <fill color="#192A39" width="592" height="246" />
+      <fill color="#141D36" width="592" height="246" />
     </surface>
   </resources>
-  <body width="640" height="480" onload="export:isoLoader_Init()" onunload="export:isoLoader_Shutdown()" name="main_body" background="#101923" onopen="export:isoLoader_Open()" onclose="export:isoLoader_Close()">
+  <body width="640" height="480" onload="export:isoLoader_Init()" onunload="export:isoLoader_Shutdown()" name="main_body" background="#080F23" onopen="export:isoLoader_Open()" onclose="export:isoLoader_Close()">
     <panel background="head_bg" height="100" width="640">
-      <label text="DREAMSHELL NeXT" x="24" y="8" width="270" height="18" font="small-12" color="#53E1E3" align="left" />
+      <label text="K-UI / KATANA USER INTERFACE" x="24" y="8" width="270" height="18" font="small-12" color="#65E8F2" align="left" />
       <label text="ISO Loader" x="24" y="28" width="300" height="31" font="title-24" color="#EDF5FC" align="left" />
-      <label text="TPMJB" x="486" y="9" width="128" height="23" font="arial-18" color="#53E1E3" align="right" />
+      <label text="TPMJB" x="486" y="9" width="128" height="23" font="arial-18" color="#65E8F2" align="right" />
       <label text="github.com/TPMJB" x="432" y="32" width="182" height="20" font="small-12" color="#9FB4C7" align="right" />
       <label name="version" text="v2.0.6" x="542" y="51" width="72" height="18" font="small-12" color="#9FB4C7" align="right" />
       <input name="btn_sd" type="button" x="24" y="68" width="48" height="30" normal="next-button" highlight="next-focus" pressed="next-focus" disabled="next-disabled" inactive="true">
@@ -230,7 +230,7 @@
       </panel>
       <panel background="settings_bg" height="380">
         <panel height="350" width="320" y="10">
-          <label align="left" color="#53E1E3" font="m23" height="40" text="Settings:" width="131" x="42" y="5" />
+          <label align="left" color="#65E8F2" font="m23" height="40" text="Settings:" width="131" x="42" y="5" />
           <input height="25" name="preset-checkbox" type="checkbox" width="47%" x="44%" y="16">
             <label align="left" color="#EDF5FC" font="arial" height="20" text="Save as preset" width="87%" x="17%" />
           </input>
@@ -239,7 +239,7 @@
               <label align="left" color="#EDF5FC" font="arial" height="20" text="Use DMA transfer (GD/IDE only)" x="9%" />
             </input>
             <panel height="80" name="async-panel" width="100%">
-              <label align="left" color="#53E1E3" font="arial" height="22" text="Emulate async read (in sectors):" width="100%" />
+              <label align="left" color="#65E8F2" font="arial" height="22" text="Emulate async read (in sectors):" width="100%" />
               <input height="25" onclick="export:isoLoader_toggleAsync()" type="checkbox" width="26%">
                 <label align="left" color="#EDF5FC" font="arial" height="20" name="async-label" text="none" width="64%" x="36%" />
               </input>
@@ -282,7 +282,7 @@
             </input>
           </panel>
           <panel height="125" name="os-panel" width="269" x="42" y="227">
-            <label align="left" color="#53E1E3" font="arial" height="25" text="Binary OS:" />
+            <label align="left" color="#65E8F2" font="arial" height="25" text="Binary OS:" />
             <input checked="true" height="25" onclick="export:isoLoader_toggleOS()" type="checkbox" width="41%">
               <label align="left" color="#EDF5FC" font="arial" height="20" text="Auto" x="23%" />
             </input>
@@ -337,7 +337,7 @@
                 </input>
               </panel>
               <panel height="225" name="boot-memory-panel" width="80%">
-                <label y="0" align="left" color="#53E1E3" font="arial" height="25" text="Loader memory:" width="100%" />
+                <label y="0" align="left" color="#65E8F2" font="arial" height="25" text="Loader memory:" width="100%" />
                 <input height="22" name="0x8c000100" onclick="export:isoLoader_toggleMemory()" type="checkbox" width="46%">
                   <label align="left" color="#EDF5FC" font="arial" height="20" text="0x8c000100" x="19%" />
                 </input>
@@ -448,7 +448,7 @@
               <panel height="250" width="85%">
                 <panel name="cdda-mode-panel" width="100%">
                   <panel width="100%" height="25" name="cdda-mode-src-panel">
-                    <label align="left" color="#53E1E3" font="arial" height="20" text="Source:" width="25%" />
+                    <label align="left" color="#65E8F2" font="arial" height="20" text="Source:" width="25%" />
                     <input height="25" onclick="export:isoLoader_toggleCDDA_Source()" type="checkbox" width="25%">
                       <label align="left" color="#EDF5FC" font="arial" height="20" text="PIO" x="22" />
                     </input>
@@ -457,7 +457,7 @@
                     </input>
                   </panel>
                   <panel width="100%" height="25" name="cdda-mode-dst-panel">
-                    <label align="left" color="#53E1E3" font="arial" height="20" text="Dest:" width="25%" />
+                    <label align="left" color="#65E8F2" font="arial" height="20" text="Dest:" width="25%" />
                     <input height="25" onclick="export:isoLoader_toggleCDDA_Dest()" type="checkbox" width="25%">
                       <label align="left" color="#EDF5FC" font="arial" height="20" text="PIO" x="22" />
                     </input>
@@ -469,7 +469,7 @@
                     </input>
                   </panel>
                   <panel width="100%" height="25" name="cdda-mode-pos-panel">
-                    <label align="left" color="#53E1E3" font="arial" height="20" text="Position:" width="25%" />
+                    <label align="left" color="#65E8F2" font="arial" height="20" text="Position:" width="25%" />
                     <input height="25" onclick="export:isoLoader_toggleCDDA_Pos()" type="checkbox" width="31%">
                       <label align="left" color="#EDF5FC" font="arial" height="20" text="TMU1" x="22" />
                     </input>
@@ -478,7 +478,7 @@
                     </input>
                   </panel>
                   <panel width="100%" height="25" name="cdda-mode-ch-panel">
-                    <label align="left" color="#53E1E3" font="arial" height="20" text="Channels:" width="25%" />
+                    <label align="left" color="#65E8F2" font="arial" height="20" text="Channels:" width="25%" />
                     <input height="25" onclick="export:isoLoader_toggleCDDA_Chan()" type="checkbox" width="31%">
                       <label align="left" color="#EDF5FC" font="arial" height="20" text="Fixed" x="22" />
                     </input>
@@ -512,7 +512,7 @@
             <panel name="fw-panel">
               <panel height="250" width="80%">
                 <panel height="45">
-                  <label align="left" color="#53E1E3" font="arial" height="22" text="Loader firmware:" width="100%" />
+                  <label align="left" color="#65E8F2" font="arial" height="22" text="Loader firmware:" width="100%" />
                   <input font="arial" fontcolor="#000000" height="22" name="device" size="30" type="text" value="auto" width="100%" />
                 </panel>
                 <panel height="200" background="fw_browser_bg">
@@ -534,13 +534,13 @@
             <label align="center" color="#EDF5FC" font="arial" width="100%" height="100%" text="Default" />
           </input>
           <panel height="25" width="70" x="290">
-            <label name="preset_status" align="left" color="#53E1E3" font="arial" width="100%" height="25" y="2" />
+            <label name="preset_status" align="left" color="#65E8F2" font="arial" width="100%" height="25" y="2" />
           </panel>
         </panel>
       </panel>
       <panel background="settings_bg" height="380">
         <panel height="350" width="55%" y="10">
-          <label align="left" color="#53E1E3" font="m23" height="40" text="Extensions:" width="45%" x="12%" y="5" />
+          <label align="left" color="#65E8F2" font="m23" height="40" text="Extensions:" width="45%" x="12%" y="5" />
           <panel height="25" width="86%" x="12%" y="45">
             <input height="25" name="alt-boot-checkbox" type="checkbox">
               <label align="left" color="#EDF5FC" font="arial" height="20" text="Boot from 2ND_READ.BIN" x="9%" />
@@ -562,7 +562,7 @@
             </input>
           </panel>
           <panel height="150" width="86%" x="12%" y="153">
-            <label align="left" color="#53E1E3" font="arial" height="25" width="100%" text="VMU emulation:" />
+            <label align="left" color="#65E8F2" font="arial" height="25" width="100%" text="VMU emulation:" />
             <input font="arial" fontcolor="#000000" height="22" name="vmu-number" size="20" type="text" value="001" width="40" />
             <input height="25" y="50" name="vmu-checkbox" onclick="export:isoLoader_toggleVMU()" type="checkbox">
               <label align="left" color="#EDF5FC" font="arial" height="20" text="Disabled" x="9%" />
@@ -579,7 +579,7 @@
           </panel>
         </panel>
         <panel height="350" width="40%" x="58%" y="10">
-          <label align="left" color="#53E1E3" font="m23" height="40" text="Region:" width="100%" y="5" />
+          <label align="left" color="#65E8F2" font="m23" height="40" text="Region:" width="100%" y="5" />
           <panel height="130" width="100%" y="45" name="region-panel">
             <input height="25" width="50%" onclick="export:isoLoader_toggleRegion()" type="checkbox">
               <label align="left" color="#EDF5FC" font="arial" height="20" text="Japan" x="25" />
@@ -613,7 +613,7 @@
           </panel>
         </panel>
         <panel height="370" width="282" x="358" y="14">
-          <label align="left" color="#53E1E3" font="arial" height="20" text="Icon size:" width="100%" y="4" />
+          <label align="left" color="#65E8F2" font="arial" height="20" text="Icon size:" width="100%" y="4" />
           <panel height="22" width="48%" y="26">
             <input height="22" name="32x32" onclick="export:isoLoader_toggleIconSize()" type="checkbox" width="100%">
               <label align="left" color="#EDF5FC" font="arial" height="20" text="32x32" x="22" />
@@ -639,7 +639,7 @@
               <label align="left" color="#EDF5FC" font="arial" height="20" text="128x128" x="22" />
             </input>
           </panel>
-          <label align="left" color="#53E1E3" font="arial" height="20" text="Icon format:" width="100%" y="100" />
+          <label align="left" color="#65E8F2" font="arial" height="20" text="Icon format:" width="100%" y="100" />
           <panel height="22" width="48%" y="122">
             <input height="22" name="icon-format-png" onclick="export:isoLoader_toggleIconFormat()" type="checkbox" width="100%" checked="true">
               <label align="left" color="#EDF5FC" font="arial" height="20" text="PNG" x="22" />
@@ -655,7 +655,7 @@
               <label align="left" color="#EDF5FC" font="arial" height="20" text="Rotate image 180" x="22" />
             </input>
           </panel>
-          <label align="left" color="#53E1E3" font="arial" height="20" text="Icon name:" width="100%" y="178" />
+          <label align="left" color="#65E8F2" font="arial" height="20" text="Icon name:" width="100%" y="178" />
           <input font="arial" fontcolor="#000000" height="22" name="link-text" y="200" onblur="export:isoLoader_toggleLinkName()" size="30" type="text" value="Game name" width="90%" x="0" />
           <panel height="22" width="100%" y="228">
             <input height="22" name="hide-name" onclick="export:isoLoader_toggleHideName()" type="checkbox" width="100%">
@@ -690,7 +690,7 @@
       </input>
     </panel>
     <panel name="message-panel" background="next-message-bg" x="24" y="120" width="592" height="246">
-      <label text="Launch check" x="18" y="12" width="556" height="28" font="arial-18" color="#53E1E3" align="left" />
+      <label text="Launch check" x="18" y="12" width="556" height="28" font="arial-18" color="#65E8F2" align="left" />
       <label name="message-0" text="" x="18" y="50" width="556" height="22" font="arial" color="#EDF5FC" align="left" />
       <label name="message-1" text="" x="18" y="73" width="556" height="22" font="arial" color="#EDF5FC" align="left" />
       <label name="message-2" text="" x="18" y="96" width="556" height="22" font="arial" color="#EDF5FC" align="left" />

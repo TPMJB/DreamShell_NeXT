@@ -1,15 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="90" viewBox="0 0 320 90">
-  <title>DreamShell NeXT — TPMJB</title>
-  <desc>Boot-disc corner badge. TPMJB at right, github.com/TPMJB below.</desc>
-  <path fill="#c0c0c0" d="M0 0h320v90H0z"/>
-  <path fill="#0b1729" d="M8 5h294l10 10v70H18L8 75z"/>
-  <path fill="#51e5db" d="M8 5h294l3 3H8z"/>
-  <path fill="#23445a" d="M8 74h304v2H8z"/>
-  <path fill="#285167" d="M153 21h1v43h-1z"/>
-  <g font-family="DejaVu Sans, sans-serif">
-    <text x="21" y="29" font-size="13" fill="#d6e8ee" letter-spacing="0.3">DreamShell</text>
-    <text x="19" y="64" font-size="36" font-weight="bold" fill="#51e5db" letter-spacing="0.5">NeXT</text>
-    <text x="296" y="43" text-anchor="end" font-size="26" font-weight="bold" fill="#f4f8ff" letter-spacing="0.3">TPMJB</text>
-    <text x="296" y="63" text-anchor="end" font-size="12" fill="#a9d5e2">github.com/TPMJB</text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="320" height="90" viewBox="0 0 320 90">
+<title>K-UI by TPMJB — boot-disc badge</title>
+<rect width="320" height="90" fill="#c0c0c0"/>
+<image x="54" y="9" width="212" height="72" xlink:href="branding/k-ui-badge.png"/>
 </svg>

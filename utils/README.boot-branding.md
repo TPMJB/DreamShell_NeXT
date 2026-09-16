@@ -1,20 +1,21 @@
-# DreamShell NeXT — bootloader 3.2
+# K-UI — bootloader 3.3
 
 This boot disc adds checked core loading, an immediate recovery menu, and
-settings you can edit on SD. The corner badge beside the SEGA startup screen
-shows DreamShell NeXT, TPMJB on the right, and **github.com/TPMJB** underneath.
+settings you can edit on SD. The corner badge on the SEGA startup screen now shows the K-UI visor portrait,
+wordmark and TPMJB credit. The core splash uses the matching full artwork.
+The new 3.3 CDI retains the tested 3.2 recovery menu and font fix.
 
 ## Install
 
-1. Extract `DreamShell_bootloader_v3.2.cdi` from the complete NeXT ZIP.
+1. Extract `K-UI_bootloader_v3.3.cdi` from the complete K-UI ZIP.
 2. Burn the CDI **as a disc image** onto a new CD-R using the same working
    image-burning method as your current DreamShell boot disc.
 3. Boot the Dreamcast with the new CD-R and your existing SD card.
 4. Optionally copy `boot.cfg.example` to `DS/boot.cfg` on SD and edit its settings.
 
 The boot logo lives on the CD. Copying this ZIP or its artwork to SD does not
-replace it. This is the NeXT FAT16/FAT32/exFAT-capable **3.2** bootloader;
-it loads the DreamShell installation already on your SD/IDE device.
+replace it. This is the K-UI FAT16/FAT32/exFAT-capable **3.3** bootloader;
+it loads the compatible DS installation already on your SD/IDE device.
 No BIOS flashing is required. To update apps and the core as well, follow the
 [complete installation guide](../docs/installation.md).
 

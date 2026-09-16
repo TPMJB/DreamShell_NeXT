@@ -126,7 +126,7 @@ static void refresh(void) {
         set_row(3,"Devices",text);
         snprintf(text,sizeof(text),"%.64s",getenv("PATH")?getenv("PATH"):"Unknown"); set_row(4,"Running from",text);
         set_row(5,"Restore defaults","Review before saving");
-        set_row(6,"Restart DreamShell","");
+        set_row(6,"Restart K-UI","");
         GUI_LabelSetText(self.help,"Clock sync needs a connection. Select Devices to refresh detection.");
         break;
     }
@@ -274,7 +274,7 @@ static void change(int row,int step) {
             if(network) OpenApp(network,NULL); else status("Network app is not installed.");
             return;
         } else if(row==5) { ask(ASK_DEFAULTS,"Restore defaults?","Defaults will remain unsaved until you choose Save settings."); return; }
-        else if(row==6) { ask(ASK_REBOOT,"Restart DreamShell?","Reload the core from the current resources folder?"); return; }
+        else if(row==6) { ask(ASK_REBOOT,"Restart K-UI?","Reload the core from the current resources folder?"); return; }
     }
     refresh(); pending();
 }

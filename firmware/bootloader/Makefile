@@ -5,10 +5,10 @@
 
 TARGET = bootloader
 VER_MAJOR = 3
-VER_MINOR = 2
+VER_MINOR = 3
 VER_MICRO = 0
 VERSION = $(VER_MAJOR).$(VER_MINOR)
-TARGET_NAME = DreamShell_$(TARGET)_v$(VERSION)
+TARGET_NAME = K-UI_$(TARGET)_v$(VERSION)
 TARGET_CD = cd/1DS_BOOT.BIN
 KOS_ROMDISK_DIR = romdisk
 
@@ -78,7 +78,7 @@ cdi: $(TARGET_CD)
 	@../../utils/update_ip_bin.sh $(DS_RES)/IP.BIN /tmp/IP_$(TARGET).BIN $(VER_MAJOR) $(VER_MINOR) $(VER_MICRO) 0x30 bootloader >/dev/null
 	@mkdir -p ./cd
 	@$(KOS_BASE)/utils/scramble/scramble $(TARGET).bin $(TARGET_CD)
-	@$(DS_SDK)/bin/mkisofs -V DreamShell -C 0,11702 -G /tmp/IP_$(TARGET).BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso ./cd
+	@$(DS_SDK)/bin/mkisofs -V K-UI -C 0,11702 -G /tmp/IP_$(TARGET).BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso ./cd
 	@echo Convert ISO to CDI...
 	@-rm -f $(TARGET).cdi
 	@$(DS_SDK)/bin/cdi4dc $(TARGET).iso $(TARGET).cdi >/dev/null
@@ -86,7 +86,7 @@ cdi: $(TARGET_CD)
 	@-rm -f /tmp/IP_$(TARGET).BIN
 
 # If you have problems with mkisofs try data/data image:
-# $(DS_SDK)/bin/mkisofs -V DreamShell -G $(DS_RES)/IP.BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso ./cd
+# $(DS_SDK)/bin/mkisofs -V K-UI -G $(DS_RES)/IP.BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso ./cd
 # @$(DS_SDK)/bin/cdi4dc $(TARGET).iso $(TARGET).cdi -d >/dev/null
 
 release: all cdi install

@@ -1,4 +1,4 @@
-/* DreamShell NeXT menu music, 2026 TPMJB and contributors.
+/* K-UI menu music, 2026 TPMJB and contributors.
  * Own only our stream. File reads finish before playback starts. */
 #include <ds.h>
 #include <dc/sound/stream.h>
@@ -7,6 +7,27 @@
 
 #define MUSIC_LIMIT (2u * 1024u * 1024u)
 #define MUSIC_BUFFER 16384
+static const char *const music_tracks[] = {
+    "menu.wav", "neon-circuit.wav", "orbital-drift.wav",
+    "midnight-vector.wav", "chrome-horizon.wav"
+};
+#define MUSIC_TRACKS (sizeof(music_tracks) / sizeof(music_tracks[0]))
+static uint32_t music_random;
+static unsigned music_previous = MUSIC_TRACKS;
+
+/* A private generator leaves games' rand() state alone. Pick once per visit;
+ * muting, retries and drive activity never advance the playlist. */
+static unsigned MusicChoose(void) {
+    uint64_t now = timer_ms_gettime64();
+    music_random ^= (uint32_t)now ^ (uint32_t)(now >> 32) ^ 0x9e3779b9u;
+    music_random ^= music_random << 13;
+    music_random ^= music_random >> 17;
+    music_random ^= music_random << 5;
+    unsigned choice = music_random % MUSIC_TRACKS;
+    if(choice == music_previous) choice = (choice + 1) % MUSIC_TRACKS;
+    music_previous = choice;
+    return choice;
+}
 /* UI state only: never hold this mutex across storage or audio-driver calls. */
 static mutex_t music_mutex = MUTEX_INITIALIZER;
 /* GD Ripper holds this during drive work; RAM playback never needs it. */
@@ -15,7 +36,7 @@ static struct {
     char path[NAME_MAX];
     unsigned char *file, *pcm, *feed;
     size_t length, position;
-    unsigned rate;
+    unsigned rate, track;
     int level, opened, suspended, failed, unsaved, volume, initialized, loading, waiting;
     unsigned revision, save_revision;
     snd_stream_hnd_t stream;
@@ -92,13 +113,13 @@ static void *MusicFeed(snd_stream_hnd_t stream, int requested, int *received) {
     return music.feed+2;
 }
 
-static int MusicLoad(void) {
+static int MusicLoadTrack(unsigned track) {
     char path[NAME_MAX];
     FILE *file;
     long size;
     size_t offset = 0, length = 0;
     unsigned rate = 0;
-    if(snprintf(path,sizeof(path),"%s/music/menu.wav",music.path) >= (int)sizeof(path)) return 0;
+    if(snprintf(path,sizeof(path),"%s/music/%s",music.path,music_tracks[track]) >= (int)sizeof(path)) return 0;
     file = fopen(path,"rb");
     if(!file) return 0;
     if(fseek(file,0,SEEK_END) || (size=ftell(file)) < 44 ||
@@ -126,6 +147,14 @@ static int MusicLoad(void) {
     music.pcm = music.file+offset; music.length = length; music.rate = rate;
     music.position = 0;
     return 1;
+}
+
+static int MusicLoad(void) {
+    int result = MusicLoadTrack(music.track);
+    /* An older installation or a removed track can still play menu.wav.
+     * Cancellation must not trigger another read. Only one WAV is retained. */
+    if(result == 0 && music.track != 0) result = MusicLoadTrack(0);
+    return result;
 }
 
 static int MusicStart(int volume) {
@@ -234,6 +263,7 @@ void MenuMusicOpen(const char *app_path) {
     music.suspended = music.unsaved = music.loading = music.waiting = 0;
     music.failed = music.initialized = !app_path;
     music.revision = music.save_revision = 0;
+    music.track = MusicChoose();
     mutex_unlock(&music_mutex);
     MusicStartWorker();
 }

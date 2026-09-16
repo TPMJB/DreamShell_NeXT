@@ -1,4 +1,4 @@
-# DreamShell NeXT keyboard and directory picker
+# K-UI keyboard and directory picker
 
 The complete NeXT 1.0 installation includes the QWERTY keyboard and modal input
 handling, plus GD Ripper 2.2.2's directory picker and Games destinations. Follow

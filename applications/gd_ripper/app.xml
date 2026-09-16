@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="GD Ripper" version="2.2.3" icon="images/icon.png">
+<app name="GD Ripper" version="2.2.4" icon="images/icon.png">
   <resources>
     <module src="modules/app_gd_ripper.klf" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="16" name="body" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="14" name="small" />
     <font src="../../fonts/ttf/arial_lite.ttf" type="ttf" size="22" name="title" />
     <surface name="bg" width="640" height="480">
-      <fill color="#101923" />
+      <fill color="#080F23" />
     </surface>
     <surface name="progress-bg" width="592" height="12">
       <fill color="#263749" />
@@ -15,11 +15,11 @@
       <fill color="#46CBD1" />
     </surface>
     <surface name="b190-44-normal" width="190" height="44">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b190-44-highlight" width="190" height="44">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="184" height="38" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="184" height="38" color="#472958" />
     </surface>
     <surface name="b190-44-pressed" width="190" height="44">
       <fill color="#ACFFFF" />
@@ -29,11 +29,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b146-44-normal" width="146" height="44">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b146-44-highlight" width="146" height="44">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="140" height="38" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="140" height="38" color="#472958" />
     </surface>
     <surface name="b146-44-pressed" width="146" height="44">
       <fill color="#ACFFFF" />
@@ -43,11 +43,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b232-44-normal" width="232" height="44">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b232-44-highlight" width="232" height="44">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="226" height="38" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="226" height="38" color="#472958" />
     </surface>
     <surface name="b232-44-pressed" width="232" height="44">
       <fill color="#ACFFFF" />
@@ -57,11 +57,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b160-40-normal" width="160" height="40">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b160-40-highlight" width="160" height="40">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="154" height="34" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="154" height="34" color="#472958" />
     </surface>
     <surface name="b160-40-pressed" width="160" height="40">
       <fill color="#ACFFFF" />
@@ -71,11 +71,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b128-32-normal" width="128" height="32">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b128-32-highlight" width="128" height="32">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="122" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="122" height="26" color="#472958" />
     </surface>
     <surface name="b128-32-pressed" width="128" height="32">
       <fill color="#ACFFFF" />
@@ -85,11 +85,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b568-36-normal" width="568" height="36">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b568-36-highlight" width="568" height="36">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="562" height="30" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="562" height="30" color="#472958" />
     </surface>
     <surface name="b568-36-pressed" width="568" height="36">
       <fill color="#ACFFFF" />
@@ -99,11 +99,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b174-44-normal" width="174" height="44">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b174-44-highlight" width="174" height="44">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="168" height="38" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="168" height="38" color="#472958" />
     </surface>
     <surface name="b174-44-pressed" width="174" height="44">
       <fill color="#ACFFFF" />
@@ -113,11 +113,11 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b260-44-normal" width="260" height="44">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b260-44-highlight" width="260" height="44">
-      <fill color="#53E1E3" />
-      <fill x="3" y="3" width="254" height="38" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="3" y="3" width="254" height="38" color="#472958" />
     </surface>
     <surface name="b260-44-pressed" width="260" height="44">
       <fill color="#ACFFFF" />
@@ -127,29 +127,29 @@
       <fill color="#26313B" />
     </surface>
     <surface name="b592-27-normal" width="592" height="27">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b592-27-highlight" width="592" height="27">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="588" height="23" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="588" height="23" color="#472958" />
     </surface>
     <surface name="b592-27-pressed" width="592" height="27">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="588" height="23" color="#155B71" />
+      <fill x="2" y="2" width="588" height="23" color="#472958" />
     </surface>
     <surface name="b592-27-disabled" width="592" height="27">
       <fill color="#26313B" />
     </surface>
     <surface name="b128-28-normal" width="128" height="28">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b128-28-highlight" width="128" height="28">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="124" height="24" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="124" height="24" color="#472958" />
     </surface>
     <surface name="b128-28-pressed" width="128" height="28">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="124" height="24" color="#155B71" />
+      <fill x="2" y="2" width="124" height="24" color="#472958" />
     </surface>
     <surface name="b128-28-disabled" width="128" height="28">
       <fill color="#26313B" />
@@ -158,12 +158,12 @@
   <body width="640" height="480" background="bg" onload="export:gd_ripper_Init()" onopen="export:gd_ripper_Open()" onclose="export:gd_ripper_Close()" onunload="export:gd_ripper_Exit()">
     <cardstack name="pages">
       <panel name="main-page" width="640" height="480">
-        <label x="24" y="16" width="384" height="28" font="title" color="#E7EEF4" text="GD RIPPER  /  NeXT" align="left" valign="center" />
-        <label x="24" y="46" width="384" height="20" font="small" color="#9BAFC1" text="2.2.3  |  DreamShell NeXT by TPMJB" align="left" valign="center" />
+        <label x="24" y="16" width="384" height="28" font="title" color="#E7EEF4" text="GD RIPPER  /  K-UI" align="left" valign="center" />
+        <label x="24" y="46" width="384" height="20" font="small" color="#9BAFC1" text="2.2.4  |  K-UI by TPMJB" align="left" valign="center" />
         <input type="button" x="426" y="20" width="190" height="44" name="music-btn" onclick="export:gd_ripper_Music()" normal="b190-44-normal" highlight="b190-44-highlight" pressed="b190-44-pressed" disabled="b190-44-disabled">
           <label font="small" color="#F0F6FA" text="Y Music 15%" align="center" />
         </input>
-        <label x="24" y="70" width="592" height="20" font="body" color="#53E1E3" text="Waiting for disc..." align="left" valign="center" name="disc-label" />
+        <label x="24" y="70" width="592" height="20" font="body" color="#65E8F2" text="Waiting for disc..." align="left" valign="center" name="disc-label" />
         <label x="24" y="100" width="70" height="22" font="body" color="#9BAFC1" text="Folder:" align="left" />
         <input type="text" name="gname-text" value="ripped_disc" x="96" y="96" width="520" height="28" size="254" font="body" fontcolor="#14202B" onblur="export:gd_ripper_Gamename()" />
         <label x="24" y="134" width="450" height="20" font="body" color="#9BAFC1" text="/sd/Games" align="left" valign="center" name="destination-path" />

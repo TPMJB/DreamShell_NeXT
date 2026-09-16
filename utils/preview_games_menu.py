@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse, json, re, subprocess, tempfile
 from PIL import Image, ImageDraw, ImageFont
 ROOT=Path(__file__).resolve().parents[1]
-NAVY='#0c141f'; PANEL='#132030'; CYAN='#2ed4f0'; WHITE='#edf5fc'; MUTED='#91adc4'
+NAVY='#080f23'; PANEL='#121a31'; CYAN='#2ed4f0'; WHITE='#edf5fc'; MUTED='#91adc4'
 def geometry():
     header=ROOT/'applications/games_menu/modules/next_layout.h'
     with tempfile.TemporaryDirectory() as tmp:
@@ -32,7 +32,7 @@ def render(mode,rects):
         d.text((x,y),s,font=f,fill=color,anchor='ls')
     def box(r,fill=PANEL,outline=None):
         x,y,w,h=r;d.rectangle((x,y,x+w-1,y+h-1),fill=fill,outline=outline,width=2 if outline else 1)
-    text('DREAMSHELL NeXT',24,28,12,CYAN);text('Games',24,57,28)
+    text('K-UI / KATANA USER INTERFACE',24,28,12,CYAN);text('Games',24,57,28)
     text('TPMJB',535,33,21,CYAN);text('github.com/TPMJB',474,54,12,MUTED)
     text('Resident Evil - Code Veronica',24,80,17,width=520);text('GDI',564,80,12,CYAN)
     box((24,88,592,2),CYAN);box((24,408,592,1))
@@ -63,7 +63,7 @@ if __name__=='__main__':
     for i,p in enumerate(previews):sheet.paste(p,(i%2*640,i//2*510))
     d=ImageDraw.Draw(sheet);f=ImageFont.truetype(str(ROOT/'resources/fonts/ttf/arial_lite.ttf'),19)
     for i,name in enumerate(['List + preview','Compact covers','Gallery']):d.text((24+i%2*640,481+i//2*510),name,font=f,fill=MUTED)
-    d.text((664,590),'Games 1.0.3  /  TPMJB NeXT',font=f,fill=CYAN)
+    d.text((664,590),'Games 1.0.3  /  K-UI by TPMJB',font=f,fill=CYAN)
     d.text((664,635),'Illustrative layout preview\nBundled placeholders shown\nScan artwork stays visible in every view',font=f,fill=WHITE,spacing=12)
     sheet.save(args.output/'Games-Preview.png')
     print('Games layout preview:',args.output/'Games-Preview.png')

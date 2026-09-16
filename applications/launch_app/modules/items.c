@@ -115,7 +115,7 @@ void BuildAppList(void) {
         snprintf(item->name, sizeof(item->name), "%s", app->name);
         snprintf(item->identity, sizeof(item->identity), "%s", app->fn);
         snprintf(item->category, sizeof(item->category), "Application");
-        snprintf(item->description, sizeof(item->description), "Open this installed DreamShell application.");
+        snprintf(item->description, sizeof(item->description), "Open this installed K-UI application.");
         snprintf(item->version, sizeof(item->version), "%s", app->ver);
         GetAppPath(dir, sizeof(dir), app->fn);
         snprintf(item->preview, sizeof(item->preview), "%s/images/preview.png", dir);

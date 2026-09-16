@@ -61,7 +61,7 @@ class BuildProvenanceTests(unittest.TestCase):
                 path = self.root / name
                 original = path.read_bytes()
                 path.write_bytes(b'replaced artwork')
-                with self.assertRaisesRegex(ValueError, 'Official NeXT branding changed'):
+                with self.assertRaisesRegex(ValueError, 'Official K-UI branding changed'):
                     self.validate(self.entries())
                 path.write_bytes(original)
 
@@ -87,7 +87,7 @@ class BuildProvenanceTests(unittest.TestCase):
             with self.subTest(name=name):
                 entries = self.entries()
                 entries['DS/' + name] = b'core with the record stripped out'
-                with self.assertRaisesRegex(ValueError, 'missing matching NeXT build attribution'):
+                with self.assertRaisesRegex(ValueError, 'missing matching K-UI build attribution'):
                     self.validate(entries)
 
     def test_relabelled_metadata_is_rejected(self):

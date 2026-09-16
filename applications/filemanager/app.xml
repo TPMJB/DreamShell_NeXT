@@ -11,18 +11,18 @@
     <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <surface name="bg" width="640" height="480">
-      <fill color="#101923" />
+      <fill color="#080F23" />
     </surface>
     <surface name="b116x32-normal" width="116" height="32">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b116x32-highlight" width="116" height="32">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="112" height="28" color="#472958" />
     </surface>
     <surface name="b116x32-pressed" width="116" height="32">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+      <fill x="2" y="2" width="112" height="28" color="#472958" />
     </surface>
     <surface name="b116x32-disabled" width="116" height="32">
       <fill color="#26313B" />
@@ -34,94 +34,94 @@
       <fill color="#1B3041" />
     </surface>
     <surface name="row" width="260" height="28">
-      <fill color="#182838" />
+      <fill color="#141D36" />
     </surface>
     <surface name="row-focus" width="260" height="28">
-      <fill color="#225765" />
+      <fill color="#472958" />
     </surface>
     <surface name="row-select" width="260" height="28">
-      <fill color="#155B71" />
+      <fill color="#472958" />
     </surface>
     <surface name="b280x30-normal" width="280" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b280x30-highlight" width="280" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="276" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="276" height="26" color="#472958" />
     </surface>
     <surface name="b280x30-pressed" width="280" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="276" height="26" color="#155B71" />
+      <fill x="2" y="2" width="276" height="26" color="#472958" />
     </surface>
     <surface name="b280x30-disabled" width="280" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b56x28-normal" width="56" height="28">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b56x28-highlight" width="56" height="28">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="52" height="24" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="52" height="24" color="#472958" />
     </surface>
     <surface name="b56x28-pressed" width="56" height="28">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="52" height="24" color="#155B71" />
+      <fill x="2" y="2" width="52" height="24" color="#472958" />
     </surface>
     <surface name="b56x28-disabled" width="56" height="28">
       <fill color="#26313B" />
     </surface>
     <surface name="b100x28-normal" width="100" height="28">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b100x28-highlight" width="100" height="28">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="96" height="24" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="96" height="24" color="#472958" />
     </surface>
     <surface name="b100x28-pressed" width="100" height="28">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="96" height="24" color="#155B71" />
+      <fill x="2" y="2" width="96" height="24" color="#472958" />
     </surface>
     <surface name="b100x28-disabled" width="100" height="28">
       <fill color="#26313B" />
     </surface>
     <surface name="b108x28-normal" width="108" height="28">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b108x28-highlight" width="108" height="28">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="104" height="24" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="104" height="24" color="#472958" />
     </surface>
     <surface name="b108x28-pressed" width="108" height="28">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="104" height="24" color="#155B71" />
+      <fill x="2" y="2" width="104" height="24" color="#472958" />
     </surface>
     <surface name="b108x28-disabled" width="108" height="28">
       <fill color="#26313B" />
     </surface>
     <surface name="b89x28-normal" width="89" height="28">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b89x28-highlight" width="89" height="28">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="85" height="24" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="85" height="24" color="#472958" />
     </surface>
     <surface name="b89x28-pressed" width="89" height="28">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="85" height="24" color="#155B71" />
+      <fill x="2" y="2" width="85" height="24" color="#472958" />
     </surface>
     <surface name="b89x28-disabled" width="89" height="28">
       <fill color="#26313B" />
     </surface>
     <surface name="b91x28-normal" width="91" height="28">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b91x28-highlight" width="91" height="28">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="87" height="24" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="87" height="24" color="#472958" />
     </surface>
     <surface name="b91x28-pressed" width="91" height="28">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="87" height="24" color="#155B71" />
+      <fill x="2" y="2" width="87" height="24" color="#472958" />
     </surface>
     <surface name="b91x28-disabled" width="91" height="28">
       <fill color="#26313B" />
@@ -129,7 +129,7 @@
   </resources>
   <body width="640" height="480" background="bg" onload="export:FileManagerApp_Init()" onopen="export:FileManagerApp_Open()" onclose="export:FileManagerApp_Close()" onunload="export:FileManagerApp_Shutdown()">
     <label name="heading" text="File Manager" x="32" y="32" width="440" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="subtitle" text="DreamShell NeXT  /  Two panes. Clear destinations." x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="subtitle" text="K-UI  /  Two panes. Clear destinations." x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
     <input name="exit-btn" type="button" x="492" y="32" width="116" height="32" onclick="console:app -o" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
       <label name="exit-btn-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
@@ -159,7 +159,7 @@
       <label name="refresh-bottom-caption" text="Refresh" x="12" y="0" width="84" height="28" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
     <filemanager name="filemgr-bottom" path="/" x="328" y="160" width="280" height="196" background="white-bg" item_font="small" item_font_color="#EFF5FC" item_normal="row" item_highlight="row-focus" item_pressed="row-select" item_disabled="row" item_selected_normal="row-select" item_selected_highlight="row-focus" item_selected_pressed="row-select" item_selected_disabled="row" onclick="FileManagerItemClickBottom" oncontextclick="FileManagerItemContextClickBottom" onselect="FileManagerItemSelectBottom" />
-    <label name="title" text="Select a file or folder." x="32" y="362" width="576" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="title" text="Select a file or folder." x="32" y="362" width="576" height="24" font="small" color="#65E8F2" align="left" valign="center" />
     <panel name="toolbar-panel" x="32" y="394" width="576" height="28">
       <input name="copy-btn" type="button" x="0" y="0" width="89" height="28" onclick="FileManager:toolbarCopy()" normal="b89x28-normal" highlight="b89x28-highlight" pressed="b89x28-pressed" disabled="b89x28-disabled">
         <label name="copy-btn-caption" text="Copy" x="10" y="0" width="69" height="28" font="small" color="#EFF5FC" align="left" valign="center" />

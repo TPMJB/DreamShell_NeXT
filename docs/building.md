@@ -1,24 +1,26 @@
-# Building DreamShell NeXT
+# Building K-UI
 
-`master` contains the current integrated source preparing **1.0**. To reproduce
-the published maintenance release, check out tag `0.9.1` instead. The historical
-`v1.0.0` tag and `codex/release-1.0` branch are older development milestones.
+The K-UI 1.0 test candidate is on **`codex/k-ui`**. It includes bootloader 3.3
+and the complete DS folder. Build it with publication disabled; console testing
+comes before the full release. Old `1.0` and `v1.0.0` tags are preserved milestones.
 
 ## GitHub Actions
 
-1. Open **Actions → Full NeXT release → Run workflow**.
-2. Select `master`. Leave **Publish a GitHub release** unchecked for testing.
-3. After success, download the `DreamShell-NeXT-v1.0` artifact. Its ZIP contains
+1. Open **Actions → Full NeXT release → Run workflow** (`full-release.yml`).
+   The Actions list uses the name from `master`; runs from this branch are
+   named **Full K-UI release**.
+2. Select `codex/k-ui`. Leave **Publish a GitHub release** unchecked for testing.
+3. After success, download the `K-UI-v1.0` artifact. Its ZIP contains
    `DS`, both CDI images, guides and host tools directly, without another ZIP inside.
 4. Record the run URL and source commit when reporting console results.
 
-To publish after the release checklist is complete, run the workflow with
+After console approval and merging the candidate into `master`, publish from `master`: run the workflow with
 **Publish a GitHub release** selected. It builds and checks the source, uploads
-the ZIP and checksum as a draft, then publishes tag **1.0**. It rejects an
+the ZIP and checksum as a draft, then publishes tag **k-ui-1.0**. It rejects an
 existing tag and refuses publication if the branch changed during the build.
 The old `v1.0.0` tag is preserved. Publication requires repository write access.
 
-Ordinary pushes and pull requests run the **NeXT host checks** workflow. They
+Pushes to `master` and pull requests targeting it run the host checks workflow. They
 do not rebuild the toolchain, produce disc images, or publish releases. Historical
 app-specific build workflows are preserved in Git history and their original
 branches; the default branch uses one complete build workflow.
@@ -48,7 +50,7 @@ its `prepare` step recreates `/usr/local/dc/kos/kos` at the pinned revision.
 ```sh
 git clone --recurse-submodules https://github.com/TPMJB/DreamShell_NeXT.git
 cd DreamShell_NeXT
-git checkout master
+git checkout codex/k-ui
 ```
 
 Install the packages listed in `.github/workflows/full-release.yml`, including
@@ -74,7 +76,7 @@ present on the host; Actions resolves its current revision for cache selection.
 This is a source/version-tracked build, not a claim of bit-for-bit reproducibility
 across arbitrary compilers or dependency updates.
 
-The final output is `DreamShell-NeXT-v1.0.zip` plus an outer `SHA256SUMS`.
+The final output is `K-UI-v1.0.zip` plus an outer `SHA256SUMS`.
 The packager validates source-matching app XML, SH-4 modules, loader payloads,
 branding, required guides and the embedded build record. Do not distribute
 `DreamShell-dev.zip` as the sealed release artifact.

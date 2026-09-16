@@ -1,7 +1,7 @@
-# Installing DreamShell NeXT
+# Installing K-UI
 
 The current published download is [NeXT 0.9.1](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/0.9.1).
-The `master` branch prepares **1.0**. A build artifact is a test build until a
+The `codex/k-ui` branch prepares **1.0**. A build artifact is a test build until a
 versioned GitHub release is published. Use the files and notes from the same build.
 
 ## Files in a complete download
@@ -9,8 +9,8 @@ versioned GitHub release is published. Use the files and notes from the same bui
 | Item | Purpose |
 | --- | --- |
 | `DS/` | Complete installation for your SD or IDE/CF device. |
-| `DreamShell_bootloader_v3.2.cdi` | Boot CD that loads `DS` from storage. |
-| `DreamShell-NeXT-v1.0.cdi` | Full CD distribution for this prepared version. |
+| `K-UI_bootloader_v3.3.cdi` | Boot CD that loads `DS` from storage. |
+| `K-UI-v1.0.cdi` | Full CD distribution for this prepared version. |
 | `boot.cfg.example` | Optional boot menu/device settings; copy to `DS/boot.cfg` only when wanted. |
 | `host-tools/` | Python verification and recovery tools for your computer. |
 | `build-info.json`, `SHA256SUMS` | Source/version information and file checksums. |
@@ -53,7 +53,7 @@ to make an incomplete dump appear complete.
 ## Do I need another CD?
 
 A working NeXT **3.0 or 3.1** boot disc can load the updated `DS` folder.
-Burning the included 3.2 disc is optional for those installations; it includes
+Burning the included 3.3 disc is optional for those installations; it includes
 the current boot reader fixes, recovery menu and TPMJB startup badge.
 The 3.2 disc fixes garbled recovery text and the old background when no core is
 found. Receiving that fix requires burning the new CDI; an SD update cannot
@@ -83,3 +83,7 @@ Keep the new error message and logs. With the console off, restore your backed-u
 `DS` folder to return to the prior installation. This does not undo BIOS/region
 writes, VMU writes, or edits to game dumps; those have their own backup workflows.
 Check that the bootloader selected the intended device/core if an old UI appears.
+
+Bootloader 3.3 adds the K-UI name and disc artwork while retaining the tested 3.2
+recovery/font fixes. Burn its CDI to update the disc branding. A working 3.2
+disc still loads the new DS folder. No BIOS flash or saved-dump conversion is needed.

@@ -18,8 +18,8 @@ def boot_version():
 
 
 VERSION = '.'.join(boot_version()[:2])
-PACKAGE = f'DreamShell-NeXT-Bootloader-{VERSION}.zip'
-CDI = f'DreamShell-NeXT-TPMJB-bootloader-v{VERSION}.cdi'
+PACKAGE = f'K-UI-Bootloader-{VERSION}.zip'
+CDI = f'K-UI-TPMJB-bootloader-v{VERSION}.cdi'
 
 
 def verify_cdi(data):
@@ -53,10 +53,10 @@ def main():
     with ZipFile(ROOT/'DreamShell-dev.zip') as full:
         if full.testzip() is not None:
             raise ValueError('Build archive failed CRC validation')
-        cdi = full.read(f'DreamShell_bootloader_v{VERSION}.cdi')
+        cdi = full.read(f'K-UI_bootloader_v{VERSION}.cdi')
     start = verify_cdi(cdi)
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    info = dict(project='DreamShell NeXT', edition='TPMJB bootloader recovery and settings',
+    info = dict(project='K-UI', edition='TPMJB bootloader recovery and settings',
                 bootloader=VERSION, source_commit=commit,
                 badge='resources/boot-disc-badge.svg',
                 website='https://github.com/TPMJB', console_tested=False)

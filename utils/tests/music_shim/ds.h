@@ -16,6 +16,7 @@ kthread_t *thd_create(int,void *(*)(void *),void *);
 int thd_join(kthread_t *,void **);
 void thd_sleep(int);
 void thd_pass(void);
+uint64_t timer_ms_gettime64(void);
 int GetVolumeFromSettings(void);
 void ds_printf(const char *,...);
 #endif

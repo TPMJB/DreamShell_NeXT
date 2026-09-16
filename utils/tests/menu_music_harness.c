@@ -13,6 +13,7 @@ static FILE *MusicFopen(const char *path,const char *mode) {
     ++file_opens;
     return fopen(path,mode);
 }
+uint64_t timer_ms_gettime64(void) { static uint64_t tick=123; return ++tick; }
 void thd_pass(void) {
     char label[64];
     MenuMusicLabel(label,sizeof(label)); /* Must remain usable during slow I/O. */
@@ -148,6 +149,26 @@ int main(int argc,char **argv) {
     RipperMusicOpen("/ide/DS"); assert(!strcmp(music.path,"/ide/DS/apps/launch_app")); MenuMusicClose();
     RipperMusicOpen("/pc/DS"); assert(!strcmp(music.path,"/pc/DS/apps/launch_app")); MenuMusicClose();
     MenuMusicClose(); assert(!active && !worker.live && destroys>0);
+    /* Real playlist visits: every selection loads its own PCM; muting never
+     * changes the selection and no two consecutive visits repeat in-module. */
+    Write(config,"15\n",3);
+    for(unsigned i=0;i<MUSIC_TRACKS;++i) {
+        snprintf(track,sizeof(track),"%s/%s",folder,music_tracks[i]);
+        wav[44]=(unsigned char)(20+i); Write(track,wav,sizeof(wav));
+    }
+    unsigned seen=0, last=MUSIC_TRACKS;
+    for(int visit=0;visit<64;++visit) {
+        MenuMusicOpen(argv[1]); MenuMusicPoll();
+        unsigned choice=music.track;
+        assert(active && choice<MUSIC_TRACKS && choice!=last);
+        assert(music.pcm[0]==20+choice); seen|=1u<<choice; last=choice;
+        int reads=file_opens;
+        MenuMusicStorageLock();
+        for(int i=0;i<6;++i) { MenuMusicCycle(); MenuMusicPoll(); }
+        assert(music.track==choice && music.pcm[0]==20+choice && file_opens==reads);
+        MenuMusicStorageUnlock(); MenuMusicClose();
+    }
+    assert(seen==(1u<<MUSIC_TRACKS)-1);
     puts("Music UI independence, cached mute/resume, 100% volume, storage gate and cleanup passed");
     return 0;
 }

@@ -8,7 +8,7 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = 'DreamShell NeXT'
+PROJECT = 'K-UI'
 MAINTAINER = 'TPMJB'
 REPOSITORY = 'https://github.com/TPMJB/DreamShell_NeXT'
 NEXT_NOTICE = f'Required Notice: {PROJECT} enhancements and branding by {MAINTAINER} ({REPOSITORY}).'
@@ -67,37 +67,37 @@ def generate(root=ROOT):
 
 
 def validate_archive(archive, root, commit, version):
-    """Explicit checks for the official NeXT packager, never called by the core."""
+    """Explicit checks for the official K-UI packager, never called by the core."""
     try:
         baseline = dict(line.split('  ', 1)[::-1] for line in
                         (root / 'resources/next-branding.sha256').read_text().splitlines())
     except (OSError, ValueError) as error:
-        raise ValueError('Official NeXT branding manifest is missing or malformed') from error
+        raise ValueError('Official K-UI branding manifest is missing or malformed') from error
     if set(baseline) != set(BRANDING_FILES):
-        raise ValueError('Official NeXT branding manifest must identify the boot badge and core logo')
+        raise ValueError('Official K-UI branding manifest must identify the boot badge and core logo')
     for name in BRANDING_FILES:
         try:
             digest = hashlib.sha256((root / name).read_bytes()).hexdigest()
         except OSError as error:
-            raise ValueError(f'Official NeXT branding asset is missing: {name}') from error
+            raise ValueError(f'Official K-UI branding asset is missing: {name}') from error
         if digest != baseline[name]:
-            raise ValueError(f'Official NeXT branding changed: {name}; review the artwork and its manifest')
+            raise ValueError(f'Official K-UI branding changed: {name}; review the artwork and its manifest')
     notice = (root / 'NOTICE').read_bytes()
     lines = notice.decode('utf-8').splitlines()
     for required in (*UPSTREAM_NOTICES, NEXT_NOTICE):
         if required not in lines:
-            raise ValueError(f'Official NeXT release source is missing attribution: {required}')
+            raise ValueError(f'Official K-UI release source is missing attribution: {required}')
     for name in ('NOTICE', 'LICENSE'):
         try:
             packaged = archive.read('DS/doc/' + name)
         except KeyError as error:
-            raise ValueError(f'Official NeXT release is missing DS/doc/{name}') from error
+            raise ValueError(f'Official K-UI release is missing DS/doc/{name}') from error
         if packaged != (root / name).read_bytes():
             raise ValueError(f'Packaged {name} differs from source; refresh the build documentation')
     try:
         data = archive.read(RECORD)
     except KeyError as error:
-        raise ValueError(f'Official NeXT release is missing {RECORD}; rebuild the core') from error
+        raise ValueError(f'Official K-UI release is missing {RECORD}; rebuild the core') from error
     try:
         record = json.loads(data)
     except (ValueError, UnicodeError) as error:
@@ -114,11 +114,11 @@ def validate_archive(archive, root, commit, version):
         if record.get(key) != value:
             raise ValueError(f'NeXT build attribution mismatch: {key}; rebuild from the intended source')
     if type(record.get('tracked_changes')) is not bool:
-        raise ValueError('Official NeXT build attribution requires Git source status')
+        raise ValueError('Official K-UI build attribution requires Git source status')
     for name in CORE_NAMES:
         path = 'DS/' + name
         if data not in archive.read(path):
-            raise ValueError(f'{path} is missing matching NeXT build attribution; rebuild this core')
+            raise ValueError(f'{path} is missing matching K-UI build attribution; rebuild this core')
     return record
 
 

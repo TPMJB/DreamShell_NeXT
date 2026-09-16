@@ -503,15 +503,15 @@ void menu_frame(void) {
     mutex_unlock(&job_mutex);
 
     const float body=0.75f; /* Integer 9x18 glyphs, including on interlaced TV. */
-    draw_box(24,24,592,432,100,1,0.035f,0.075f,0.13f);
+    draw_box(24,24,592,432,100,1,0.031f,0.059f,0.137f);
     draw_box(24,24,592,3,100.5f,1,0.3f,0.9f,0.86f);
     line(40,36,1,0.9f,0.98f,1,title,46);
-    line(40,67,body,0.6f,0.8f,0.85f,"TPMJB  /  github.com/TPMJB/DreamShell_NeXT",62);
+    line(40,67,body,0.6f,0.8f,0.85f,"Katana User Interface  /  by TPMJB",62);
     if(countdown.armed) {
         uint64_t now=timer_ms_gettime64();
         unsigned seconds=now<countdown.deadline ? (unsigned)((countdown.deadline-now+999)/1000) : 0;
         snprintf(info,sizeof(info),"Booting in %us - any button opens the menu",seconds);
-    } else if(!inventory.count) snprintf(info,sizeof(info),"Waiting for storage with DreamShell installed");
+    } else if(!inventory.count) snprintf(info,sizeof(info),"Waiting for storage with K-UI installed");
     else snprintf(info,sizeof(info),"%d core%s available",inventory.count,inventory.count==1 ? "" : "s");
     line(40,92,body,0.6f,0.8f,0.85f,info,62);
 
@@ -527,7 +527,7 @@ void menu_frame(void) {
     for(int n=0; n<VISIBLE_ITEMS && first+n<inventory.count; ++n) {
         int index=first+n;
         float y=122+n*24;
-        if(index==inventory.selected) draw_box(34,y,572,23,100.5f,1,0.13f,0.29f,0.36f);
+        if(index==inventory.selected) draw_box(34,y,572,23,100.5f,1,0.28f,0.16f,0.35f);
         line(44,y+2,body,0.93f,0.97f,1,inventory.items[index].label,61);
     }
     if(inventory.count>VISIBLE_ITEMS) {

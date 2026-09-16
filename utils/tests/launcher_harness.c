@@ -244,7 +244,7 @@ static void Faults(void) {
  for(int i=0;i<self.item_count;i++)if(self.items[i].app_id==a->id){
   SetFocusedIndex(i,0);assert(!self.items[i].icon);assert(self.items[i].label);
   assert(self.preview_banner->texture==self.fallback_icon);
-  assert(!strcmp(self.items[i].description,"Open this installed DreamShell application."));
+  assert(!strcmp(self.items[i].description,"Open this installed K-UI application."));
   for(int j=0;j<2;j++){TSU_LabelGetSize(self.title[j],&w,&h);assert(w<=DETAIL_W);}
   Button(SDL_DC_A);assert(opened==a->id);
  }

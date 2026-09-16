@@ -19,10 +19,12 @@ $(DEPS): $(wildcard modules/*.c modules/*.h)
 clean:
 	cd modules && make clean && cd ../
 
-music/menu.wav: ../../utils/generate_menu_music.py
-	$(PYTHON) ../../utils/generate_menu_music.py --output $@
+MUSIC_TRACKS = music/menu.wav music/neon-circuit.wav music/orbital-drift.wav music/midnight-vector.wav music/chrome-horizon.wav
 
-install: app.xml catalog.xml music/menu.wav $(DEPS)
+$(MUSIC_TRACKS) &: ../../utils/generate_menu_music.py
+	$(PYTHON) ../../utils/generate_menu_music.py --directory music
+
+install: app.xml catalog.xml $(MUSIC_TRACKS) $(DEPS)
 	-mkdir -p $(APP_DIR)
 	-mkdir -p $(APP_DIR)/modules
 	-mkdir -p $(APP_DIR)/scripts
@@ -32,4 +34,4 @@ install: app.xml catalog.xml music/menu.wav $(DEPS)
 	cp app.xml $(APP_DIR)/app.xml
 	cp catalog.xml $(APP_DIR)/catalog.xml
 	cp images/*.png $(APP_DIR)/images
-	cp music/menu.wav music/README.md $(APP_DIR)/music/
+	cp $(MUSIC_TRACKS) music/README.md $(APP_DIR)/music/

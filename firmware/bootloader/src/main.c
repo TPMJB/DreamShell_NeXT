@@ -41,7 +41,7 @@ pvr_init_params_t params = {
 	0
 };
 
-const char title[] = "DreamShell NeXT boot v"VERSION;
+const char title[] = "K-UI boot v"VERSION;
 
 
 int FileExists(const char *fn) {

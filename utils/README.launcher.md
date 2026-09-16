@@ -1,4 +1,4 @@
-# DreamShell NeXT launcher 2.1.0
+# K-UI launcher 2.1.0
 
 Launch App provides a controller-operated list and details pane at 640x480.
 Installed apps and saved Lua/DSC shortcuts remain discoverable. The original

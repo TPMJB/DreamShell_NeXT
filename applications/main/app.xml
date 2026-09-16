@@ -4,7 +4,7 @@
 		<module src="modules/app_main.klf" />
 		<font src="../../fonts/ttf/comic_lite.ttf" type="ttf" size="16" name="comic" />
 		<surface width="100%" height="450" name="main-bg">
-			<fill color="#70C9DB" />
+			<fill color="#080F23" />
 			<blit align="center" valign="center" surface="images/logo.png" />
 		</surface>
 		<image src="images/taskbar.png" name="taskbar-bg" />
@@ -28,7 +28,7 @@
 						<label name="date" text="00.00.0000" color="#33295A" align="left" valign="center" font="comic" />
 					</panel>
 					<panel width="62%">
-						<label name="version" text="DreamShell" color="#33295A" align="center" valign="center" font="comic" />
+						<label name="version" text="K-UI" color="#33295A" align="center" valign="center" font="comic" />
 					</panel>
 					<panel width="16%">
 						<panel width="30%">

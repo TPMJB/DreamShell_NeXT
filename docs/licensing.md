@@ -1,6 +1,6 @@
 # Licensing and attribution
 
-DreamShell NeXT is maintained by TPMJB and includes work from the original
+K-UI is maintained by TPMJB and includes work from the original
 DreamShell project and other contributors. This page explains the repository's
 licensing arrangement; the applicable license texts control.
 

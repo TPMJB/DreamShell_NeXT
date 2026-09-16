@@ -24,6 +24,7 @@ int thd_join(kthread_t *t,void **result) {
     int rv=pthread_join(t->thread,result); free(t); return rv;
 }
 void thd_sleep(int ms) {usleep(ms*1000);}
+uint64_t timer_ms_gettime64(void) { static uint64_t tick=123; return ++tick; }
 void thd_pass(void) {sched_yield();}
 int GetVolumeFromSettings(void) {return 200;}
 void ds_printf(const char *format,...) {(void)format;}

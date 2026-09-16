@@ -1,33 +1,35 @@
-**☕ [Support TPMJB's work on DreamShell NeXT on Ko-fi](https://ko-fi.com/tpmjb)**
+**☕ [Support TPMJB's work on K-UI on Ko-fi](https://ko-fi.com/tpmjb)**
 
 Optional tips help support development, testing and documentation. Downloads remain free.
 
-# DreamShell NeXT — by TPMJB
+# K-UI — by TPMJB
 
-A Dreamcast tools environment inspired by Swat's DreamShell
-and KallistiOS. NeXT adds exFAT boot/storage support, a controller-friendly app
-launcher, a QWERTY keyboard and directory browser, and reliable GD ripping with
-checkpoints, catalog verification and targeted recovery.
+**Katana User Interface** — a Dreamcast tools environment by TPMJB, built on
+SWAT's DreamShell and KallistiOS. Formerly DreamShell NeXT.
+
+![K-UI: neon visor portrait and chrome wordmark](resources/branding/k-ui-splash.png)
+
+K-UI includes exFAT storage, a controller-friendly launcher, redesigned utilities,
+and GD ripping with checkpoints, catalog verification and targeted recovery.
 
 **[Download the full NeXT 0.9.1 release](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/0.9.1)**
 — includes the complete DS folder, boot CDs, firmware and desktop tools.
 Read [the published installation and release notes](https://github.com/TPMJB/DreamShell_NeXT/blob/0.9.1/RELEASE-NOTES.md)
 before updating. [Browse the released 0.9.1 source](https://github.com/TPMJB/DreamShell_NeXT/tree/0.9.1).
 
-**1.0 is being prepared on `master`.** This branch includes the complete 0.9.1
-source, GD Ripper 2.2.2, and the attribution and documentation cleanup. The
-[prepared release notes](RELEASE-NOTES.md) and [release checklist](docs/release-checklist.md)
-describe the candidate; 0.9.1 remains the published stable download.
+**K-UI 1.0 is a test candidate on `codex/k-ui`.** It includes the integrated
+project work, the tested bootloader/music fixes, new artwork throughout the shell,
+and five original synth loops. The full 1.0 release waits for console testing.
+See [candidate release notes](RELEASE-NOTES.md) and the [release checklist](docs/release-checklist.md).
 
-[![DreamShell NeXT 0.9 overview: Launcher, GD Ripper, Games, Settings, VMU Manager and File Manager](docs/screenshots/0.9/00-release-overview.png)](docs/screenshots/README.md)
+[![Current K-UI app layout previews](docs/screenshots/k-ui/overview.png)](docs/screenshots/k-ui/README.md)
 
-**[Explore all 14 app screens →](docs/screenshots/README.md)**
-— click any image in the gallery to open it at full size.
-These are layout previews from the released 0.9 source, with sample data.
+[Current app previews](docs/screenshots/k-ui/README.md) use the actual layouts
+with sample data. The [0.9 gallery](docs/screenshots/README.md) is retained as a historical archive.
 
 ## Included in the 1.0 source
 
-- **GD Ripper 2.2.2:** disc-title detection, Stop/Resume, CRC checkpoints, TOSEC
+- **GD Ripper 2.2.4:** disc-title detection, Stop/Resume, CRC checkpoints, TOSEC
   and Redump-derived catalogs, optional saved-file scans, and targeted recovery.
   Recovery reports original, recovered and unresolved totals across sessions.
 - **Shared Games folders:** rip to `/ide/Games`, `/sd/Games` or `/pc/Games` and
@@ -37,10 +39,10 @@ These are layout previews from the released 0.9 source, with sample data.
 - **Games and ISO Loader:** controller navigation, artwork extraction, eligible
   CD-audio previews, image checks and launch reports. Compatibility varies by
   game and storage hardware.
-- **NeXT utilities:** File Manager, VMU Manager, GD Play, Settings, BIOS Flasher,
+- **K-UI utilities:** File Manager, VMU Manager, GD Play, Settings, BIOS Flasher,
   Region Changer, Speedtest, Memtest and Network, plus the other standard apps.
-- **Bootloader 3.2 and launcher music:** checked core loading, recovery menu,
-  optional boot settings, TPMJB branding and the original *After Hours* loop.
+- **Bootloader 3.3 and music:** checked core loading, recovery menu,
+  optional boot settings, K-UI artwork and five original synth loops in Launcher and GD Ripper.
 
 A working NeXT 3.0/3.1 boot disc can load the updated DS folder. The project
 release number is independent of the DreamShell **4.0.5 Beta 3** core/API and
@@ -62,23 +64,24 @@ before assuming a particular game or device is supported.
 
 ## Build
 
-Use **Actions → Full NeXT release → Run workflow**, select `master`, and leave
+Use **Actions → Full NeXT release → Run workflow** (`full-release.yml`; the test
+run is named **Full K-UI release**), select `codex/k-ui`, and leave
 **Publish a GitHub release** unchecked to produce a complete test artifact.
-Publication is a separate explicit choice. Normal pushes run host checks and
+Publication is a separate explicit choice. Master pushes and pull requests run host checks and
 do not start a full toolchain/Dreamcast build.
 
 [Build instructions](docs/building.md) cover Actions, local Ubuntu builds and
-the exact release outputs. `master` is the current integration source; use the
+the exact release outputs. `codex/k-ui` is the current test source; use the
 `0.9.1` tag when reproducing that published release. The old `v1.0.0` tag is a
 historical development milestone, not the upcoming 1.0 release.
 
 ## Licensing and contributions
 
-DreamShell-specific code and NeXT additions use
+DreamShell-specific code and K-UI additions use
 [PolyForm Noncommercial 1.0.0](LICENSE), except where separate terms apply.
 Third-party components retain their own licenses. Preserve the required
 [notices](NOTICE); see [licensing and attribution](docs/licensing.md) for scope.
 
-Contributors retain their copyrights. NeXT uses the applicable existing licenses
+Contributors retain their copyrights. K-UI uses the applicable existing licenses
 and does not require a separate CLA or commercial relicensing grant. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for submissions and bug reports.

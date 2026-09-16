@@ -1,5 +1,5 @@
-DreamShell NeXT
-NeXT enhancements and branding by TPMJB
+K-UI (Katana User Interface)
+K-UI enhancements and branding by TPMJB
 https://github.com/TPMJB/DreamShell_NeXT
 
 Based on DreamShell 4.0.5 Beta 3

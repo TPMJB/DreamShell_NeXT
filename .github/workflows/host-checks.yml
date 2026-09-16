@@ -1,4 +1,4 @@
-name: NeXT host checks
+name: K-UI host checks
 
 on:
   push:

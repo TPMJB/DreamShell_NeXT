@@ -198,7 +198,7 @@ int InitDS() {
 	dbglog_set_level(DBG_KDEBUG);
 #endif
 
-	setenv("HOST", "DreamShell", 1);
+	setenv("HOST", "K-UI", 1);
 	setenv("OS", getenv("HOST"), 1);
 	setenv("USER", getenv("HOST"), 1);
 

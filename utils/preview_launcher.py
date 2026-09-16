@@ -9,6 +9,7 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from PIL import Image, ImageDraw, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +41,7 @@ def render(output, index=0):
             draw.rounded_rectangle((x,y-d['h']*scale,x+d['w']*scale,y),radius=d['radius']*scale,fill=color)
         elif d['kind']==2 and d['image']:
             with Image.open(ROOT/d['image']) as im:
-                im=im.convert('RGBA').resize((round(d['w']*scale),round(d['h']*scale)),Image.Resampling.LANCZOS)
+                im=im.convert('RGBA').resize((round(d['w']*scale),round(d['h']*scale)),getattr(Image,'Resampling',Image).LANCZOS)
                 canvas.paste(im,(round(x-im.width/2),round(y-im.height/2)),im)
         elif d['kind']==1:
             size=d['size']*scale
@@ -50,10 +51,16 @@ def render(output, index=0):
                 mask,xo,yo,gw,gh=glyphs[c]
                 factor=size/ascent
                 if gw and gh:
-                    mask=mask.resize((max(1,round(gw*factor)),max(1,round(gh*factor))),Image.Resampling.BILINEAR)
+                    mask=mask.resize((max(1,round(gw*factor)),max(1,round(gh*factor))),getattr(Image,'Resampling',Image).BILINEAR)
                     canvas.paste(color,(round(x+xo*factor),round(y-(yo+gh)*factor)),mask)
                 x+=(0.1+(xo+gw)/ascent)*size
-    canvas.resize((1280,960),Image.Resampling.LANCZOS).save(output)
+    # Static XML banners are not owned by the C scene harness. Render them
+    # from the same shipped assets; coordinates are top-left in this XML API.
+    for node in ET.parse(ROOT/'applications/launch_app/app.xml').findall('body/image'):
+        with Image.open(ROOT/'applications/launch_app'/node.get('src')) as im:
+            im = im.convert('RGB').resize((int(node.get('width'))*scale,int(node.get('height'))*scale),getattr(Image,'Resampling',Image).LANCZOS)
+            canvas.paste(im,(int(node.get('x'))*scale,int(node.get('y'))*scale))
+    canvas.resize((1280,960),getattr(Image,'Resampling',Image).LANCZOS).save(output)
 
 if __name__=='__main__':
     render(sys.argv[1],int(sys.argv[2]) if len(sys.argv)>2 else 0)

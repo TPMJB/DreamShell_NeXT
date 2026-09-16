@@ -1,4 +1,4 @@
-name: Full NeXT release
+name: Full K-UI release
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build:
-    name: Build complete NeXT package
+    name: Build complete K-UI package
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     permissions:
@@ -45,7 +45,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$PUBLISH_RELEASE" == true ]]; then
             test "$GITHUB_REF" = refs/heads/master || { echo 'Publish from the reviewed master branch.'; exit 1; }
-            existing="$(git ls-remote --tags origin "refs/tags/${version}")"
+            existing="$(git ls-remote --tags origin "refs/tags/k-ui-${version}")"
             test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
           fi
 
@@ -133,7 +133,7 @@ jobs:
           make -C applications/speedtest/modules module.o exports.o
           make -C applications/memtest/modules module.o exports.o
           make -C applications/network/modules module.o exports.o
-          make -C applications/gd_ripper/modules module.o exports.o
+          make -C applications/gd_ripper/modules module.o music.o exports.o
           make -C applications/vmu_manager/modules module.o exports.o
           make -C applications/iso_loader/modules module.o utils.o exports.o
           make -C applications/games_menu/modules module.o utils.o menu.o system_menu.o preset.o exports.o
@@ -174,12 +174,12 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile
           version = Path('VERSION').read_text().strip()
-          with ZipFile(f'DreamShell-NeXT-v{version}.zip') as package:
+          with ZipFile(f'K-UI-v{version}.zip') as package:
               assert package.testzip() is None
               package.extractall('full-build')
           PY_BUILD
 
-      - name: Validate launcher runtime imports
+      - name: Validate music runtime imports
         run: |
           source /usr/local/dc/kos/kos/environ.sh
           python3 utils/package_menu_music.py check-imports "$KOS_BASE" "$KOS_CC_BASE/bin/sh-elf-nm"
@@ -187,7 +187,7 @@ jobs:
       - name: Upload complete build contents
         uses: actions/upload-artifact@v4
         with:
-          name: DreamShell-NeXT-v${{ steps.release.outputs.version }}
+          name: K-UI-v${{ steps.release.outputs.version }}
           path: full-build/
           if-no-files-found: error
           retention-days: 30
@@ -201,14 +201,14 @@ jobs:
           version="$(cat VERSION)"
           current="$(git ls-remote origin "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
           test "$current" = "$GITHUB_SHA" || { echo 'Source branch changed during the build; refusing to publish stale files.'; exit 1; }
-          existing="$(git ls-remote --tags origin "refs/tags/${version}")"
+          existing="$(git ls-remote --tags origin "refs/tags/k-ui-${version}")"
           test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
           cp RELEASE-NOTES.md /tmp/next-release-notes.md
           printf '\nBuilt from [%s](%s/%s/commit/%s). [Build and test results](%s/%s/actions/runs/%s).\n' \
             "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/next-release-notes.md
           # Upload assets as a draft first; publish only once both uploads finish.
-          gh release create "$version" "DreamShell-NeXT-v${version}.zip" SHA256SUMS \
-            --draft --title "DreamShell NeXT ${version} — by TPMJB" \
+          gh release create "k-ui-$version" "K-UI-v${version}.zip" SHA256SUMS \
+            --draft --title "K-UI ${version} — by TPMJB" \
             --target "$GITHUB_SHA" --notes-file /tmp/next-release-notes.md
-          gh release edit "$version" --draft=false --latest
+          gh release edit "k-ui-$version" --draft=false --latest

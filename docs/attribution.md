@@ -1,14 +1,14 @@
-# DreamShell NeXT attribution and build records
+# K-UI attribution and build records
 
-NeXT enhancements and branding are credited to **TPMJB**. The root `NOTICE`
+K-UI enhancements and branding are credited to **TPMJB**. The root `NOTICE`
 includes this attribution alongside the original DreamShell notices for
 **Ruslan Rostovtsev (SWAT)** and the existing third-party credits. This notice
 does not claim authorship of the upstream project or its other contributors' work.
 
-NeXT 1.0 builds contain a readable `next-build.json` record inside the core's
+K-UI 1.0 builds contain a readable `next-build.json` record inside the core's
 ROM disk, accessible as `/rd/next-build.json`. A copy is installed at
 `DS/doc/next-build.json`, and the complete release's `build-info.json` includes
-the record under `provenance`. The record identifies NeXT, TPMJB, the repository,
+the record under `provenance`. The record identifies K-UI, TPMJB, the repository,
 project version, full source commit, and SHA-256 of the distributed `NOTICE`.
 `tracked_changes` reports modifications to tracked source files at build time;
 it does not inventory untracked files. Source archives without Git metadata

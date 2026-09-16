@@ -174,7 +174,7 @@ static void save_report(void) {
 static void confirm(int action) {
     if(action == 2) {
         self.runs = 0; self.write = self.read = 0; self.summary[0] = 0;
-        snprintf(self.report, sizeof(self.report), "DreamShell NeXT Speedtest\nIO timings include close/flush, exclude pattern and GUI work.\nCaches remain enabled. Repeated reads may be cached.\nFailed/stopped runs contain partial timings, not successful benchmark results.\n");
+        snprintf(self.report, sizeof(self.report), "K-UI Speedtest\nIO timings include close/flush, exclude pattern and GUI work.\nCaches remain enabled. Repeated reads may be cached.\nFailed/stopped runs contain partial timings, not successful benchmark results.\n");
         refresh(); ma_status("Results cleared.", 0); ma_note("");
     }
 }

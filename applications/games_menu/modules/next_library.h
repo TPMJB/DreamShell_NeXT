@@ -1,8 +1,8 @@
 /* Native Tsunami chrome. Owned separately so every view retains its actions. */
 #include "next_layout.h"
 
-static const Color next_navy = {1, .047f, .078f, .122f};
-static const Color next_panel = {1, .075f, .125f, .188f};
+static const Color next_navy = {1, .031f, .059f, .137f};
+static const Color next_panel = {1, .071f, .102f, .192f};
 static const Color next_cyan = {1, .18f, .83f, .94f};
 static const Color next_white = {1, .93f, .96f, .99f};
 static const Color next_muted = {1, .57f, .68f, .77f};
@@ -67,7 +67,7 @@ static void NextCreateChrome(void) {
     library.panels[0]=NextPanel((NextRect){0,0,640,480},&next_navy,ML_BACKGROUND);
     library.panels[1]=NextPanel((NextRect){24,88,592,2},&next_cyan,ML_BACKGROUND+1);
     library.panels[2]=NextPanel((NextRect){24,408,592,1},&next_panel,ML_BACKGROUND+1);
-    library.brand=NextLabel("DREAMSHELL NeXT",12,24,28,0,&next_cyan);
+    library.brand=NextLabel("K-UI / KATANA USER INTERFACE",12,24,28,0,&next_cyan);
     library.heading=NextLabel("Games",28,24,57,0,&next_white);
     library.owner=NextLabel("TPMJB",21,535,33,81,&next_cyan);
     library.url=NextLabel("github.com/TPMJB",12,474,54,142,&next_muted);

@@ -33,8 +33,10 @@ def package(dest):
     elf = module.read_bytes()
     assert len(elf)>1024 and elf[:7]==b'\x7fELF\x01\x01\x01'
     assert struct.unpack_from('<HH',elf,16)==(1,42), 'Expected SH-4 relocatable ELF'
-    files = [app/'app.xml',app/'catalog.xml',module,app/'music/menu.wav',app/'music/README.md']
+    files = [app/'app.xml',app/'catalog.xml',module,app/'music/README.md']
     files += sorted((app/'images').glob('*.png'))
+    from generate_menu_music import TRACKS
+    files += [app/'music'/name for name in TRACKS]
     for file in files:
         target = dest/'DS/apps/launch_app'/file.relative_to(app)
         target.parent.mkdir(parents=True,exist_ok=True)
@@ -52,6 +54,7 @@ def package(dest):
 
 if __name__=='__main__':
     if sys.argv[1]=='check-imports':
-        check_imports(ROOT/'applications/launch_app/modules/app_launch_app.klf',Path(sys.argv[2]),sys.argv[3])
+        for app in ('launch_app', 'gd_ripper'):
+            check_imports(ROOT/f'applications/{app}/modules/app_{app}.klf',Path(sys.argv[2]),sys.argv[3])
     else:
         package(Path(sys.argv[1]))

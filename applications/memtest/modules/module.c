@@ -70,7 +70,7 @@ static void run(void) {
     ma_busy(1); self.plan.cancel = 0; self.ran = 1; self.saved = 0; self.options = 0;
     memset(self.results, 0, sizeof(self.results));
     memset(self.errors, 0, sizeof(self.errors)); memset(self.completed, 0, sizeof(self.completed));
-    snprintf(self.report, sizeof(self.report), "DreamShell NeXT Memtest\nHardware: %s\nMode: %s\nRequested passes: %u\nStop on failure: %s\nCoverage: detected memory regions; live RAM execution island excluded.\nEngine backs up/restores tested chunks. Quick omits device patterns.\nStopping takes effect between regions. No claim of exhaustive hardware coverage.\n",
+    snprintf(self.report, sizeof(self.report), "K-UI Memtest\nHardware: %s\nMode: %s\nRequested passes: %u\nStop on failure: %s\nCoverage: detected memory regions; live RAM execution island excluded.\nEngine backs up/restores tested chunks. Quick omits device patterns.\nStopping takes effect between regions. No claim of exhaustive hardware coverage.\n",
         self.plan.hw_name, self.plan.quick ? "Quick" : "Full", cycles[self.cycle], self.stop_first ? "yes" : "no");
     refresh();
     int failures = 0, tested = 0, stop = 0;

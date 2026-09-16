@@ -470,7 +470,7 @@ static void ShowVersion(GUI_Widget *widget) {
 		return;
 	}
 	char vers[64];	
-	snprintf(vers, sizeof(vers), "%s %s", getenv("OS"), getenv("VERSION"));
+	snprintf(vers, sizeof(vers), "K-UI by TPMJB");
 	GUI_LabelSetText(widget, vers);
 }
 

@@ -23,7 +23,7 @@ BUILD_TYPE_BASE = $(if $(filter 0x3%,$(VER_BUILD)),Release,$(if $(filter 0x2%,$(
 BUILD_NUM = $(lastword $(subst 0x2,,$(subst 0x1,,$(subst 0x0,,$(subst 0x3,,$(VER_BUILD))))))
 BUILD_TYPE_NAME = $(if $(filter Release,$(BUILD_TYPE_BASE)),$(BUILD_TYPE_BASE),$(BUILD_TYPE_BASE)$(BUILD_NUM))
 NEXT_VERSION = $(shell cat $(DS_BASE)/VERSION 2>/dev/null || cat VERSION)
-TARGET_NAME = DreamShell-NeXT-v$(NEXT_VERSION)
+TARGET_NAME = K-UI-v$(NEXT_VERSION)
 TARGET_BIN = $(TARGET)_CORE.BIN
 TARGET_BIN_CD = 1$(TARGET_BIN)
 IDE_IMG_SIZE ?= 0
@@ -326,7 +326,7 @@ $(TARGET).cdi: $(TARGET_BIN_CD) make-build
 	@-rm -f $(DS_BUILD)/$(TARGET_BIN_CD)
 	@cp $(TARGET_BIN_CD) $(DS_BUILD)/$(TARGET_BIN_CD)
 	@-rm -rf $(DS_BUILD)/.* 2> /dev/null
-	@$(DS_SDK)/bin/mkisofs -V DreamShell -C 0,11702 -G /tmp/IP_$(TARGET).BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
+	@$(DS_SDK)/bin/mkisofs -V K-UI -C 0,11702 -G /tmp/IP_$(TARGET).BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
 	@echo Convert ISO to CDI...
 	@-rm -f $(TARGET).cdi
 	@$(DS_SDK)/bin/cdi4dc $(TARGET).iso $(TARGET).cdi >/dev/null
@@ -335,7 +335,7 @@ $(TARGET).cdi: $(TARGET_BIN_CD) make-build
 	@-rm -f /tmp/IP_$(TARGET).BIN
 
 # If you have problems with mkisofs try data/data image:
-# $(DS_SDK)/bin/mkisofs -V DreamShell -G $(DS_RES)/IP.BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
+# $(DS_SDK)/bin/mkisofs -V K-UI -G $(DS_RES)/IP.BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
 # @$(DS_SDK)/bin/cdi4dc $(TARGET).iso $(TARGET).cdi -d >/dev/null
 
 ide: $(TARGET).img

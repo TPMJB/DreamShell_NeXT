@@ -23,7 +23,7 @@ static int executions, joins, detections;
 static void *(*thread_fn)(void *);
 static void *thread_arg;
 static kthread_t fake_thread;
-const char title[]="DreamShell NeXT boot v3.2";
+const char title[]="K-UI boot v3.3";
 volatile int start_pressed;
 uint32 boot_detect_ms=17;
 

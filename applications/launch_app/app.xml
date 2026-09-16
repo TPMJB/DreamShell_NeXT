@@ -1,38 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<app name="Launch App" icon="images/icon.png" version="2.1.1">
+<app name="Launch App" icon="images/icon.png" version="2.2.0">
   <resources>
     <module src="modules/app_launch_app.klf" />
     <font src="../../fonts/txf/helvetica.txf" name="caption_font" />
   </resources>
-  <body type="tsunami" width="640" height="480" backgroundColor="#101822"
+  <body type="tsunami" width="640" height="480" backgroundColor="#080F23"
     onload="export:LaunchApp_Init()" onopen="export:LaunchApp_Open()"
     onclose="export:LaunchApp_Close()" onunload="export:LaunchApp_Shutdown()">
-    <rectangle x="0" y="0" width="640" height="480" z="1" color="#101822FF" />
-    <rectangle x="24" y="24" width="4" height="28" z="2" color="#65DFCFFF" />
-    <label smear="false" x="40" y="50" text="DreamShell NeXT" font="caption_font" fontsize="26" color="#F1F5FAFF" z="3" />
-    <label smear="false" x="40" y="71" text="Your Dreamcast. Your tools." font="caption_font" fontsize="13" color="#A8B8C9FF" z="3" />
+    <rectangle x="0" y="0" width="640" height="480" z="1" color="#080F23FF" />
+    <rectangle x="24" y="24" width="4" height="28" z="2" color="#65E8F2FF" />
+    <image src="images/brand.png" x="32" y="16" width="128" height="64" z="3" />
+    <label smear="false" x="180" y="50" text="Katana User Interface" font="caption_font" fontsize="20" color="#F1F5FAFF" z="3" />
+    <label smear="false" x="180" y="71" text="by TPMJB" font="caption_font" fontsize="13" color="#A8B8C9FF" z="3" />
     <label smear="false" name="clock" x="564" y="47" text="" font="caption_font" fontsize="16" color="#A8B8C9FF" z="3" />
-    <label smear="false" x="482" y="71" text="by TPMJB" font="caption_font" fontsize="12" color="#A8B8C9FF" z="3" />
-    <rectangle x="24" y="84" width="592" height="1" color="#2A394AFF" z="3" />
-    <rectangle x="24" y="100" width="224" height="308" radius="6" color="#172331FF" z="60" />
-    <rectangle name="selection" transparent="true" x="24" y="102" width="224" height="40" radius="5" color="#225765FF" z="70" />
-    <rectangle name="selection_edge" transparent="true" x="24" y="106" width="3" height="32" color="#65DFCFFF" z="71" />
+    <rectangle x="24" y="84" width="592" height="1" color="#343354FF" z="3" />
+    <rectangle x="24" y="100" width="224" height="308" radius="6" color="#121A31FF" z="60" />
+    <rectangle name="selection" transparent="true" x="24" y="102" width="224" height="40" radius="5" color="#472958FF" z="70" />
+    <rectangle name="selection_edge" transparent="true" x="24" y="106" width="3" height="32" color="#F07DDCFF" z="71" />
     <label smear="false" name="app-count" x="32" y="425" text="" font="caption_font" fontsize="12" color="#A8B8C9FF" z="74" />
-    <label smear="false" name="music-toggle" x="124" y="425" text="Y Music 15%" font="caption_font" fontsize="12" color="#65DFCFFF" z="74" />
+    <label smear="false" name="music-toggle" x="124" y="425" text="Y Music 15%" font="caption_font" fontsize="12" color="#65E8F2FF" z="74" />
     <label smear="false" name="detail-title-0" x="280" y="116" text="" font="caption_font" fontsize="23" color="#F1F5FAFF" z="74" />
     <label smear="false" name="detail-title-1" x="280" y="140" text="" font="caption_font" fontsize="23" color="#F1F5FAFF" z="74" />
-    <label smear="false" name="detail-category" x="280" y="161" text="" font="caption_font" fontsize="12" color="#65DFCFFF" z="74" />
-    <rectangle x="280" y="170" width="312" height="140" radius="6" color="#172331FF" z="65" />
+    <label smear="false" name="detail-category" x="280" y="161" text="" font="caption_font" fontsize="12" color="#65E8F2FF" z="74" />
+    <rectangle x="280" y="170" width="312" height="140" radius="6" color="#121A31FF" z="65" />
     <label smear="false" name="detail-description-0" x="280" y="330" text="" font="caption_font" fontsize="16" color="#D9E4EFFF" z="74" />
     <label smear="false" name="detail-description-1" x="280" y="350" text="" font="caption_font" fontsize="16" color="#D9E4EFFF" z="74" />
     <label smear="false" name="detail-description-2" x="280" y="370" text="" font="caption_font" fontsize="16" color="#D9E4EFFF" z="74" />
     <label smear="false" name="detail-description-3" x="280" y="390" text="" font="caption_font" fontsize="16" color="#D9E4EFFF" z="74" />
-    <rectangle x="280" y="403" width="312" height="32" radius="5" color="#65DFCFFF" z="70" />
+    <rectangle x="280" y="403" width="312" height="32" radius="5" color="#65E8F2FF" z="70" />
     <label smear="false" x="387" y="425" text="A  Open app" font="caption_font" fontsize="16" color="#10242CFF" z="74" />
-    <rectangle x="24" y="441" width="592" height="1" color="#2A394AFF" z="75" />
+    <rectangle x="24" y="441" width="592" height="1" color="#343354FF" z="75" />
     <label smear="false" x="24" y="458" text="D-pad Select   A Open   B Back   START Settings   X Delete" font="caption_font" fontsize="12" color="#A8B8C9FF" z="76" />
     <dialog name="delete_dialog" font="caption_font" fontsize="16" x="0" y="0" width="520" height="180" align="center" valign="center" z="200"
-      visibility="hidden" color="#000000B0" panelColor="#172331FF" textColor="#F1F5FAFF" buttonColor="#65DFCFFF"
+      visibility="hidden" color="#000000B0" panelColor="#121A31FF" textColor="#F1F5FAFF" buttonColor="#65E8F2FF"
       confirmText="Delete" cancelText="Cancel" onconfirm="export:LaunchAppDeleteConfirm" oncancel="export:LaunchAppDeleteCancel" />
   </body>
 </app>
