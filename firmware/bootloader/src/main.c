@@ -10,9 +10,13 @@
 #include <dc/sd.h>
 
 static void early_init(void) {
-	/* hardware_sys_mode() is not ready yet at KOS_INIT_EARLY time */
+	/* This runs before BSS is cleared and before IRQ/thread initialization.
+	   Neither hardware_sys_mode() nor g1_ata_select_device() is safe here:
+	   the latter reads a BSS device cache and can enter the scheduler.
+	   Restore the GD-ROM selection directly; KOS will then clear its cache
+	   to the same master-device value. No commands are issued by this hook. */
 	if((((*(volatile uint32_t *)0xA05F74B0) >> 4) & 0x0F) == HW_TYPE_RETAIL) {
-		g1_ata_select_device(G1_ATA_MASTER);
+		*(volatile uint8_t *)0xA05F7098 = G1_ATA_MASTER;
 	}
 }
 
