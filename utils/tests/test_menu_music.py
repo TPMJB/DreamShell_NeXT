@@ -18,6 +18,16 @@ class MenuMusicTests(unittest.TestCase):
                             'utils/tests/menu_music_harness.c','-o',str(exe)],cwd=ROOT,check=True)
             subprocess.run([str(exe),tmp],cwd=ROOT,check=True)
 
+    def test_input_and_close_during_blocked_io(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / 'music-threads'
+            subprocess.run(['gcc','-std=gnu11','-O1','-g','-Wall','-Wextra','-Werror',
+                            '-Wno-format-truncation','-fsanitize=address,undefined',
+                            '-fno-omit-frame-pointer','-no-pie','-pthread',
+                            '-Iutils/tests/music_shim','utils/tests/menu_music_threads.c',
+                            '-o',str(exe)],cwd=ROOT,check=True)
+            subprocess.run([str(exe),tmp],cwd=ROOT,check=True,timeout=10)
+
     def test_bundled_track_matches_playback_budget(self):
         path = ROOT/'applications/launch_app/music/menu.wav'
         if not path.exists():

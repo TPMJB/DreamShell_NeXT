@@ -7,6 +7,13 @@ attribution and contribution-policy cleanup.
 
 ## Changes since 0.9.1
 
+- **Responsive music controls:** Launcher 2.1.1 keeps the track in RAM when muted,
+  moves loading and preference saves off the UI path, and adds 75%/100% levels.
+  GD Ripper 2.2.3 uses the same optional music and Y/M control. Music playback
+  reads from RAM, with file loading/saving deferred during drive operations;
+  no music is loaded from CD. App-module updates can reuse the 3.2 boot disc.
+  Music/ripping performance still needs console testing.
+
 - **Bootloader 3.2 recovery display:** fixes the font upload, removes the legacy
   animated background, and adds a TV-safe NeXT missing-storage screen with SD
   insertion/rescan instructions. Burn the updated bootloader CDI to receive
@@ -36,8 +43,8 @@ attribution and contribution-policy cleanup.
 
 | Component | Version | Included behavior |
 | --- | --- | --- |
-| GD Ripper | 2.2.2 | Checkpoints, Stop/Resume, catalog CRCs, optional saved-file scans, targeted recovery and corrected totals. |
-| Launcher | 2.1.0 | App list, details, coordinated icons and optional original background music. |
+| GD Ripper | 2.2.3 | Checkpoints, Stop/Resume, catalog CRCs, optional saved-file scans, targeted recovery corrected totals and optional RAM-backed music. |
+| Launcher | 2.1.1 | App list, details, coordinated icons and optional original background music. |
 | Games | 1.0.3 | Library views, embedded artwork extraction, eligible CD-audio previews and shared Games paths. |
 | ISO Loader | 2.0.6 | D-pad/pointer navigation, immediate folder refresh, image/executable checks and launch reports. |
 | VMU Manager | 2.1.0 | Labeled slots, individual/bulk save copying and explicit full-card backup/restore. |

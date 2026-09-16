@@ -6,10 +6,16 @@
 #include <stdlib.h>
 #include <string.h>
 #define NAME_MAX 256
+#ifdef MUSIC_REAL_THREADS
+#include <pthread.h>
+typedef struct { pthread_t thread; } kthread_t;
+#else
 typedef struct { int live; } kthread_t;
+#endif
 kthread_t *thd_create(int,void *(*)(void *),void *);
 int thd_join(kthread_t *,void **);
 void thd_sleep(int);
+void thd_pass(void);
 int GetVolumeFromSettings(void);
 void ds_printf(const char *,...);
 #endif

@@ -17,17 +17,20 @@ unchanged.
 
 ## Controls
 
-In Launch App, press **Y** (keyboard **M**) or click **Y Music** to cycle
-**15% → 30% → 50% → Off → 15%**. The level is relative to DreamShell's master
+In Launch App or GD Ripper, press **Y** (keyboard **M**) or click **Y Music** to cycle
+**15% → 30% → 50% → 75% → 100% → Off → 15%**. The level is relative to DreamShell's master
 volume. A new installation starts at 15%. Your preference is stored in
-`DS/apps/launch_app/music.cfg`. An asterisk means the preference could not be
+`DS/apps/launch_app/music.cfg`. An asterisk means the preference is pending or could not be
 saved; the current session still uses your selection.
 
-The music plays only in Launch App. It stops and releases its memory when an
-app or shortcut opens, so it does not overlap Games previews or GD Play, or run
-during ripping, flashing, benchmarks or a game. It restarts when you return.
+Each app owns its playback and releases it on close, so music does not overlap
+Games previews, GD Play, flashing, benchmarks or a game. GD Ripper loads music
+from SD, IDE/CF or PC only, never from the disc. Its drive operations defer music
+loads and preference saves; an already loaded track plays from RAM. Selecting
+music during a rip without a cached track shows "queued" until the operation ends.
+Audio adds CPU/AICA work; real-console throughput and sound checks remain pending.
 
-The 1,058,444-byte WAV is loaded once into RAM per visit. Playback makes no
+The 1,058,444-byte WAV is loaded once into RAM per visit. Off retains this cache until you leave the app. Playback makes no
 further storage reads. A missing/invalid track or unavailable audio stream
 leaves the launcher usable; the music label reports it unavailable.
 

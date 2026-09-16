@@ -54,6 +54,7 @@ GUI_Widget *GUI_ScreenGetFocusWidget(GUI_Screen *s);
 void GUI_ScreenEvent(GUI_Screen *s, const SDL_Event *e,int x,int y);
 void GUI_ScreenSetJoySelectState(GUI_Screen *s,int v);
 void GUI_WidgetClicked(GUI_Widget *w,int x,int y);
+char *GUI_LabelGetText(GUI_Widget *w);
 void GUI_LabelSetText(GUI_Widget *w,const char *text);
 void GUI_LabelSetTextColor(GUI_Widget *w,int r,int g,int b);
 void GUI_WidgetSetEnabled(GUI_Widget *w,int v);

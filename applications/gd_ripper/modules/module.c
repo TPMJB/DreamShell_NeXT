@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <dc/cdrom.h>
 #include "destination.h"
+#include "music.h"
 
 DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 
@@ -2389,10 +2390,14 @@ void gd_ripper_Open(void) {
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SetEventActive(self.input_event, 1);
     select_page(0);
+    RipperMusicOpen(getenv("PATH"));
 }
+
+void gd_ripper_Music(GUI_Widget *widget) { (void)widget; MenuMusicCycle(); }
 
 void gd_ripper_Close(void) {
     self.rip_active = 0;
+    MenuMusicClose();
     if (self.input_event) SetEventActive(self.input_event, 0);
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
     GUI_EnableInput();
@@ -2526,9 +2531,13 @@ static void *service_thread(void *arg) {
             int operation = self.request;
             self.request = 0;
             self.start_time = timer_ms_gettime64();
+            /* Wait for any initial music load before touching the disc; then
+             * allow RAM playback only throughout ripping/recovery/verification. */
+            MenuMusicStorageLock();
             if (operation == 1) gd_ripper_thread(NULL);
             else if (operation == 3) gd_ripper_thread((void *)1);
             else gd_verify_thread(NULL);
+            MenuMusicStorageUnlock();
             self.busy = 0;
             self.rip_active = 0;
             self.drive_command = 0;
@@ -2538,6 +2547,7 @@ static void *service_thread(void *arg) {
         } else if (timer_ms_gettime64() >= next_poll && claim_worker()) {
             int status = 0, type = 0;
             int rv;
+            MenuMusicStorageLock();
             rv = cdrom_get_status(&status, &type);
             next_poll = timer_ms_gettime64() + 500;
             if (rv == ERR_OK && (status == CD_STATUS_OPEN || status == CD_STATUS_NO_DISC)) {
@@ -2575,6 +2585,7 @@ static void *service_thread(void *arg) {
                 /* DISC_CHG also detects a quick swap between two polls. */
                 if (rv == ERR_DISC_CHG) { self.media_seen = false; self.disc_ready = false; }
             }
+            MenuMusicStorageUnlock();
             self.busy = 0;
             refresh_controls();
         }
@@ -2583,14 +2594,14 @@ static void *service_thread(void *arg) {
     return NULL;
 }
 
-static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn"};
+static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn", "music-btn"};
 static const char *advanced_focus[] = {"recover-btn", "edc-btn", "verify-btn", "bad_btn", "use_bin_btn", "num-read", "advanced-back"};
 static const char *destination_focus[] = {"device-sd", "device-ide", "device-pc", "folder-up",
     "folder-0", "folder-1", "folder-2", "folder-3", "folder-4", "folder-5", "folder-6",
     "folder-prev", "folder-next", "destination-confirm", "destination-back"};
 static const char *recovery_focus[] = {"recovery-start", "recovery-later"};
 
-static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : self.page == 1 ? 15 : 6; }
+static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : self.page == 1 ? 15 : 7; }
 
 static GUI_Widget *focus_widget(int index) {
     const char **names = self.page == 3 ? recovery_focus : self.page == 2 ? advanced_focus :
@@ -2679,7 +2690,8 @@ static void input_event(void *event, void *param, int action) {
         int *old = e->jaxis.axis == 0 ? &self.analog_x : &self.analog_y;
         if (e->jaxis.axis <= 1) { if (dir && dir != *old) focus_step(dir); *old = dir; }
     } else if (e->type == SDL_JOYBUTTONDOWN) {
-        if (e->jbutton.button == SDL_DC_A) activate_focus();
+        if (e->jbutton.button == SDL_DC_Y) gd_ripper_Music(NULL);
+        else if (e->jbutton.button == SDL_DC_A) activate_focus();
         else if (e->jbutton.button == SDL_DC_B) {
             if (self.busy) gd_ripper_CancelRip(NULL);
             else if (self.page == 1 && folder_root(self.folders.path) && strlen(self.folders.path) > (size_t)folder_root(self.folders.path))
@@ -2690,6 +2702,7 @@ static void input_event(void *event, void *param, int action) {
         switch (e->key.keysym.sym) {
             case SDLK_UP: case SDLK_LEFT: focus_step(-1); break;
             case SDLK_DOWN: case SDLK_RIGHT: case SDLK_TAB: focus_step(1); break;
+            case SDLK_m: gd_ripper_Music(NULL); break;
             case SDLK_RETURN: case SDLK_SPACE: activate_focus(); break;
             case SDLK_ESCAPE: if (self.busy) gd_ripper_CancelRip(NULL); else select_page(0); break;
             default: GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0); break;
@@ -2704,6 +2717,10 @@ static void input_event(void *event, void *param, int action) {
 static void video_event(void *event, void *param, int action) {
     (void)event; (void)param;
     if (action != EVENT_ACTION_RENDER || !(self.app->state & APP_STATE_OPENED)) return;
+    char music_text[48];
+    MenuMusicLabel(music_text,sizeof(music_text));
+    GUI_Widget *caption = GUI_ButtonGetCaption(APP_GET_WIDGET("music-btn"));
+    if(strcmp(GUI_LabelGetText(caption),music_text)) GUI_LabelSetText(caption,music_text);
     if (self.busy && self.io_started) {
         unsigned seconds = ((uint32_t)timer_ms_gettime64() - self.io_started) / 1000;
         if (seconds >= 2 && seconds != self.heartbeat_second) {

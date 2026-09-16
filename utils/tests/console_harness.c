@@ -20,7 +20,15 @@ static GUI_Widget *focused;
 static int screen_events;
 static int nw, drive_fd = -1, read_calls, injected, fault, clicks;
 static uint32_t mode = 2352;
-static int auto_test;
+static int auto_test, music_storage_locked, music_cycles, music_opened;
+void RipperMusicOpen(const char *root) {(void)root;music_opened=1;}
+void MenuMusicClose(void) {music_opened=0;}
+void MenuMusicCycle(void) {music_cycles++;}
+void MenuMusicStorageLock(void) {assert(!music_storage_locked);music_storage_locked=1;}
+void MenuMusicStorageUnlock(void) {assert(music_storage_locked);music_storage_locked=0;}
+void MenuMusicLabel(char *text,size_t n) {snprintf(text,n,"Y Music 100%%");}
+char *GUI_LabelGetText(GUI_Widget *w) {return w->text;}
+
 static int legacy_fs, reject_append, fail_crc, mode_failures;
 static uint32_t drive_base = 45150;
 static uint64_t clock_ms = 1000, read_bytes;
@@ -137,7 +145,7 @@ const dirent_t *fs_readdir(file_t f) {
     out.attr = S_ISDIR(st.st_mode) ? O_DIR : 0;
     return &out;
 }
-int cdrom_get_status(int *s,int *t) {*s=auto_test && clock_ms>=6000 && clock_ms<7000 ? CD_STATUS_OPEN : CD_STATUS_STANDBY;*t=CD_GDROM;return ERR_OK;}
+int cdrom_get_status(int *s,int *t) {if(auto_test)assert(music_storage_locked);*s=auto_test && clock_ms>=6000 && clock_ms<7000 ? CD_STATUS_OPEN : CD_STATUS_STANDBY;*t=CD_GDROM;return ERR_OK;}
 int cdrom_change_datatype(cd_read_sec_part_t p,int t,int size) {
     (void)p;(void)t;
     if(size==2352 && mode_failures>0) {mode_failures--;return ERR_SYS;}
@@ -354,6 +362,7 @@ int main(int argc,char **argv) {
         drive_fd=open(argv[2],O_RDONLY);assert(drive_fd>=0);
         auto_test=1;self.worker=(kthread_t*)1;self.rip_active=0;service_thread(NULL);
         assert(read_calls==2);assert(self.disc_header_valid);assert(self.disc_ready);
+        assert(!music_storage_locked);
         puts(self.gname->text);close(drive_fd);return 0;
     }
     if(!strcmp(argv[1],"controls")) {
@@ -364,6 +373,14 @@ int main(int argc,char **argv) {
         focus_step(1);assert(self.focus==2); /* Disabled Stop is skipped. */
         SDL_Event event={.type=SDL_JOYBUTTONDOWN};event.jbutton.button=SDL_DC_A;
         input_event(NULL,&event,EVENT_ACTION_UPDATE);assert(clicks==1);
+        self.busy=1;
+        event.type=SDL_JOYBUTTONDOWN;event.jbutton.button=SDL_DC_Y;
+        input_event(NULL,&event,EVENT_ACTION_UPDATE);assert(music_cycles==1);
+        event.type=SDL_KEYDOWN;event.key.keysym.sym=SDLK_m;
+        input_event(NULL,&event,EVENT_ACTION_UPDATE);assert(music_cycles==2);
+        assert(!self.request && self.busy);
+        video_event(NULL,NULL,EVENT_ACTION_RENDER);
+        assert(!strcmp(host_widget("music-btn")->text,"Y Music 100%"));
         puts("ok");return 0;
     }
     if(!strcmp(argv[1],"recovery-controls")) {

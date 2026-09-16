@@ -6,7 +6,7 @@
 
 APP_NAME = gd_ripper
 TARGET_NAME = app_$(APP_NAME)
-OBJS = module.o verify.o checksum.o recovery.o readback.o
+OBJS = module.o verify.o checksum.o recovery.o readback.o music.o
 DBG_LIBS = -lds -lisofs
 EXPORTS_FILE = exports.txt
 
@@ -14,7 +14,7 @@ KOS_CFLAGS += -I./
 
 VER_MAJOR = 2
 VER_MINOR = 2
-VER_MICRO = 2
+VER_MICRO = 3
 
 all: rm-elf
 

@@ -24,12 +24,16 @@ The older tag `v1.0.0` is a historical development milestone preceding 0.9 and
   the successful run URL and exact source commit.
 - [ ] Confirm complete SH-4 build, runtime imports, package contents, attribution
   records, and both CDI checks pass in that run.
-- [ ] Boot the 3.2 CD with no SD: check readable NeXT recovery text, insert SD,
+- [x] Record maintainer feedback for bootloader 3.2: "New bootloader works great!"
+  (2026-09-16). Detailed cases below still need individual results.
+- [ ] Complete detailed bootloader checks with no SD: check readable NeXT recovery text, insert SD,
   press X, then A to boot; also check Start-held recovery and a failed core load.
 - [ ] On the candidate, check Settings save/reboot, GD Play disc changes/exit,
   ISO Loader navigation and launching a known-working game from Games.
 - [ ] Check rip destination discovery, recovery counts across reopen, a file copy
   and a VMU backup/restore with nonessential data. Reuse existing known-good dumps.
+- [ ] Test launcher Off/On and 75%/100% controls; compare a known-good rip with
+  music on/off for catalog CRC, throughput and sound. The 3.2 CD can be reused.
 - [ ] Record hardware results or remaining limitations in `compatibility.md`.
 - [ ] Review `RELEASE-NOTES.md`; its claims must match the completed checks.
 - [ ] When ready to publish, run the same workflow from the reviewed `master`
