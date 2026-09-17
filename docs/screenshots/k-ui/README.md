@@ -1,5 +1,8 @@
 # K-UI app previews
 
+For the release-ready individual images, captions and explanations, open the
+[K-UI 1.0 tool-by-tool showcase](../../launch/1.0/showcase/README.md).
+
 These are host layout previews from the K-UI source with sample data,
 not photographs or emulator/hardware captures. Boot recovery uses a substitute
 host font; the console uses the BIOS font. Splash and badge artwork is converted

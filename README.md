@@ -10,7 +10,7 @@ and VMUs, dump your discs, and check your storage from a coordinated interface.
 **[Releases & downloads](https://github.com/TPMJB/DreamShell_NeXT/releases)** ·
 [Install or update](docs/installation.md) ·
 [What's new in 1.0](RELEASE-NOTES.md) ·
-[App gallery](docs/screenshots/k-ui/README.md)
+[App gallery](docs/launch/1.0/showcase/README.md)
 
 The maintainer has approved the hardware-tested 1.0 baseline for release.
 The versioned download is **K-UI-v1.0.zip**, under tag **k-ui-1.0** once the
@@ -34,9 +34,11 @@ milestones. Use the ZIP attached to the release, rather than GitHub's source ZIP
 The retired Classic launcher is excluded from the package. Existing `DS` paths,
 settings, game presets and saved-rip formats remain compatible.
 
-[![K-UI app layout previews](docs/screenshots/k-ui/overview.png)](docs/screenshots/k-ui/README.md)
+[![K-UI app layout previews](docs/launch/1.0/showcase/00-k-ui-overview.jpg)](docs/launch/1.0/showcase/README.md)
 
-The gallery shows actual app layouts rendered on a host with sample data.
+The gallery includes 15 individual tool cards, captions explaining each tool's
+significance, and a six-screen overview. It shows actual app layouts rendered on
+a host with sample data.
 Launch artwork is promotional illustration. Neither is a hardware screenshot.
 
 ## Install and check compatibility

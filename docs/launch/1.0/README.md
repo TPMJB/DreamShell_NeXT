@@ -7,7 +7,11 @@ available. They are drafts for TPMJB to post; no Reddit or forum post has been s
 
 - [Wide release banner](k-ui-release-banner.jpg): README, forum opening image and release announcement.
 - [Square social cover](k-ui-social-square.jpg): Reddit/gallery cover.
-- [App gallery](../../screenshots/k-ui/README.md): actual app layouts rendered on a host with sample data.
+- [Tool-by-tool showcase](showcase/README.md): 15 individual app/screen cards and
+  a six-screen overview, with captions and an explanation of why each tool matters.
+- [Browse offline](showcase/index.html): open this file after extracting the kit.
+- [Copy-ready captions](showcase/captions.md): captions and significance notes for
+  the full gallery. The images use host-rendered layouts with sample data.
 
 ![Release banner](k-ui-release-banner.jpg)
 
@@ -27,7 +31,9 @@ as tested; these larger images are for the release page and social posts.
 4. Keep the versioned GitHub release as the download link. Put optional support
    at the end. Preserve the known-issue paragraph and upstream credit.
 
-Suggested gallery order: cover, Launcher, File Manager, GD Ripper, VMU Manager.
+Suggested gallery order: cover, Launcher, GD Ripper, Advanced/recovery, Games,
+ISO Loader, VMU Manager, File Manager. Use Settings, GD Play, Network, firmware
+utilities, diagnostics and Boot Recovery in a longer forum gallery or follow-up.
 A short real-console clip opening File Manager and returning to Launcher is more
 useful evidence than another promotional image. Read the destination community's
 current posting rules before submitting; no specific forum or subreddit is assumed.
