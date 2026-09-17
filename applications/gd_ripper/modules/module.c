@@ -452,12 +452,14 @@ static int prepare_track_mode(uint32_t track, uint32_t fad, uint32_t size) {
     return drive_error("Sector mode failed", track, fad, rv);
 }
 
-static void safe_cdrom_spin_down(void) {
+static bool safe_cdrom_spin_down(void) {
 	int rv = cdrom_exec_cmd_timed(CD_CMD_STOP, NULL, GD_COMMAND_TIMEOUT_MS);
 
 	if (rv != ERR_OK && rv != ERR_NO_ACTIVE && rv != ERR_NO_DISC) {
 		ds_printf("DS_WARN: GD-ROM spin-down returned %d\n", rv);
+        return false;
 	}
+    return true;
 }
 
 static void reset_rip_state(void) {
@@ -1362,6 +1364,7 @@ static void* gd_ripper_thread(void *arg) {
 	bool destination_ready = false;
 	bool success = false;
 	bool verification_ran = false;
+    bool drive_stopped = false;
     bool deferred = false;
     bool recovering = arg != NULL;
     int pass_complete = 0;
@@ -1458,7 +1461,7 @@ static void* gd_ripper_thread(void *arg) {
 		goto out;
 	}
 
-	if (rip_log("GD Ripper 2.2.2 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
+	if (rip_log("GD Ripper 2.2.5 diagnostic: destination reopen/sync/read-back passed") != CMD_OK) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
@@ -1553,7 +1556,9 @@ static void* gd_ripper_thread(void *arg) {
 
 	if (self.rip_active) {
 		verification_ran = true;
-		safe_cdrom_spin_down();
+        rip_log("Drive stop before verification: begin");
+		drive_stopped = safe_cdrom_spin_down();
+        rip_log("Drive stop before verification: %s", drive_stopped ? "done" : "failed");
 		GUI_LabelSetText(self.track_label, "Checking stream CRC...");
 		GUI_LabelSetText(self.speed_label, "Catalog lookup...");
 		GUI_LabelSetText(self.time_label, "Please wait");
@@ -1564,6 +1569,9 @@ static void* gd_ripper_thread(void *arg) {
 			self.sync_mount[0] != '\0', &self.rip_active, update_verify_display,
 			NULL, &verification_summary, true, false);
         memory_phase("verify-finish");
+        rip_log("Verification returned: result=%d (%s), catalog=%d, report=%d",
+            verification_result, gd_verify_result_text(verification_result),
+            verification_summary.catalog_result, verification_summary.report_written);
 	}
 
 out:
@@ -1573,6 +1581,7 @@ out:
 			"Rip paused after an error; partial files preserved for resume");
 	}
 
+    if (self.log_path[0]) rip_log("Finalization: UI begin");
 	self.rip_active = 0;
 	GUI_WidgetSetEnabled(self.start_btn, 1);
 	GUI_WidgetSetEnabled(self.cancel_btn, 0);
@@ -1631,7 +1640,14 @@ out:
             (unsigned long)self.recovery_totals.flagged, (unsigned long)self.recovery_totals.recovered,
             (unsigned long)self.recovery_totals.remaining);
     }
-	safe_cdrom_spin_down();
+    if (self.log_path[0]) rip_log("Finalization: UI done");
+    /* Saved-CRC verification does not use the drive. Avoid stopping it twice
+     * after success, but retain cleanup if the earlier stop failed. */
+    if (!drive_stopped) {
+        if (self.log_path[0]) rip_log("Finalization: drive stop begin");
+        drive_stopped = safe_cdrom_spin_down();
+        if (self.log_path[0]) rip_log("Finalization: drive stop %s", drive_stopped ? "done" : "failed");
+    } else if (self.log_path[0]) rip_log("Finalization: drive already stopped");
 	if (self.log_path[0]) memory_phase("rip-finish");
 	self.start_time = 0;
 	return NULL;
@@ -2106,6 +2122,23 @@ static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
             (unsigned long)fad, (unsigned long)changed, (unsigned long)first,
             (unsigned long)last, changed ? self.validation.bytes[first] : 0,
             changed ? good[first] : 0, (unsigned long)crc32(0,buffer,2352));
+        if (changed) {
+            /* Include the bytes themselves so a recurring pointer/metadata
+             * overwrite can be distinguished from random read corruption.
+             * Bound both output and stack use; no additional disc reads. */
+            static const char hex[] = "0123456789abcdef";
+            char before[65], after[65];
+            size_t length = last - first + 1;
+            if (length > 32) length = 32;
+            for (size_t i = 0; i < length; ++i) {
+                uint8_t old = self.validation.bytes[first + i], now = good[first + i];
+                before[2*i] = hex[old >> 4]; before[2*i+1] = hex[old & 15];
+                after[2*i] = hex[now >> 4]; after[2*i+1] = hex[now & 15];
+            }
+            before[2*length] = after[2*length] = '\0';
+            rip_log("Validation bytes FAD %lu: offset=%lu length=%lu before=%s after=%s",
+                (unsigned long)fad, (unsigned long)first, (unsigned long)length, before, after);
+        }
         self.validation.pending = false;
     }
     return rv;

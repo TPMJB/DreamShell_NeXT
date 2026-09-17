@@ -169,6 +169,24 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(log.count('slot=11'), 2)
         self.assertEqual(log.count('changed=1 first=100 last=100'), 2)
 
+    def test_eight_byte_bulk_corruption_records_both_patterns_and_recovers(self):
+        self.assertEqual(self.rip(fault=7)[0], '0')
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
+        log = Path(str(self.track)+'.log').read_text()
+        self.assertEqual(log.count('changed=8 first=1872 last=1879'), 2)
+        for index in (14, 30):
+            original = self.disc_data[index*2352+1872:index*2352+1880].hex()
+            self.assertIn(f'Validation bytes FAD {45150+index}: offset=1872 length=8 '
+                          f'before=4013258c03804b0c after={original}', log)
+
+    def test_failed_preverification_stop_is_retried_at_cleanup(self):
+        subprocess.run([str(self.exe), 'service', str(self.disc), str(self.path),
+                        '8', '1'], check=True, timeout=10)
+        log = (self.path/'fixture'/'rip.log').read_text()
+        self.assertIn('Drive stop before verification: failed', log)
+        self.assertIn('Finalization: drive stop done', log)
+        self.assertIn('RAM rip-finish ', log)
+
     def test_verification_service_unloads_music_and_resumes_after_unlock(self):
         for operation in (1, 2):
             with self.subTest(operation=operation):
@@ -179,6 +197,12 @@ class ConsoleTests(unittest.TestCase):
                       'verify-music-before', 'verify-music-freed', 'verify-start',
                       'verify-track-1', 'verify-finish', 'rip-finish'):
             self.assertIn('RAM '+phase+' ', log)
+        phases = ('Verification returned:', 'Finalization: UI begin',
+                  'Finalization: UI done', 'Finalization: drive already stopped',
+                  'RAM rip-finish ')
+        positions = [log.index(phase) for phase in phases]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn('Finalization: drive stop begin', log)
         import re
         before = int(re.search(r'RAM verify-music-before .*?available=(\d+)', log)[1])
         after = int(re.search(r'RAM verify-music-freed .*?available=(\d+)', log)[1])

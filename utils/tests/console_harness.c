@@ -22,6 +22,7 @@ static int screen_events, pointer_enabled, pointer_clicks;
 static int nw, drive_fd = -1, read_calls, injected, fault, clicks;
 static uint32_t mode = 2352;
 static int auto_test, music_storage_locked, music_cycles, music_opened;
+static int stop_calls;
 static int music_suspended, music_suspends, music_resumes;
 void RipperMusicOpen(const char *root) {(void)root;music_opened=1;}
 void MenuMusicClose(void) {music_opened=0;}
@@ -179,6 +180,10 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t c,void *p,uint32_t timeout) {
         req->buffer->leadout_sector = drive_base + 32 + (req->area == CD_AREA_LOW ? 150 : 0);
         return ERR_OK;
     }
+    if (c == CD_CMD_STOP) {
+        ++stop_calls;
+        return fault == 8 && stop_calls == 1 ? ERR_TIMEOUT : ERR_OK;
+    }
     if(c!=CD_CMD_PIOREAD)return ERR_OK;
     cd_read_params_t *req=p;read_calls++;
     if(fault==2 && req->start_sec<=45151 && req->start_sec+req->num_sec>45151)return ERR_SYS;
@@ -192,6 +197,10 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t c,void *p,uint32_t timeout) {
     if(auto_test) {gd_ripper_StartRip(NULL);assert(!self.request);}
     if(fault==1 && !injected++){((uint8_t*)req->buffer)[100]^=1;}
     if(fault==6 && req->num_sec==16) ((uint8_t*)req->buffer)[11*2352+100]^=1;
+    if(fault==7 && req->num_sec==16) {
+        const uint8_t overwrite[] = {0x40,0x13,0x25,0x8c,0x03,0x80,0x4b,0x0c};
+        memcpy((uint8_t*)req->buffer+14*2352+1872,overwrite,sizeof(overwrite));
+    }
     return ERR_OK;
 }
 
@@ -359,6 +368,10 @@ int main(int argc,char **argv) {
             service_thread(NULL);
             assert(music_suspends==1 && music_resumes==1 && !music_suspended);
             assert(!self.verification_music_suspended && !music_storage_locked);
+            /* No duplicate drive command after saved-CRC verification, except
+             * a cleanup retry if the first stop actually failed. Manual scans
+             * use storage only and must not issue a drive stop. */
+            assert(stop_calls == (atoi(argv[5]) == 1 ? (fault == 8 ? 2 : 1) : 0));
         } else gd_ripper_thread(atoi(argv[5]) ? (void*)1 : NULL);
         printf("%d|%d|%s|%s\n", self.recovery_prompt, self.page,
             self.failure_stage ? self.failure_stage : "OK", self.track_label->text);
@@ -443,7 +456,7 @@ int main(int argc,char **argv) {
     if(!strcmp(argv[1],"rip") || !strcmp(argv[1],"firstpass")) {
         drive_fd=open(argv[2],O_RDONLY);assert(drive_fd>=0);
         self.advanced=atoi(argv[4]);fault=atoi(argv[5]);self.total_sectors=fs_total(drive_fd)/2352;
-        if (fault==6) snprintf(self.log_path,sizeof(self.log_path),"%s.log",argv[3]);
+        if (fault==6 || fault==7) snprintf(self.log_path,sizeof(self.log_path),"%s.log",argv[3]);
         self.recovery_mode=!strcmp(argv[1],"firstpass");
         int rv=rip_sec(3,45150,self.total_sectors,4,argv[3]);
         printf("%d %d %llu %08x %llu\n",rv,read_calls,(unsigned long long)self.processed_sectors,
