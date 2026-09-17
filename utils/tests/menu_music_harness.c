@@ -117,6 +117,16 @@ int main(int argc,char **argv) {
     assert(file_opens==opens && music.unsaved);
     MenuMusicLabel(label,sizeof(label)); assert(strchr(label,'*'));
     MenuMusicStorageUnlock(); MenuMusicPoll(); assert(!music.unsaved);
+    /* Verification owns the storage gate: shutdown must join/free without I/O,
+     * and resume must keep this visit's track and volume selection. */
+    MenuMusicStorageLock(); opens=file_opens;
+    unsigned verify_track=music.track;
+    int verify_level=music.level;
+    MenuMusicSuspend(1);
+    assert(!active && !music.file && !music.feed && !music.worker);
+    assert(file_opens==opens);
+    MenuMusicStorageUnlock(); MenuMusicSuspend(0); MenuMusicPoll();
+    assert(active && music.track==verify_track && music.level==verify_level);
     fail_poll=1; MenuMusicPoll(); assert(!active && music.failed); fail_poll=0;
     int previous=allocs; for(int i=0;i<10;i++) MenuMusicPoll(); assert(allocs==previous);
     MenuMusicCycle(); MenuMusicPoll(); assert(active); /* Explicit retry. */

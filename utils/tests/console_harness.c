@@ -1,5 +1,6 @@
 /* Executes the actual console C implementation against local files and a mock drive. */
 #include "console_shim/ds.h"
+#include "memory_mock.h"
 #include "../../applications/gd_ripper/modules/module.c"
 #include <assert.h>
 #include <dirent.h>
@@ -21,8 +22,21 @@ static int screen_events;
 static int nw, drive_fd = -1, read_calls, injected, fault, clicks;
 static uint32_t mode = 2352;
 static int auto_test, music_storage_locked, music_cycles, music_opened;
+static int music_suspended, music_suspends, music_resumes;
 void RipperMusicOpen(const char *root) {(void)root;music_opened=1;}
 void MenuMusicClose(void) {music_opened=0;}
+void MenuMusicSuspend(int suspend) {
+    if (suspend) {
+        if (!music_suspended) {
+            memory_info.uordblks -= 1024*1024;
+            memory_info.fordblks += 1024*1024;
+        }
+        music_suspended = 1; ++music_suspends;
+    } else {
+        assert(!music_storage_locked);
+        music_suspended = 0; ++music_resumes;
+    }
+}
 void MenuMusicCycle(void) {music_cycles++;}
 void MenuMusicStorageLock(void) {assert(!music_storage_locked);music_storage_locked=1;}
 void MenuMusicStorageUnlock(void) {assert(music_storage_locked);music_storage_locked=0;}
@@ -33,7 +47,7 @@ static int legacy_fs, reject_append, fail_crc, mode_failures;
 static uint32_t drive_base = 45150;
 static uint64_t clock_ms = 1000, read_bytes;
 static unsigned recovery_pass, recovered_count, stop_after;
-static int recovery_fault, full_thread;
+static int recovery_fault, full_thread, service_test;
 static int scan_fault, scan_injected, scan_map_fd = -1;
 static uint8_t *scan_buffer;
 static size_t scan_buffer_size;
@@ -71,7 +85,10 @@ int SetEventActive(Event_t *e,int a) {(void)e;(void)a;return 0;}
 uint64_t timer_ms_gettime64(void) {return clock_ms;}
 kthread_t *thd_create(int d,void *(*f)(void*),void *a) {(void)d;(void)f;(void)a;static kthread_t thread;return &thread;}
 int thd_join(kthread_t *t,void **r) {(void)t;(void)r;abort();}
-void thd_sleep(unsigned ms) {clock_ms+=ms;if(auto_test && clock_ms>=10000)self.shutdown=1;}
+void thd_sleep(unsigned ms) {
+    clock_ms+=ms;
+    if ((auto_test && clock_ms>=10000) || (service_test && !self.busy)) self.shutdown=1;
+}
 void thd_pass(void) {
     clock_ms++;
     if (scan_fault == 3 && scan_buffer && !scan_injected++)
@@ -174,6 +191,7 @@ int cdrom_exec_cmd_timed(cd_cmd_code_t c,void *p,uint32_t timeout) {
     } else if(pread(drive_fd,req->buffer,n,(off_t)(req->start_sec-drive_base)*mode)!=(ssize_t)n)return ERR_SYS;
     if(auto_test) {gd_ripper_StartRip(NULL);assert(!self.request);}
     if(fault==1 && !injected++){((uint8_t*)req->buffer)[100]^=1;}
+    if(fault==6 && req->num_sec==16) ((uint8_t*)req->buffer)[11*2352+100]^=1;
     return ERR_OK;
 }
 
@@ -306,14 +324,19 @@ int main(int argc,char **argv) {
         assert(!strcmp(self.time_label->text, "3 / 8 recovered"));
         puts("ok"); return 0;
     }
-    if (!strcmp(argv[1], "thread")) {
+    if (!strcmp(argv[1], "thread") || !strcmp(argv[1], "service")) {
         full_thread = 1;
         drive_fd = open(argv[2], O_RDONLY); assert(drive_fd >= 0);
         snprintf(self.rip_destination,sizeof(self.rip_destination),"%s",argv[3]);
         snprintf(self.rip_name,sizeof(self.rip_name),"fixture");
         snprintf(self.database_path,sizeof(self.database_path),"%s/redump.db",argv[3]);
         self.recovery_mode = true; self.advanced = true; fault = atoi(argv[4]);
-        gd_ripper_thread(atoi(argv[5]) ? (void*)1 : NULL);
+        if (!strcmp(argv[1], "service")) {
+            service_test=1; self.busy=1; self.request=atoi(argv[5]);
+            service_thread(NULL);
+            assert(music_suspends==1 && music_resumes==1 && !music_suspended);
+            assert(!self.verification_music_suspended && !music_storage_locked);
+        } else gd_ripper_thread(atoi(argv[5]) ? (void*)1 : NULL);
         printf("%d|%d|%s|%s\n", self.recovery_prompt, self.page,
             self.failure_stage ? self.failure_stage : "OK", self.track_label->text);
         close(drive_fd); return 0;
@@ -397,6 +420,7 @@ int main(int argc,char **argv) {
     if(!strcmp(argv[1],"rip") || !strcmp(argv[1],"firstpass")) {
         drive_fd=open(argv[2],O_RDONLY);assert(drive_fd>=0);
         self.advanced=atoi(argv[4]);fault=atoi(argv[5]);self.total_sectors=fs_total(drive_fd)/2352;
+        if (fault==6) snprintf(self.log_path,sizeof(self.log_path),"%s.log",argv[3]);
         self.recovery_mode=!strcmp(argv[1],"firstpass");
         int rv=rip_sec(3,45150,self.total_sectors,4,argv[3]);
         printf("%d %d %llu %08x %llu\n",rv,read_calls,(unsigned long long)self.processed_sectors,

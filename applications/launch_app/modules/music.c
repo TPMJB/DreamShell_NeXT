@@ -32,6 +32,8 @@ static unsigned MusicChoose(void) {
 static mutex_t music_mutex = MUTEX_INITIALIZER;
 /* GD Ripper holds this during drive work; RAM playback never needs it. */
 static mutex_t music_io_mutex = MUTEX_INITIALIZER;
+/* Verification's service thread and app close can both join the audio worker. */
+static mutex_t music_lifecycle_mutex = MUTEX_INITIALIZER;
 static struct {
     char path[NAME_MAX];
     unsigned char *file, *pcm, *feed;
@@ -253,10 +255,16 @@ static void MusicStartWorker(void) {
     }
 }
 
-/* App lifecycle calls are serialized by DreamShell. The worker alone owns the
- * stream/buffers until joined; input/labels touch only the short state lock. */
+static void MusicJoin(void) {
+    if(music.worker) { thd_join(music.worker,NULL); music.worker = NULL; }
+    MusicStop();
+}
+
+/* The lifecycle lock serializes joins/restarts; the worker never takes it. */
 void MenuMusicOpen(const char *app_path) {
-    MenuMusicClose();
+    mutex_lock(&music_lifecycle_mutex);
+    mutex_lock(&music_mutex); music.opened = 0; mutex_unlock(&music_mutex);
+    MusicJoin();
     mutex_lock(&music_mutex);
     snprintf(music.path,sizeof(music.path),"%s",app_path ? app_path : "");
     music.level = 15; music.opened = 1;
@@ -266,16 +274,14 @@ void MenuMusicOpen(const char *app_path) {
     music.track = MusicChoose();
     mutex_unlock(&music_mutex);
     MusicStartWorker();
-}
-
-static void MusicJoin(void) {
-    if(music.worker) { thd_join(music.worker,NULL); music.worker = NULL; }
-    MusicStop();
+    mutex_unlock(&music_lifecycle_mutex);
 }
 
 void MenuMusicClose(void) {
+    mutex_lock(&music_lifecycle_mutex);
     mutex_lock(&music_mutex); music.opened = 0; mutex_unlock(&music_mutex);
     MusicJoin();
+    mutex_unlock(&music_lifecycle_mutex);
 }
 
 void MenuMusicCycle(void) {
@@ -286,15 +292,19 @@ void MenuMusicCycle(void) {
     music.unsaved = 1;
     ++music.revision;
     mutex_unlock(&music_mutex);
+    mutex_lock(&music_lifecycle_mutex);
     if(music.opened && !music.suspended && !music.worker) MusicStartWorker();
+    mutex_unlock(&music_lifecycle_mutex);
 }
 
 void MenuMusicSuspend(int suspend) {
+    mutex_lock(&music_lifecycle_mutex);
     mutex_lock(&music_mutex);
     music.suspended = suspend;
     mutex_unlock(&music_mutex);
     if(suspend) MusicJoin();
     else if(music.opened && !music.worker) MusicStartWorker();
+    mutex_unlock(&music_lifecycle_mutex);
 }
 
 void MenuMusicStorageLock(void) { mutex_lock(&music_io_mutex); }

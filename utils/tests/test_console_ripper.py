@@ -48,7 +48,7 @@ class ConsoleTests(unittest.TestCase):
         cls.build = tempfile.TemporaryDirectory()
         cls.exe = Path(cls.build.name) / 'console-test'
         subprocess.run(['gcc','-std=gnu11','-O1','-Wall','-Wextra','-Werror',
-                        '-Wno-format-truncation','-Iutils/tests/console_shim','-Iinclude/SDL',
+                        '-Wno-format-truncation','-Iutils/tests/console_shim','-Iinclude/SDL','-Iinclude',
                         'utils/tests/console_harness.c',
                         'applications/gd_ripper/modules/verify.c',
                         'applications/gd_ripper/modules/checksum.c',
@@ -160,6 +160,29 @@ class ConsoleTests(unittest.TestCase):
 
     def rip(self, advanced=0, fault=0):
         return self.run_c('rip',self.disc,self.track,advanced,fault)
+
+    def test_fixed_bulk_slot_diagnosis_keeps_successful_reread_bytes(self):
+        self.assertEqual(self.rip(fault=6)[0], '0')
+        self.assertEqual(self.track.read_bytes(), self.disc_data)
+        # The normal retry path handles both corrupt bulk reads; no added reads.
+        log = Path(str(self.track)+'.log').read_text()
+        self.assertEqual(log.count('slot=11'), 2)
+        self.assertEqual(log.count('changed=1 first=100 last=100'), 2)
+
+    def test_verification_service_unloads_music_and_resumes_after_unlock(self):
+        for operation in (1, 2):
+            with self.subTest(operation=operation):
+                subprocess.run([str(self.exe), 'service', str(self.disc), str(self.path),
+                                '0', str(operation)], check=True, timeout=10)
+        log = (self.path/'fixture'/'rip.log').read_text()
+        for phase in ('rip-start', 'sector-buffer', 'rip-data-finish',
+                      'verify-music-before', 'verify-music-freed', 'verify-start',
+                      'verify-track-1', 'verify-finish', 'rip-finish'):
+            self.assertIn('RAM '+phase+' ', log)
+        import re
+        before = int(re.search(r'RAM verify-music-before .*?available=(\d+)', log)[1])
+        after = int(re.search(r'RAM verify-music-freed .*?available=(\d+)', log)[1])
+        self.assertEqual(after-before, 1024*1024)
 
     def test_sector_checks_distinguish_payload_parity_address_and_unsupported(self):
         s = bytearray(make_sector(45150))

@@ -116,7 +116,7 @@ UTILS_OBJ = $(SRC_DIR)/utils.o $(UTILS_DIR)/gmtime.o $(UTILS_DIR)/strftime.o \
 			$(UTILS_DIR)/memset.op $(UTILS_DIR)/memmove.op
 
 OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/video.o $(SRC_DIR)/console.o \
-		$(SRC_DIR)/gui/gui.o $(SRC_DIR)/commands.o \
+		$(SRC_DIR)/gui/gui.o $(SRC_DIR)/commands.o $(SRC_DIR)/memory_stats.o \
 		$(SRC_DIR)/module.o $(SRC_DIR)/events.o $(SRC_DIR)/fs/fs.o  \
 		$(SRC_DIR)/lua/lua.o $(SRC_DIR)/lua/lua_ds.o $(SRC_DIR)/lua/packlib.o \
 		$(SRC_DIR)/app/app.o $(SRC_DIR)/app/load.o $(SRC_DIR)/app/tsunami.o \
@@ -255,6 +255,7 @@ release: build cdi
 	@cp $(DS_BASE)/utils/README.exfat.md $(DS_BASE)/release/exfat-guide.md
 	@cp $(DS_BASE)/utils/README.input-ui.md $(DS_BASE)/release/input-ui-guide.md
 	@cp $(DS_BASE)/utils/README.readback-diagnostic.md $(DS_BASE)/release/readback-guide.md
+	@cp $(DS_BASE)/docs/1.0-test-followups.md $(DS_BASE)/release/1.0-test-followups.md
 	@cp $(DS_BASE)/RELEASE-NOTES.md $(DS_BASE)/release/README-FIRST.md
 	@cp $(DS_BASE)/docs/upstream-review.md $(DS_BASE)/release/upstream-review.md
 	@cp $(DS_BASE)/VERSION $(DS_BASE)/release/$(TARGET)/NEXT_VERSION

@@ -20,7 +20,7 @@ class FatMetadataTests(unittest.TestCase):
             'gcc', '-std=gnu11', '-O1', '-Wno-format-truncation', '-D_GNU_SOURCE',
             '-ffunction-sections', '-fdata-sections',
             '-include', 'utils/tests/fatfs_host_types.h',
-            '-Iutils/tests/console_shim', '-Iinclude/SDL', '-I' + str(fat),
+            '-Iutils/tests/console_shim', '-Iinclude/SDL', '-Iinclude', '-I' + str(fat),
             'utils/tests/fatfs_harness.c', 'applications/gd_ripper/modules/checksum.c',
             'applications/gd_ripper/modules/recovery.c',
             str(fat / 'ff.c'), str(fat / 'ffunicode.c'), str(fat / 'ffsystem.c'),

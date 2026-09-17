@@ -1,0 +1,4 @@
+#ifndef KUI_TEST_STACK_H
+#define KUI_TEST_STACK_H
+#define THD_KERNEL_STACK_SIZE (64 * 1024)
+#endif

@@ -8,6 +8,7 @@
 
 
 #include "ds.h"
+#include "memory_stats.h"
 #include "cmd_elf.h"
 #include "zlib/zlib.h"
 #include "network/net.h"
@@ -998,35 +999,26 @@ static int builtin_read(int argc, char *argv[]) {
 
 
 static int builtin_mstats(int argc, char *argv[]) {
-
-	struct mallinfo mi = mallinfo();
-	//struct mallinfo pmi = pvr_int_mallinfo();
-	ds_printf(	"Memory usage:\n"
-	            "Max system bytes      = %10lu\n"
-	            "System bytes          = %10lu\n"
-	            "In use bytes          = %10lu\n"
-	            "Free chunks           = %10lu\n"
-	            "Fastbin blocks        = %10lu\n"
-	            "Mmapped regions       = %10lu\n"
-	            "Total allocated space = %10lu\n"
-	            "Total free space      = %10lu\n"
-	            "PVR Mem avaible       = %10lu\n"
-	            "Current sbrk          = %10lx\n",
-	            (uint32)(mi.usmblks),
-	            (uint32)(mi.arena + mi.hblkhd),
-	            (uint32)(mi.uordblks + mi.hblkhd),
-	            (uint32) mi.ordblks,
-	            (uint32) mi.smblks,
-	            (uint32) mi.hblks,
-	            (uint32) mi.uordblks,
-	            (uint32) mi.fordblks,
-	            (uint32) pvr_mem_available(),
-	            (uint32) (sbrk(0))
-	         );
-	//ds_printf("PVR System bytes = %10lu\n",(uint32)(pmi.arena + pmi.hblkhd));
-	//ds_printf("PVR In use bytes = %10lu\n",(uint32)(pmi.uordblks + pmi.hblkhd));
-
-	return CMD_OK;
+    (void)argc; (void)argv;
+    memory_snapshot_t s;
+    if (!MemoryStatsRead(&s)) {
+        ds_printf("K-UI RAM snapshot unavailable; retry mstats.\n");
+        return CMD_ERROR;
+    }
+    ds_printf("K-UI memory (bytes):\n"
+              "Main RAM              = %10lu\n"
+              "Heap in use           = %10lu\n"
+              "Reusable heap free    = %10lu\n"
+              "Unclaimed heap space  = %10lu\n"
+              "Available estimate    = %10lu\n"
+              "PVR free (separate)   = %10lu\n"
+              "Program break         = %10lx\n"
+              "Available is an estimate, not the largest contiguous allocation.\n",
+              (unsigned long)s.main_bytes, (unsigned long)s.heap_used,
+              (unsigned long)s.heap_free, (unsigned long)s.unclaimed,
+              (unsigned long)s.available, (unsigned long)pvr_mem_available(),
+              (unsigned long)s.program_break);
+    return CMD_OK;
 }
 
 

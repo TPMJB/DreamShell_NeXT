@@ -7,6 +7,7 @@
  ****************************/
 
 #include "ds.h"
+#include "memory_stats.h"
 #include "vmu.h"
 #include <stdlib.h>
 
@@ -454,6 +455,7 @@ static int OpenAppFinish(App_t *app, const char *args) {
 	}
 
 	UnLoadOldApps();
+    MemoryStatsAppEvent("before-load", app->name);
 
 	if(!(app->state & APP_STATE_LOADED)) {
 		if(!LoadApp(app, 1)) {
@@ -509,10 +511,12 @@ static int OpenAppFinish(App_t *app, const char *args) {
 
     if(!(app->state & APP_STATE_READY)) GUI_EnableInput();
 
+    MemoryStatsAppEvent("opened", app->name);
 	ds_printf("DS_OK: App %s opened\n", app->name);
 	return 1;
 
 error:
+    MemoryStatsAppEvent("open-failed", app->name);
 	if(args != NULL) {
 		app->args = NULL;
 	}
@@ -563,6 +567,7 @@ int CloseApp(App_t *app, int unload) {
 		curOpenedApp = 0;
 	}
 
+    MemoryStatsAppEvent("closed", app->name);
 	ds_printf("DS_OK: App %s closed.\n", app->name);
 	return 1;
 }

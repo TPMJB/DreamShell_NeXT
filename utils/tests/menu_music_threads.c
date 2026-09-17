@@ -42,6 +42,11 @@ int snd_stream_poll(snd_stream_hnd_t h) {
     assert(h==3); sem_post(&polling); assert(!sem_wait(&allow_poll)); return 0;
 }
 static void *close_music(void *unused) {(void)unused;MenuMusicClose();return NULL;}
+static void *verify_suspend(void *unused) {
+    (void)unused;
+    MenuMusicStorageLock(); MenuMusicSuspend(1); MenuMusicStorageUnlock();
+    return NULL;
+}
 static void wait_closing(void) {
     for(;;) {
         mutex_lock(&music_mutex); int opened=music.opened; mutex_unlock(&music_mutex);
@@ -78,6 +83,21 @@ int main(int argc,char **argv) {
     MenuMusicLabel(label,sizeof(label)); sem_post(&allow_read);
     assert(!pthread_join(closer,NULL));
     assert(!streams && !music.file && !music.feed && !music.worker);
+    /* A simultaneous app close and CRC suspend must perform only one join/free. */
+    MenuMusicOpen(argv[1]); assert(!sem_wait(&reading));
+    sem_post(&allow_read); assert(!sem_wait(&polling));
+    pthread_t verifier;
+    assert(!pthread_create(&verifier,NULL,verify_suspend,NULL));
+    for (;;) {
+        mutex_lock(&music_mutex); int suspended=music.suspended; mutex_unlock(&music_mutex);
+        if (suspended) break;
+        sched_yield();
+    }
+    assert(!pthread_create(&closer,NULL,close_music,NULL));
+    sem_post(&allow_poll);
+    assert(!pthread_join(verifier,NULL)); assert(!pthread_join(closer,NULL));
+    assert(!streams && !music.file && !music.feed && !music.worker);
+    MenuMusicSuspend(0); assert(!music.worker && !music.opened);
     puts("UI stays responsive during blocked file/audio I/O; close cancels load and joins worker");
     return 0;
 }
