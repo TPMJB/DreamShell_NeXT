@@ -28,6 +28,25 @@
 --	
 ------------------------------------------
 
+-- Keep one small log per boot. Flush each step so a native load failure still
+-- leaves its last completed step on writable media. Logging must not stop boot.
+local startup_log;
+local base_path = os.getenv("PATH");
+if base_path then
+	local ok, file = pcall(io.open, base_path .. "/kui-startup.log", "w");
+	if ok then startup_log = file; end
+end
+
+local function startup_message(message)
+	print(message);
+	if startup_log then
+		pcall(function()
+			startup_log:write(message);
+			startup_log:flush();
+		end);
+	end
+end
+
 local DreamShell = {
 
 	initialized = false,
@@ -87,28 +106,28 @@ local DreamShell = {
 		local path = os.getenv("PATH");
 		local time = os.time();
 
-		print(os.getenv("HOST") .. " " .. os.getenv("VERSION") .. "\n");
-		print(os.getenv("ARCH") .. ": " .. os.getenv("BOARD_ID") .. "\n");
-		print("Date: " .. os.date() .. "\n");
-		print("Base path: " .. path .. "\n");
-		print("User: " .. os.getenv("USER") .. "\n");
+		startup_message(os.getenv("HOST") .. " " .. os.getenv("VERSION") .. "\n");
+		startup_message(os.getenv("ARCH") .. ": " .. os.getenv("BOARD_ID") .. "\n");
+		startup_message("Date: " .. os.date() .. "\n");
+		startup_message("Base path: " .. path .. "\n");
+		startup_message("User: " .. os.getenv("USER") .. "\n");
 
 		local emu = os.getenv("EMU");
 
 		if emu ~= nil then
-			print("Emulator: " .. emu .. "\n");
+			startup_message("Emulator: " .. emu .. "\n");
 		end
 
-		print("\n");
+		startup_message("\n");
 
 		if not MapleAttached("Keyboard") then
 			table.insert(self.modules, "vkb");
 		end
 
 		table.foreach(self.modules, function(k, name)  
-			print("DS_PROCESS: Loading module " .. name .. "...\n");
+			startup_message("DS_PROCESS: Loading module " .. name .. "...\n");
 			if not OpenModule(path .. "/modules/" .. name .. ".klf") then
-				print("DS_ERROR: Can't load module " .. path .. "/modules/" .. name .. ".klf\n");
+				startup_message("DS_ERROR: Can't load module " .. path .. "/modules/" .. name .. ".klf\n");
 			end
 		end);
 
@@ -118,8 +137,20 @@ local DreamShell = {
 		end
 
 		self:InstallingApps(path .. "/apps");
+		local startup_app = os.getenv("STARTUP_APP");
+		local default_app = "Launch App";
+		if not startup_app or startup_app == "" then startup_app = default_app; end
+		startup_message("K-UI: Opening startup app: " .. startup_app .. "\n");
+		local opened = OpenApp(startup_app);
+		if not opened and startup_app ~= default_app then
+			startup_message("K-UI: Startup app unavailable; opening " .. default_app .. " instead.\n");
+			opened = OpenApp(default_app);
+		end
+		if not opened then
+			error("K-UI could not open the launcher. Check the module and app messages above.");
+		end
 		self.initialized = true;
-		OpenApp(os.getenv("STARTUP_APP"));
+		startup_message("K-UI: Startup app opened.\n");
 
 		local startup_cmd = os.getenv("STARTUP_CMD");
 		if startup_cmd ~= nil and startup_cmd ~= "" then
@@ -129,7 +160,7 @@ local DreamShell = {
 
 	InstallingApps = function(self, path)
 
-		print("DS_PROCESS: Installing apps...\n");
+		startup_message("DS_PROCESS: Installing apps...\n");
 		local name = nil;
 		local list = {};
 
@@ -146,9 +177,9 @@ local DreamShell = {
 			name = AddApp(path .. "/" .. directory .. "/app.xml");
 
 			if not name then
-				print("DS_ERROR: " .. directory .. "\n");
+				startup_message("DS_ERROR: " .. directory .. "\n");
 			else
-				print("DS_OK: " .. name .. "\n");
+				startup_message("DS_OK: " .. name .. "\n");
 			end
 		end
 
@@ -156,6 +187,15 @@ local DreamShell = {
 	end
 };
 
-if not DreamShell.initialized then
+startup_message("K-UI startup recovery log\n");
+local ok, failure = xpcall(function()
 	DreamShell:Initialize();
-end
+end, function(message)
+	local detail = tostring(message);
+	if debug and debug.traceback then detail = debug.traceback(detail, 2); end
+	startup_message("K-UI STARTUP FAILED: " .. detail .. "\n");
+	ShowConsole();
+	return detail;
+end);
+if startup_log then pcall(function() startup_log:close(); end); end
+if not ok then error(failure, 0); end

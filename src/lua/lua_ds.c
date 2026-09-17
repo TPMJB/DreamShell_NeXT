@@ -297,7 +297,7 @@ static int remove_dir (lua_State *L) {
 
 typedef struct dir_data {
 	int  closed;
-	uint32 dir;
+	file_t dir;
 } dir_data;
 
 
@@ -338,6 +338,7 @@ static int dir_iter (lua_State *L) {
 	} else {
 		/* no more entries => close directory */
 		fs_close(d->dir);
+		d->dir = FILEHND_INVALID;
 		d->closed = 1;
 		return 0;
 	}
@@ -352,8 +353,9 @@ static int dir_iter (lua_State *L) {
 static int dir_close (lua_State *L) {
 	dir_data *d = (dir_data *)lua_touserdata (L, 1);
 
-	if (!d->closed && d->dir) {
+	if (!d->closed && d->dir != FILEHND_INVALID) {
 		fs_close(d->dir);
+		d->dir = FILEHND_INVALID;
 		d->closed = 1;
 	}
 	return 0;
@@ -366,13 +368,15 @@ static int dir_close (lua_State *L) {
 static int dir_iter_factory (lua_State *L) {
 	const char *path = luaL_checkstring (L, 1);
 	dir_data *d = (dir_data *) lua_newuserdata (L, sizeof(dir_data));
-	d->closed = 0;
+	d->closed = 1;
+	d->dir = FILEHND_INVALID;
 
 	luaL_getmetatable (L, DIR_METATABLE);
 	lua_setmetatable (L, -2);
 	
 	d->dir = fs_open(path, O_RDONLY | O_DIR);
-	if (d->dir < 0) luaL_error (L, "cannot open %s", path);
+	if (d->dir == FILEHND_INVALID) return luaL_error (L, "cannot open %s", path);
+	d->closed = 0;
 	lua_pushcclosure (L, dir_iter, 1);
 	return 1;
 }
