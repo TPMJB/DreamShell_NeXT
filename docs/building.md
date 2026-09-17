@@ -1,21 +1,21 @@
 # Building K-UI
 
-K-UI **1.0** is approved for release from the reviewed **`master`** branch.
-The release tag is **k-ui-1.0**. Old `1.0` and `v1.0.0` tags remain historical
-milestones and must not be moved or reused.
+Build K-UI **1.0.1** from the reviewed **`master`** branch.
+The release tag is **k-ui-1.0.1**. Existing tags, including `k-ui-1.0`, `1.0`
+and `v1.0.0`, must not be moved or reused.
 
 ## GitHub Actions
 
 1. Open **Actions → Full K-UI release → Run workflow** (`full-release.yml`).
 2. Select **master**. For the public release, check **Publish a GitHub release**.
    Leave it unchecked only when you want a test artifact.
-3. After success, the release contains **K-UI-v1.0.zip** and **SHA256SUMS**.
-   The workflow also uploads the `K-UI-v1.0` artifact, with the complete `DS`
+3. After success, the release contains **K-UI-v1.0.1.zip** and **SHA256SUMS**.
+   The workflow also uploads the `K-UI-v1.0.1` artifact, with the complete `DS`
    folder, both CDI images, guides and host tools.
 4. Record the run URL and source commit when reporting console results.
 
 The workflow builds and validates the exact commit, uploads the archive and
-checksum as a draft, then publishes **k-ui-1.0**. It rejects existing tags and
+checksum as a draft, then publishes **k-ui-1.0.1**. It rejects existing tags and
 refuses publication if `master` changed during the build. Publication requires
 repository write access. Merging the source alone does not publish the release.
 
@@ -47,10 +47,10 @@ submodules initialized. The helper uses `/usr/local/dc/kos` and `/opt/toolchains
 its `prepare` step recreates `/usr/local/dc/kos/kos` at the pinned revision.
 
 ```sh
-git clone --recurse-submodules https://github.com/TPMJB/DreamShell_NeXT.git
-cd DreamShell_NeXT
+git clone --recurse-submodules https://github.com/TPMJB/K-UI_DS.git
+cd K-UI_DS
 git checkout master
-# To reproduce the published release once available: git checkout k-ui-1.0
+# To reproduce the published release once available: git checkout k-ui-1.0.1
 ```
 
 Install the packages listed in `.github/workflows/full-release.yml`, including
@@ -76,7 +76,7 @@ present on the host; Actions resolves its current revision for cache selection.
 This is a source/version-tracked build, not a claim of bit-for-bit reproducibility
 across arbitrary compilers or dependency updates.
 
-The final output is `K-UI-v1.0.zip` plus an outer `SHA256SUMS`.
+The final output is `K-UI-v1.0.1.zip` plus an outer `SHA256SUMS`.
 The packager validates source-matching app XML, SH-4 modules, loader payloads,
 branding, required guides and the embedded build record. Do not distribute
 `DreamShell-dev.zip` as the sealed release artifact.

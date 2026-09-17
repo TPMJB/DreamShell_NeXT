@@ -3,10 +3,11 @@
 This record distinguishes reported console results from source/host checks.
 It is not a claim that every app, game, device or firmware write has been tested.
 
-| Area | Evidence carried into 1.0 | Remaining scope |
+| Area | Evidence carried into 1.0.1 | Remaining scope |
 | --- | --- | --- |
 | Integrated 1.0 baseline | Commit `62a5fbc` passed the [complete Dreamcast build](https://github.com/TPMJB/DreamShell_NeXT/actions/runs/35180819886), including host checks, Linux FAT32/exFAT, SH-4 compilation/linking and package validation. The maintainer reports the latest app retest working except the intermittent dumping crash and approves full release. | The final publishing workflow validates the release commit again. This general report does not establish every individual firmware/peripheral scenario. |
-| Serial SD ripping | The maintainer reports completed catalog-matching rips and successful Stop/Resume, including recovery of a scratched Sonic Adventure disc. | An intermittent MDK2 dumping crash remains unresolved. A damaged disc can remain unrecoverable. |
+| GD Ripper 2.2.5 / E.G.G. | Fresh 516,324-sector rip with music loaded: zero sector-validation failures, full TOSEC match on all three tracks and completed finalization. Previous-build control had 69 recovered failures. Tested source `c7cacb4` passed the [complete build](https://github.com/TPMJB/K-UI_DS/actions/runs/35240170225). | Supports the framebuffer cache correction; one successful fresh rip does not prove the intermittent reboot permanently eliminated. Verification used streamed CRCs, not full SD read-back. [Detailed results](gd-ripper-egg-crash.md). |
+| Serial SD ripping | The maintainer reports completed catalog-matching rips and successful Stop/Resume, including recovery of a scratched Sonic Adventure disc. | K-UI 1.0.1 includes the cache correction tested on E.G.G.; the intermittent MDK2 reboot has not been separately retested. A damaged disc can remain unrecoverable. |
 | GD Ripper recovery reporting | The maintainer reports the reporting issue fixed in its separate thread. Commit `fa96afbd6286233f7f61992f7f443063acb4a118` passed its host tests and SH-4 app build. | The 1.0 integration retains `/ide/Games` and `/sd/Games` destinations; the maintainer has approved the combined app retest without a separate detailed reporting matrix. |
 | FAT16/FAT32/exFAT | The 0.9.1 build passed the host suite, Linux interoperability and SH-4 build with the FatFs R0.16 fixes. | Host images do not model SD/IDE timing or every card. |
 | Code Veronica on serial SD | Reported boot through ISO Loader. | Do not infer every preset, CDDA or VMU-emulation combination works. |
@@ -29,7 +30,11 @@ was captured for that occurrence. The earlier VMU photograph shows an
 failure. The rip and memory logs do not establish ordinary memory exhaustion.
 Ten subsequent completed-rip resume/CRC checks succeeded. Preserve `rip.log`,
 `kui-memory.log` and a full exception photo on recurrence; include disc revision,
-storage/filesystem, exact build and music state. This issue remains open in 1.0.
+storage/filesystem, exact build and music state. This issue remained open in 1.0. K-UI 1.0.1 includes the cache correction and
+completion changes from PR #15. Its fresh E.G.G. retest with music loaded had
+zero validation failures and completed normally, while the previous-build
+control had 69 recovered failures. The intermittent reboot remains a monitoring
+item; this single pass does not prove it cannot recur.
 
 Build evidence: [0.9.1 complete build](https://github.com/TPMJB/DreamShell_NeXT/actions/runs/34975888753)
 and [GD Ripper 2.2.2](https://github.com/TPMJB/DreamShell_NeXT/actions/runs/35003894677).

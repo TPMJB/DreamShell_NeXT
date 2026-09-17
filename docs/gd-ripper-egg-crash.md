@@ -1,5 +1,39 @@
 # E.G.G. completion crash investigation
 
+## Hardware retest and 1.0.1 decision
+
+The maintainer supplied `rip-2.log` / `verify-2.log` and `rip-3.log` /
+`verify-3.log` after testing the patch. Both were fresh 516,324-sector rips,
+with retries 10, zero-fill off, sector EDC on and advanced ECC off.
+
+| Measurement | Run #2: previous build | Run #3: GD Ripper 2.2.5 |
+| --- | --- | --- |
+| Music state reported | Turned on after opening the app | On when opening the app |
+| Memory released at verification music suspension | 952,136 bytes | 1,069,752 bytes |
+| Sector-validation failures / bulk fallbacks | 69 / 69 | 0 / 0 |
+| Extraction completion | 1,747.459 s | 1,775.933 s |
+| Stream CRC result | Full TOSEC track match | Full TOSEC track match |
+| Finalization | Reached `rip-finish` | All new milestones and `rip-finish` reached |
+
+Run #2's eight diagnostic samples still show an eight-byte overwrite, now at
+`0x8c80e970`–`0x8c80e977`, again the same cache index. Run #3 contains no sampled
+corruption because it has no validation failures. Both reports identify
+Elemental Gimmick Gear v1.001 (1999)(Vatical)(US)[!] and the same track CRCs:
+`85e929ab`, `087ff89a`, `8277c8be`. These are streamed CRC checks, not a full
+storage read-back.
+
+The tested patch source is `c7cacb4399e2fed00e75f64c8ffe5aba4546f7fe`, which also
+passed the [complete package build](https://github.com/TPMJB/K-UI_DS/actions/runs/35240170225).
+The logs identify GD Ripper 2.2.5; they do not independently fingerprint the
+loaded core. The prescribed test installation updates the complete DS folder.
+
+This evidence supports shipping the cache correction in K-UI 1.0.1. The
+maintainer authorized merging PR #15 based on the results. It does not prove
+that the intermittent reboot is permanently eliminated or establish the exact
+original overwrite mechanism. No ripping speed improvement is claimed.
+
+## Initial failure
+
 The supplied `rip(4).log` contains a fresh dump followed by a completed-file
 resume. The fresh run writes all 516,324 sectors, returns from automatic
 verification and records `RAM verify-finish`, but never records `RAM rip-finish`.
@@ -54,9 +88,9 @@ needs confirmation.
 - Record up to 32 bytes before and after each of the existing eight diagnostic
   samples. This adds no disc reads and does not change retries or validation.
 
-These changes are diagnostics, a cache mitigation and limited cleanup, not a confirmed crash fix.
-The duplicate drive stop has not been established as the cause. Do not describe
-this build as hardware verified or merge it into a frozen release on that basis.
+These changes were prepared as diagnostics, a cache mitigation and limited
+cleanup. The hardware retest above supports the 1.0.1 release decision, while
+the duplicate drive stop has not been established as the crash cause.
 
 ## Preserve the existing dump
 

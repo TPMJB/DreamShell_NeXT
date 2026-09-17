@@ -1,7 +1,7 @@
 # Installing K-UI
 
-Get the complete package from [GitHub Releases](https://github.com/TPMJB/DreamShell_NeXT/releases).
-For **K-UI 1.0**, choose tag **k-ui-1.0** and download **K-UI-v1.0.zip** when
+Get the complete package from [GitHub Releases](https://github.com/TPMJB/K-UI_DS/releases).
+For **K-UI 1.0.1**, choose tag **k-ui-1.0.1** and download **K-UI-v1.0.1.zip** when
 publication completes. A build artifact is not a published release. Use the
 files and notes from the same build; GitHub's source ZIP is not an installation.
 
@@ -11,7 +11,7 @@ files and notes from the same build; GitHub's source ZIP is not an installation.
 | --- | --- |
 | `DS/` | Complete installation for your SD or IDE/CF device. |
 | `K-UI_bootloader_v3.3.cdi` | Boot CD that loads `DS` from storage. |
-| `K-UI-v1.0.cdi` | Full CD distribution for this version. |
+| `K-UI-v1.0.1.cdi` | Full CD distribution for this version. |
 | `boot.cfg.example` | Optional boot menu/device settings; copy to `DS/boot.cfg` only when wanted. |
 | `host-tools/` | Python verification and recovery tools for your computer. |
 | `build-info.json`, `SHA256SUMS` | Source/version information and file checksums. |
@@ -47,6 +47,10 @@ the DEBUG and EMU variants are optional diagnostic files.
    Do not restore old program modules over the new ones. Remove `DS/apps/main`
    if it remains from an older install; it is the retired Classic launcher.
 4. Safely eject, reboot, and check the app versions and `DS/NEXT_VERSION`.
+
+For **1.0.1**, confirm `DS/NEXT_VERSION` is `1.0.1` and GD Ripper shows **2.2.5**.
+The cache fix also requires the updated **`DS/DS_CORE.BIN`**; copying only the
+GD Ripper app does not install the complete fix.
 
 Existing dumps need no conversion. Keep each dump's descriptor, tracks and all
 `rip.*`, CRC, bad-sector and recovery sidecars together. Do not delete records

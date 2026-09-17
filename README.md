@@ -1,4 +1,4 @@
-# K-UI 1.0
+# K-UI 1.0.1
 
 **Katana User Interface · by TPMJB**
 
@@ -7,15 +7,18 @@
 A refreshed tools environment for your Dreamcast. Browse games, manage files
 and VMUs, dump your discs, and check your storage from a coordinated interface.
 
-**[Releases & downloads](https://github.com/TPMJB/DreamShell_NeXT/releases)** ·
+**[Releases & downloads](https://github.com/TPMJB/K-UI_DS/releases)** ·
 [Install or update](docs/installation.md) ·
-[What's new in 1.0](RELEASE-NOTES.md) ·
+[What's new in 1.0.1](RELEASE-NOTES.md) ·
 [App gallery](docs/launch/1.0/showcase/README.md)
 
-The maintainer has approved the hardware-tested 1.0 baseline for release.
-The versioned download is **K-UI-v1.0.zip**, under tag **k-ui-1.0** once the
-publishing workflow completes. Older `1.0` and `v1.0.0` tags are historical
-milestones. Use the ZIP attached to the release, rather than GitHub's source ZIP.
+Version **1.0.1** is a targeted core and GD Ripper **2.2.5** update. The maintainer's
+E.G.G. retest with music enabled completed with a full catalog match and zero
+sector-check failures. This supports the cache fix, but one successful run does
+not prove every intermittent crash is resolved.
+The versioned download is **K-UI-v1.0.1.zip**, under tag **k-ui-1.0.1** once the
+publishing workflow completes. Earlier release tags remain unchanged.
+Use the ZIP attached to the release, rather than GitHub's source ZIP.
 
 ## Inside K-UI
 
@@ -47,11 +50,12 @@ Copy the complete `DS` folder from the release ZIP to your supported SD or IDE/C
 device. Back up personal files first. **An already-working boot disc can be
 reused** for an SD update; new installations can use the included
 `K-UI_bootloader_v3.3.cdi`. No BIOS flashing is required.
+Update **`DS/DS_CORE.BIN`** along with GD Ripper; the cache fix is in the core.
 
-**Known issue:** an intermittent GD-ROM dumping crash was reported with MDK2
-and has not been reproduced reliably. Ten subsequent completed-rip resume/CRC
-checks succeeded; those were not ten fresh disc dumps. Keep `rip.log`,
-`kui-memory.log` and a photograph of any exception screen when reporting it.
+**Remaining uncertainty:** earlier builds had intermittent dumping crashes with
+MDK2 and E.G.G. The new E.G.G. result is encouraging; it does not establish that
+all crash causes are fixed. Keep `rip.log`, `verify.log`, `kui-memory.log` and a
+photograph of any exception screen when reporting a recurrence.
 
 Game and device compatibility varies. Read [hardware results and limits](docs/compatibility.md),
 including the known Bust-A-Move 4 serial-SD black screen and untested hardware.
@@ -71,8 +75,8 @@ including the known Bust-A-Move 4 serial-SD black screen and untested hardware.
 
 K-UI enhancements and branding are by **TPMJB**. K-UI builds on **SWAT's
 DreamShell**, **KallistiOS**, **FatFs** and the other credited projects. It was
-previously named DreamShell NeXT; the repository URL is retained for continuity.
-The project version is 1.0; inherited core/API version identifiers remain intact.
+previously named DreamShell NeXT; its repository is now `TPMJB/K-UI_DS`.
+The project version is 1.0.1; inherited core/API version identifiers remain intact.
 
 DreamShell-specific code and K-UI additions use [PolyForm Noncommercial 1.0.0](LICENSE),
 except where separate terms apply. Third-party components retain their licenses.
