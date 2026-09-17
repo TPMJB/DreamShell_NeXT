@@ -84,6 +84,7 @@ GUI_Dialog::GUI_Dialog(const char *aname, int x, int y, int w, int h, GUI_Font *
 
     original_h = GetHeight();
     original_y = GetArea().y;
+    focused_button = 1;
 
     SetFlags(WIDGET_HIDDEN);
 }
@@ -150,6 +151,16 @@ void GUI_Dialog::ButtonClick(GUI_Object *sender) {
             cancel_callback->Call(this);
         }
     }
+}
+
+void GUI_Dialog::FocusButton(int index) {
+    if(confirm_button->GetFlags() & WIDGET_DISABLED) index = 1;
+    else if(cancel_button->GetFlags() & WIDGET_DISABLED) index = 0;
+    focused_button = index;
+    confirm_button->ClearFlags(WIDGET_INSIDE | WIDGET_PRESSED);
+    cancel_button->ClearFlags(WIDGET_INSIDE | WIDGET_PRESSED);
+    GUI_Button *selected = index ? cancel_button : confirm_button;
+    if(!(selected->GetFlags() & WIDGET_DISABLED)) selected->SetFlags(WIDGET_INSIDE);
 }
 
 void GUI_Dialog::Show(DialogMode new_mode, const char *text, const char *bodyText) {
@@ -253,6 +264,9 @@ void GUI_Dialog::Show(DialogMode new_mode, const char *text, const char *bodyTex
         }
     }
 
+    /* Destructive confirmations start on Cancel; one-button alerts select OK.
+     * This focus is independent of the screen's legacy joystick mouse mode. */
+    FocusButton(1);
     GUI_Screen *screen = GUI_GetScreen();
     if(screen) screen->SetModalWidget(this);
 
@@ -270,6 +284,23 @@ int GUI_Dialog::Event(const SDL_Event *event, int xoffset, int yoffset) {
 	if((flags & WIDGET_HIDDEN)) {
 		return rv;
 	}
+	if(!(flags & WIDGET_DISABLED) && event->type == SDL_KEYDOWN &&
+	   !(mode == MODE_PROMPT && (input->GetFlags() & WIDGET_HAS_FOCUS))) {
+		int sym = event->key.keysym.sym;
+		if(sym == SDLK_LEFT || sym == SDLK_UP) { FocusButton(0); return 1; }
+		if(sym == SDLK_RIGHT || sym == SDLK_DOWN) { FocusButton(1); return 1; }
+		if(sym == SDLK_TAB) { FocusButton(!focused_button); return 1; }
+		if(sym == SDLK_RETURN || sym == SDLK_KP_ENTER || sym == SDLK_SPACE) {
+			GUI_Button *selected = focused_button ? cancel_button : confirm_button;
+			if(!(selected->GetFlags() & WIDGET_DISABLED)) ButtonClick(selected);
+			return 1;
+		}
+		if(sym == SDLK_ESCAPE) {
+			GUI_Button *selected = mode == MODE_ALERT ? confirm_button : cancel_button;
+			if(!(selected->GetFlags() & WIDGET_DISABLED)) ButtonClick(selected);
+			return 1;
+		}
+	}
 
 	rv = GUI_Drawable::Event(event, xoffset, yoffset);
 
@@ -281,15 +312,6 @@ int GUI_Dialog::Event(const SDL_Event *event, int xoffset, int yoffset) {
 		return 1;
 	}
 
-	// Handle ESCAPE key press to cancel
-	if(event->type == SDL_KEYDOWN) {
-		if(event->key.keysym.sym == SDLK_ESCAPE) {
-			if(!(cancel_button->GetFlags() & WIDGET_DISABLED)) {
-				ButtonClick(cancel_button);
-				rv = 1;
-			}
-		}
-	}
 	return rv;
 }
 

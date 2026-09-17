@@ -22,6 +22,9 @@
 #include <errno.h>
 #include <dc/cdrom.h>
 #include "destination.h"
+#include "music.h"
+#include "memory_stats.h"
+#include "../../pointer_input.h"
 
 DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 
@@ -148,7 +151,15 @@ static struct self {
     bool crc_failed;
     char failure_detail[208];
     const char *failure_stage;
-    int analog_x, analog_y;
+    memory_meter_t memory;
+    bool memory_buffer_logged, verification_music_suspended;
+    uint32_t memory_verify_track;
+    struct {
+        uint8_t bytes[2352];
+        uint32_t fad;
+        unsigned captured;
+        bool pending;
+    } validation;
 	track_info_t tracks[MAX_TRACKS];
 	char selected_path[NAME_MAX];
 	char rip_name[NAME_MAX];
@@ -267,6 +278,39 @@ static int rip_log(const char *format, ...) {
 		}
 	}
 	return fs_close(hnd) ? CMD_ERROR : CMD_OK;
+}
+
+static void memory_phase(const char *phase) {
+    int saved_errno = errno;
+    MemoryStatsSample(&self.memory, timer_ms_gettime64(), 1);
+    memory_snapshot_t *s = &self.memory.current;
+    if (s->valid) {
+        rip_log("RAM %s main=%lu used=%lu free=%lu unclaimed=%lu available=%lu lowest=%lu samples=%lu rejected=%lu",
+            phase, (unsigned long)s->main_bytes, (unsigned long)s->heap_used,
+            (unsigned long)s->heap_free, (unsigned long)s->unclaimed,
+            (unsigned long)s->available, (unsigned long)self.memory.lowest_available,
+            (unsigned long)self.memory.samples, (unsigned long)self.memory.rejected);
+    } else rip_log("RAM %s snapshot unavailable", phase);
+    errno = saved_errno;
+}
+
+static void prepare_verification_memory(void) {
+    memory_phase("verify-music-before");
+    /* The service holds the storage gate. Worker shutdown uses trylock for its
+     * optional preference flush, so joining it cannot wait on this same gate. */
+    MenuMusicSuspend(1);
+    self.verification_music_suspended = true;
+    MemoryStatsReset(&self.memory);
+    self.memory_verify_track = 0;
+    memory_phase("verify-music-freed");
+    memory_phase("verify-start");
+}
+
+static void finish_verification_music(void) {
+    if (!self.verification_music_suspended) return;
+    self.verification_music_suspended = false;
+    /* Run only after releasing the storage gate; close must never restart music. */
+    if (!self.shutdown && (self.app->state & APP_STATE_OPENED)) MenuMusicSuspend(0);
 }
 
 static int storage_error(const char *stage, const char *path, int error) {
@@ -1332,6 +1376,9 @@ static void* gd_ripper_thread(void *arg) {
 	verification_summary.catalog_result = GD_VERIFY_ERROR;
 
 	ds_printf("DS_PROCESS: Starting disc ripping process\n");
+	MemoryStatsReset(&self.memory);
+    self.memory_buffer_logged = false;
+    memset(&self.validation, 0, sizeof(self.validation));
 	self.start_time = timer_ms_gettime64();
 	self.processed_sectors = 0;
     self.recovery_counts_valid = false;
@@ -1415,6 +1462,7 @@ static void* gd_ripper_thread(void *arg) {
         storage_error("Rip log creation failed", self.log_path, errno);
         goto out;
     }
+    memory_phase("rip-start");
     if (check_disc_identity(dst_folder, resume, disc_type) != CMD_OK) {
         failure_label = "Disc identity mismatch / unreadable";
         rip_log("Disc identity check failed before track extraction");
@@ -1500,6 +1548,7 @@ static void* gd_ripper_thread(void *arg) {
     update_ui_display(2352, true);
     rip_log("Rip completed successfully: %llu sectors",
 		(unsigned long long)self.processed_sectors);
+    memory_phase("rip-data-finish");
 	success = true;
 
 	if (self.rip_active) {
@@ -1510,9 +1559,11 @@ static void* gd_ripper_thread(void *arg) {
 		GUI_LabelSetText(self.time_label, "Please wait");
 		self.start_time = timer_ms_gettime64();
 		self.last_ui_update = 0;
+		prepare_verification_memory();
 		verification_result = gd_verify_dump_ex(dst_folder, self.database_path,
 			self.sync_mount[0] != '\0', &self.rip_active, update_verify_display,
 			NULL, &verification_summary, true, false);
+        memory_phase("verify-finish");
 	}
 
 out:
@@ -1581,6 +1632,7 @@ out:
             (unsigned long)self.recovery_totals.remaining);
     }
 	safe_cdrom_spin_down();
+	if (self.log_path[0]) memory_phase("rip-finish");
 	self.start_time = 0;
 	return NULL;
 }
@@ -1604,6 +1656,7 @@ static void set_io_status(const char *operation, uint32_t fad) {
 
 static void update_ui_display(uint32_t current_sector_size, bool force) {
 	uint64_t current_time = timer_ms_gettime64();
+    MemoryStatsSample(&self.memory, current_time, 0);
 	uint64_t elapsed_time = current_time - self.start_time;
 	double progress_percent = self.total_sectors ?
 		(double)self.processed_sectors * 100.0 / self.total_sectors : 0.0;
@@ -1694,6 +1747,13 @@ static void update_verify_display(void *data, const char *filename,
 		uint32_t track_index, uint32_t track_count, uint64_t processed_bytes,
 		uint64_t total_bytes) {
 	uint64_t now = timer_ms_gettime64();
+    MemoryStatsSample(&self.memory, now, 0);
+    if (track_index != self.memory_verify_track) {
+        char phase[40];
+        self.memory_verify_track = track_index;
+        snprintf(phase, sizeof(phase), "verify-track-%lu", (unsigned long)track_index);
+        memory_phase(phase);
+    }
 	double percent = total_bytes ? (double)processed_bytes * 100.0 / total_bytes : 0.0;
 	char track_text[64];
 	char current_text[64];
@@ -1832,16 +1892,25 @@ static void* gd_verify_thread(void *arg) {
 	gd_verify_result_t result;
 
 	(void)arg;
+    MemoryStatsReset(&self.memory);
+    self.log_path[0] = '\0';
+    memset(&summary, 0, sizeof(summary));
 	if (snprintf(folder, sizeof(folder), "%s/%s", self.rip_destination,
-			self.rip_name) >= (int)sizeof(folder)) {
+			self.rip_name) >= (int)sizeof(folder) ||
+            snprintf(self.log_path, sizeof(self.log_path), "%s/rip.log", folder) >=
+                (int)sizeof(self.log_path)) {
+        self.log_path[0] = '\0';
 		memset(&summary, 0, sizeof(summary));
 		summary.catalog_result = GD_VERIFY_ERROR;
 		result = GD_VERIFY_ERROR;
 	}
 	else {
 		set_sync_mount(self.rip_destination);
+        self.last_ui_update = 0;
+        prepare_verification_memory();
 		result = gd_verify_dump(folder, self.database_path, self.sync_mount[0] != '\0',
 			&self.rip_active, update_verify_display, NULL, &summary);
+        memory_phase("verify-finish");
 	}
 
 	self.rip_active = 0;
@@ -1999,6 +2068,7 @@ static int stream_written(const void *data, uint32_t crc_before_write, size_t by
 
 static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
         uint32_t type, uint32_t secbyte) {
+    if (count > 1) self.validation.pending = false;
     int rv = timed_cdrom_read(buffer, fad, count);
     if (rv != ERR_OK || type != 4 || secbyte != 2352) return rv;
     for (size_t i = 0; i < count; ++i) {
@@ -2008,8 +2078,35 @@ static int checked_sector_read(void *buffer, uint32_t fad, size_t count,
         if (flags && (self.recovery_mode || flags != GD_SECTOR_UNSUPPORTED)) {
             rip_log("Sector validation failed at FAD %lu (flags=%u: sync=1 address=2 EDC=4 ECC=8)",
                 (unsigned long)(fad + i), flags);
+            if (count > 1 && self.validation.captured < 8) {
+                /* Retain a bounded byte snapshot, not a pointer into the buffer
+                 * which the existing individual rereads will overwrite. */
+                const volatile uint8_t *observed = sector;
+                for (size_t j = 0; j < sizeof(self.validation.bytes); ++j)
+                    self.validation.bytes[j] = observed[j];
+                self.validation.fad = fad + i;
+                self.validation.pending = true;
+                ++self.validation.captured;
+                rip_log("Validation sample %u: FAD %lu slot=%lu buffer=%lx crc=%08lx flags=%u",
+                    self.validation.captured, (unsigned long)(fad+i), (unsigned long)i,
+                    (unsigned long)(uintptr_t)sector,
+                    (unsigned long)crc32(0,self.validation.bytes,2352), flags);
+            }
             return ERR_SYS;
         }
+    }
+    if (count == 1 && self.validation.pending && fad == self.validation.fad) {
+        size_t changed = 0, first = 2352, last = 0;
+        const volatile uint8_t *good = buffer;
+        for (size_t i = 0; i < 2352; ++i) if (self.validation.bytes[i] != good[i]) {
+            if (!changed) first = i;
+            last = i; ++changed;
+        }
+        rip_log("Validation reread FAD %lu: changed=%lu first=%lu last=%lu before=%02x after=%02x crc=%08lx",
+            (unsigned long)fad, (unsigned long)changed, (unsigned long)first,
+            (unsigned long)last, changed ? self.validation.bytes[first] : 0,
+            changed ? good[first] : 0, (unsigned long)crc32(0,buffer,2352));
+        self.validation.pending = false;
     }
     return rv;
 }
@@ -2068,6 +2165,10 @@ static int rip_sec(uint32_t tn, uint32_t first, uint32_t count, uint32_t type, c
 		rip_log("Failed to allocate sector buffer");
 		return CMD_ERROR;
 	}
+    if (!self.memory_buffer_logged) {
+        self.memory_buffer_logged = true;
+        memory_phase("sector-buffer");
+    }
 
 	if (prepare_track_mode(tn, first + resumed_sectors, secbyte) != CMD_OK) {
 		free(buffer);
@@ -2385,14 +2486,18 @@ int create_gdi_file(char *dst_folder, char *dst_file, char *text, int disc_type)
 void gd_ripper_Open(void) {
     if (!self.input_event) return;
     GUI_DisableInput();
-    SDL_DC_EmulateMouse(SDL_FALSE);
+    utility_pointer_open();
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SetEventActive(self.input_event, 1);
     select_page(0);
+    RipperMusicOpen(getenv("PATH"));
 }
+
+void gd_ripper_Music(GUI_Widget *widget) { (void)widget; MenuMusicCycle(); }
 
 void gd_ripper_Close(void) {
     self.rip_active = 0;
+    MenuMusicClose();
     if (self.input_event) SetEventActive(self.input_event, 0);
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 1);
     GUI_EnableInput();
@@ -2526,9 +2631,13 @@ static void *service_thread(void *arg) {
             int operation = self.request;
             self.request = 0;
             self.start_time = timer_ms_gettime64();
+            /* RAM playback continues during ripping. Verification unloads music. */
+            MenuMusicStorageLock();
             if (operation == 1) gd_ripper_thread(NULL);
             else if (operation == 3) gd_ripper_thread((void *)1);
             else gd_verify_thread(NULL);
+            MenuMusicStorageUnlock();
+            finish_verification_music();
             self.busy = 0;
             self.rip_active = 0;
             self.drive_command = 0;
@@ -2538,6 +2647,7 @@ static void *service_thread(void *arg) {
         } else if (timer_ms_gettime64() >= next_poll && claim_worker()) {
             int status = 0, type = 0;
             int rv;
+            MenuMusicStorageLock();
             rv = cdrom_get_status(&status, &type);
             next_poll = timer_ms_gettime64() + 500;
             if (rv == ERR_OK && (status == CD_STATUS_OPEN || status == CD_STATUS_NO_DISC)) {
@@ -2575,6 +2685,7 @@ static void *service_thread(void *arg) {
                 /* DISC_CHG also detects a quick swap between two polls. */
                 if (rv == ERR_DISC_CHG) { self.media_seen = false; self.disc_ready = false; }
             }
+            MenuMusicStorageUnlock();
             self.busy = 0;
             refresh_controls();
         }
@@ -2583,14 +2694,14 @@ static void *service_thread(void *arg) {
     return NULL;
 }
 
-static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn"};
+static const char *main_focus[] = {"start_btn", "cancel_btn", "advanced-btn", "exit-btn", "gname-text", "browse-btn", "music-btn"};
 static const char *advanced_focus[] = {"recover-btn", "edc-btn", "verify-btn", "bad_btn", "use_bin_btn", "num-read", "advanced-back"};
 static const char *destination_focus[] = {"device-sd", "device-ide", "device-pc", "folder-up",
     "folder-0", "folder-1", "folder-2", "folder-3", "folder-4", "folder-5", "folder-6",
     "folder-prev", "folder-next", "destination-confirm", "destination-back"};
 static const char *recovery_focus[] = {"recovery-start", "recovery-later"};
 
-static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : self.page == 1 ? 15 : 6; }
+static int focus_count(void) { return self.page == 3 ? 2 : self.page == 2 ? 7 : self.page == 1 ? 15 : 7; }
 
 static GUI_Widget *focus_widget(int index) {
     const char **names = self.page == 3 ? recovery_focus : self.page == 2 ? advanced_focus :
@@ -2665,6 +2776,8 @@ static void input_event(void *event, void *param, int action) {
     if (ConsoleIsVisible() || (e->type == SDL_KEYDOWN &&
         (e->key.keysym.sym == SDLK_F1 || e->key.keysym.sym == SDLK_PRINT ||
          (e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT))))) return;
+    utility_pointer_event(e);
+    if(e->type == SDL_NOEVENT) return;
     /* Let text entry / DreamShell's keyboard process actual typing. */
     if (GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
@@ -2674,12 +2787,9 @@ static void input_event(void *event, void *param, int action) {
     if (e->type == SDL_JOYHATMOTION && e->jhat.hat == 0) {
         if (e->jhat.value & (SDL_HAT_UP | SDL_HAT_LEFT)) focus_step(-1);
         else if (e->jhat.value & (SDL_HAT_DOWN | SDL_HAT_RIGHT)) focus_step(1);
-    } else if (e->type == SDL_JOYAXISMOTION) {
-        int dir = e->jaxis.value < -48 ? -1 : e->jaxis.value > 48 ? 1 : 0;
-        int *old = e->jaxis.axis == 0 ? &self.analog_x : &self.analog_y;
-        if (e->jaxis.axis <= 1) { if (dir && dir != *old) focus_step(dir); *old = dir; }
     } else if (e->type == SDL_JOYBUTTONDOWN) {
-        if (e->jbutton.button == SDL_DC_A) activate_focus();
+        if (e->jbutton.button == SDL_DC_Y) gd_ripper_Music(NULL);
+        else if (e->jbutton.button == SDL_DC_A && !utility_pointer) activate_focus();
         else if (e->jbutton.button == SDL_DC_B) {
             if (self.busy) gd_ripper_CancelRip(NULL);
             else if (self.page == 1 && folder_root(self.folders.path) && strlen(self.folders.path) > (size_t)folder_root(self.folders.path))
@@ -2690,12 +2800,13 @@ static void input_event(void *event, void *param, int action) {
         switch (e->key.keysym.sym) {
             case SDLK_UP: case SDLK_LEFT: focus_step(-1); break;
             case SDLK_DOWN: case SDLK_RIGHT: case SDLK_TAB: focus_step(1); break;
+            case SDLK_m: gd_ripper_Music(NULL); break;
             case SDLK_RETURN: case SDLK_SPACE: activate_focus(); break;
             case SDLK_ESCAPE: if (self.busy) gd_ripper_CancelRip(NULL); else select_page(0); break;
             default: GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0); break;
         }
     } else if (e->type == SDL_MOUSEMOTION || e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP || e->type >= SDL_USEREVENT) {
-        /* Real mouse remains optional; the controller never moves a pointer. */
+        /* Stick and real mouse clicks share the same GUI path. */
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
     }
     e->type = SDL_NOEVENT; /* The app owns this input; do not replay it globally. */
@@ -2704,6 +2815,10 @@ static void input_event(void *event, void *param, int action) {
 static void video_event(void *event, void *param, int action) {
     (void)event; (void)param;
     if (action != EVENT_ACTION_RENDER || !(self.app->state & APP_STATE_OPENED)) return;
+    char music_text[48];
+    MenuMusicLabel(music_text,sizeof(music_text));
+    GUI_Widget *caption = GUI_ButtonGetCaption(APP_GET_WIDGET("music-btn"));
+    if(strcmp(GUI_LabelGetText(caption),music_text)) GUI_LabelSetText(caption,music_text);
     if (self.busy && self.io_started) {
         unsigned seconds = ((uint32_t)timer_ms_gettime64() - self.io_started) / 1000;
         if (seconds >= 2 && seconds != self.heartbeat_second) {

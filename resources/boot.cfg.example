@@ -1,4 +1,4 @@
-# DreamShell NeXT bootloader 3.1
+# K-UI bootloader 3.3
 # Optional: copy this file to DS/boot.cfg on SD and edit with a text editor.
 # These values preserve the default immediate boot behavior.
 boot_order=auto

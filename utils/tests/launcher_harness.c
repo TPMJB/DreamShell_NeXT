@@ -186,7 +186,8 @@ static void Hat(int n) {SDL_Event e={0};e.type=SDL_JOYHATMOTION;e.jhat.value=n;I
 static void Mouse(int type,int x,int y) {SDL_Event e={0};e.type=type;if(type==SDL_MOUSEMOTION){e.motion.x=x;e.motion.y=y;}else{e.button.button=SDL_BUTTON_LEFT;e.button.x=x;e.button.y=y;}InputHandler(NULL,&e,EVENT_ACTION_UPDATE);}
 static void Behavior(void) {
  int initial=self.item_count,last=self.item_count-1,i;float w,h;
- assert(initial>=17);assert(!strcmp(self.items[0].name,"GD Ripper"));assert(self.focused_index==0);
+ assert(initial>=16);assert(!strcmp(self.items[0].name,"GD Ripper"));assert(self.focused_index==0);
+ for(i=0;i<initial;i++) assert(strcasecmp(self.items[i].name,"Main"));
  assert(music_opened);Button(SDL_DC_Y);assert(music_cycles==1&&self.focused_index==0&&!opened);
  Mouse(SDL_MOUSEBUTTONDOWN,170,421);Mouse(SDL_MOUSEBUTTONUP,170,421);assert(music_cycles==2&&!opened);
  Mouse(SDL_MOUSEBUTTONDOWN,170,421);Mouse(SDL_MOUSEBUTTONUP,300,421);assert(music_cycles==2&&!opened);
@@ -244,7 +245,7 @@ static void Faults(void) {
  for(int i=0;i<self.item_count;i++)if(self.items[i].app_id==a->id){
   SetFocusedIndex(i,0);assert(!self.items[i].icon);assert(self.items[i].label);
   assert(self.preview_banner->texture==self.fallback_icon);
-  assert(!strcmp(self.items[i].description,"Open this installed DreamShell application."));
+  assert(!strcmp(self.items[i].description,"Open this installed K-UI application."));
   for(int j=0;j<2;j++){TSU_LabelGetSize(self.title[j],&w,&h);assert(w<=DETAIL_W);}
   Button(SDL_DC_A);assert(opened==a->id);
  }

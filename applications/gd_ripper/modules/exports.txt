@@ -19,3 +19,4 @@ gd_ripper_ShowFileBrowser
 gd_ripper_ShowMainPage
 gd_ripper_FileBrowserConfirm
 gd_ripper_Folder
+gd_ripper_Music

@@ -1046,7 +1046,7 @@ void VMU_Manager_ItemSelect(dirent_fm_t *fm_ent) {
 	}
 	else {	// is DS_VMD
 		sprintf(self.desc_short, "VMU Dump");
-		sprintf(self.desc_long, "Dreamshell VMU Dump file");
+		sprintf(self.desc_long, "K-UI VMU Dump file");
 	}
 
 	if(flag_type == DS_VMI) {

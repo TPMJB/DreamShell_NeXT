@@ -243,7 +243,7 @@
         </cardstack>
 
         <label name="title_label" font="ui_font" fontsize="20" x="16" y="448" z="90.0"
-            text="DreamShell MIE JVS" smear="true" color="#70C9DBFF" />
+            text="K-UI MIE JVS" smear="true" color="#70C9DBFF" />
         <label name="page_label" font="ui_font" fontsize="14" x="520" y="448" z="90.0"
             text="Monitor" smear="true" color="#AAAAAAFF" />
         <label name="status_label" font="ui_font" fontsize="14" x="16" y="424" z="90.0"

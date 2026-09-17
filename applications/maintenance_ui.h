@@ -147,9 +147,7 @@ static void ma_input(void *event, void *param, int action) {
     if(ui.busy) { if(key == UI_BACK) ui.cancel = 1; e->type = SDL_NOEVENT; return; }
     if(utility_global_input(e)) return;
     if(ui.asking) {
-        if(key == UI_OK) ma_answer(1);
-        else if(key == UI_BACK || key == UI_START) ma_answer(0);
-        else utility_forward(e);
+        utility_dialog(e, key);
     } else if(ui.browsing) {
         if(key == UI_UP || key == UI_DOWN) {
             SDL_Event move; memset(&move, 0, sizeof(move)); move.type = SDL_JOYHATMOTION;

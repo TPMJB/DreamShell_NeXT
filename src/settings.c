@@ -62,6 +62,11 @@ Settings_t *GetSettings() {
 	if(!loaded) {
 		ResetSettings();
 	}
+	/* Upgrade old desktop selections to the K-UI launcher in memory. */
+	if(!strcasecmp(current_set.startup_app, "Main"))
+		snprintf(current_set.startup_app, sizeof(current_set.startup_app), "%s", DS_DEFAULT_APP_NAME);
+	if(!strcasecmp(current_set.main_app, "Main"))
+		snprintf(current_set.main_app, sizeof(current_set.main_app), "%s", DS_DEFAULT_APP_NAME);
 	return &current_set;
 }
 
@@ -233,7 +238,7 @@ static int SaveSettingsVMU() {
 	memset(&pkg, 0, sizeof(pkg));
 
 	strcpy(pkg.desc_short, getenv("VERSION"));
-	strcpy(pkg.desc_long, "DreamShell Settings");
+	strcpy(pkg.desc_long, "K-UI Settings");
 	strcpy(pkg.app_id, "DreamShell");
 
 	pkg.icon_cnt = 1;

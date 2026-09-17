@@ -80,7 +80,7 @@ def main(folder):
     preview=Preview('region_changer',values,hidden=('browser-panel',))
     preview.save(folder/'region-unknown.png');overflows.extend(preview.overflows)
     # Six screenshots at native resolution. All values here are samples.
-    sheet=Image.new('RGB',(1280,1440),'#101923')
+    sheet=Image.new('RGB',(1280,1440),'#080F23')
     for i,im in enumerate(images):sheet.paste(im.resize((640,480),RESAMPLE),((i%2)*640,(i//2)*480))
     sheet.save(folder/'maintenance-apps.png')
     if overflows: raise SystemExit(f'{len(overflows)} labels overflow')

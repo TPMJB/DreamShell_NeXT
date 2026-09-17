@@ -7,6 +7,62 @@ import xml.etree.ElementTree as E
 ROOT=Path(__file__).resolve().parents[2]
 
 class VMUManagerTests(unittest.TestCase):
+    def test_pointer_dispatch_preserves_native_actions_and_cancel(self):
+        from utils.tests.test_kui_bug_batch import SDL, run_source
+        source=(ROOT/'applications/vmu_manager/modules/ui.h').read_text()
+        handler=source[source.index('static void ui_input('):source.index('static void ui_init(')]
+        opened=source[source.index('void VMU_Manager_Open('):source.index('void VMU_Manager_Close(')]
+        commands=source[source.index('enum { UI_UP'):source.index('typedef struct')]
+        run_source(SDL + commands + r'''
+enum {APP_STATE_OPENED=1,EVENT_ACTION_UPDATE=1,CMD_OK=0,CMD_ERROR=-1,CMD_NO_ARG=-2};
+typedef struct {int state;} App_t;
+static struct {App_t *m_App;void *pages;} self;
+static struct {void *input,*worker;int repeat_dir,modal,armed,answer,allow_browse,bulk,cancel,busy;uint64_t repeat_at,poll_at;} ui;
+static int pointer_enabled,native_jobs,last_job,mouse_clicks;
+void SDL_DC_EmulateMouse(SDL_bool v) {pointer_enabled=v;}
+#include "applications/pointer_input.h"
+static int ConsoleIsVisible(void) {return 0;}
+#define GUI_GetScreen() NULL
+#define GUI_ScreenGetFocusWidget(s) NULL
+#define GUI_CardStackGetIndex(p) 1
+#define GUI_ScreenSetJoySelectState(s,v) ((void)0)
+#define SetEventActive(e,v) ((void)0)
+static void GUI_DisableInput(void) {pointer_enabled=0;}
+static void GUI_ScreenEvent(void *s,SDL_Event *e,int x,int y) {
+ (void)s;(void)x;(void)y;if(e->type==SDL_MOUSEBUTTONUP) mouse_clicks++;
+}
+static void VMU_Manager_Exit(void *w) {(void)w;}
+static uint64_t timer_ms_gettime64(void) {return 1;}
+static void ui_queue(int job,void *w,void *e) {(void)w;(void)e;last_job=job;native_jobs++;}
+static void ui_status(const char *s) {(void)s;}
+static void ui_refresh(void) {}
+''' + handler + opened + r'''
+static void send(SDL_Event e) {ui_input(NULL,&e,EVENT_ACTION_UPDATE);assert(e.type==SDL_NOEVENT);}
+static void click(int button,int mouse) {
+ send((SDL_Event){.jbutton={.type=SDL_JOYBUTTONDOWN,.button=button}});
+ send((SDL_Event){.button={.type=SDL_MOUSEBUTTONDOWN,.button=mouse}});
+ send((SDL_Event){.jbutton={.type=SDL_JOYBUTTONUP,.button=button}});
+ send((SDL_Event){.button={.type=SDL_MOUSEBUTTONUP,.button=mouse}});
+}
+int main(void) {
+ App_t app={APP_STATE_OPENED};self.m_App=&app;ui.input=ui.worker=&app;
+ VMU_Manager_Open(&app);assert(pointer_enabled);
+ click(SDL_DC_A,SDL_BUTTON_LEFT);assert(native_jobs==1 && last_job==UI_ACTIVATE && !mouse_clicks);
+ send((SDL_Event){.jhat={.type=SDL_JOYHATMOTION,.value=SDL_HAT_DOWN}});
+ assert(last_job==UI_DOWN && ui.repeat_dir==UI_DOWN);
+ send((SDL_Event){.jaxis={.type=SDL_JOYAXISMOTION,.axis=0,.value=100}});
+ assert(native_jobs==2 && !ui.repeat_dir);
+ click(SDL_DC_A,SDL_BUTTON_LEFT);assert(native_jobs==2 && mouse_clicks==1);
+ ui.modal=ui.armed=1;ui.answer=99;
+ click(SDL_DC_B,SDL_BUTTON_RIGHT);assert(ui.answer==CMD_ERROR && mouse_clicks==1);
+ ui.modal=0;ui.bulk=1;click(SDL_DC_B,SDL_BUTTON_RIGHT);assert(ui.cancel && mouse_clicks==1);
+ ui.bulk=0;send((SDL_Event){.jhat={.type=SDL_JOYHATMOTION,.value=SDL_HAT_UP}});
+ send((SDL_Event){.jaxis={.type=SDL_JOYAXISMOTION,.axis=2,.value=200}});
+ click(SDL_DC_A,SDL_BUTTON_LEFT);assert(native_jobs==4 && mouse_clicks==1);
+ return 0;
+}
+''')
+
     def test_transfer_failure_and_confirmation_gates(self):
         with tempfile.TemporaryDirectory() as tmp:
             exe=Path(tmp)/'vmu-transfer'

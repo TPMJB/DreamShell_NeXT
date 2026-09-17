@@ -23,7 +23,7 @@ BUILD_TYPE_BASE = $(if $(filter 0x3%,$(VER_BUILD)),Release,$(if $(filter 0x2%,$(
 BUILD_NUM = $(lastword $(subst 0x2,,$(subst 0x1,,$(subst 0x0,,$(subst 0x3,,$(VER_BUILD))))))
 BUILD_TYPE_NAME = $(if $(filter Release,$(BUILD_TYPE_BASE)),$(BUILD_TYPE_BASE),$(BUILD_TYPE_BASE)$(BUILD_NUM))
 NEXT_VERSION = $(shell cat $(DS_BASE)/VERSION 2>/dev/null || cat VERSION)
-TARGET_NAME = DreamShell-NeXT-v$(NEXT_VERSION)
+TARGET_NAME = K-UI-v$(NEXT_VERSION)
 TARGET_BIN = $(TARGET)_CORE.BIN
 TARGET_BIN_CD = 1$(TARGET_BIN)
 IDE_IMG_SIZE ?= 0
@@ -116,7 +116,7 @@ UTILS_OBJ = $(SRC_DIR)/utils.o $(UTILS_DIR)/gmtime.o $(UTILS_DIR)/strftime.o \
 			$(UTILS_DIR)/memset.op $(UTILS_DIR)/memmove.op
 
 OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/video.o $(SRC_DIR)/console.o \
-		$(SRC_DIR)/gui/gui.o $(SRC_DIR)/commands.o \
+		$(SRC_DIR)/gui/gui.o $(SRC_DIR)/commands.o $(SRC_DIR)/memory_stats.o \
 		$(SRC_DIR)/module.o $(SRC_DIR)/events.o $(SRC_DIR)/fs/fs.o  \
 		$(SRC_DIR)/lua/lua.o $(SRC_DIR)/lua/lua_ds.o $(SRC_DIR)/lua/packlib.o \
 		$(SRC_DIR)/app/app.o $(SRC_DIR)/app/load.o $(SRC_DIR)/app/tsunami.o \
@@ -179,6 +179,7 @@ next-provenance:
 romdisk.img: next-provenance
 
 make-build: $(DS_BUILD)/lua/startup.lua next-provenance
+	@rm -rf "$(DS_BUILD)/apps/main"
 	@mkdir -p $(DS_BUILD)/doc
 	@cp LICENSE NOTICE $(DS_BUILD)/doc
 	@cp $(DS_RES)/doc/about.txt $(DS_BUILD)/doc/about.txt
@@ -254,6 +255,7 @@ release: build cdi
 	@cp $(DS_BASE)/utils/README.exfat.md $(DS_BASE)/release/exfat-guide.md
 	@cp $(DS_BASE)/utils/README.input-ui.md $(DS_BASE)/release/input-ui-guide.md
 	@cp $(DS_BASE)/utils/README.readback-diagnostic.md $(DS_BASE)/release/readback-guide.md
+	@cp $(DS_BASE)/docs/1.0-test-followups.md $(DS_BASE)/release/1.0-test-followups.md
 	@cp $(DS_BASE)/RELEASE-NOTES.md $(DS_BASE)/release/README-FIRST.md
 	@cp $(DS_BASE)/docs/upstream-review.md $(DS_BASE)/release/upstream-review.md
 	@cp $(DS_BASE)/VERSION $(DS_BASE)/release/$(TARGET)/NEXT_VERSION
@@ -326,7 +328,7 @@ $(TARGET).cdi: $(TARGET_BIN_CD) make-build
 	@-rm -f $(DS_BUILD)/$(TARGET_BIN_CD)
 	@cp $(TARGET_BIN_CD) $(DS_BUILD)/$(TARGET_BIN_CD)
 	@-rm -rf $(DS_BUILD)/.* 2> /dev/null
-	@$(DS_SDK)/bin/mkisofs -V DreamShell -C 0,11702 -G /tmp/IP_$(TARGET).BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
+	@$(DS_SDK)/bin/mkisofs -V K-UI -C 0,11702 -G /tmp/IP_$(TARGET).BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
 	@echo Convert ISO to CDI...
 	@-rm -f $(TARGET).cdi
 	@$(DS_SDK)/bin/cdi4dc $(TARGET).iso $(TARGET).cdi >/dev/null
@@ -335,7 +337,7 @@ $(TARGET).cdi: $(TARGET_BIN_CD) make-build
 	@-rm -f /tmp/IP_$(TARGET).BIN
 
 # If you have problems with mkisofs try data/data image:
-# $(DS_SDK)/bin/mkisofs -V DreamShell -G $(DS_RES)/IP.BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
+# $(DS_SDK)/bin/mkisofs -V K-UI -G $(DS_RES)/IP.BIN -joliet -rock -l -x .DS_Store -o $(TARGET).iso $(DS_BUILD)
 # @$(DS_SDK)/bin/cdi4dc $(TARGET).iso $(TARGET).cdi -d >/dev/null
 
 ide: $(TARGET).img

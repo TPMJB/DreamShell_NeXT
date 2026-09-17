@@ -10,9 +10,13 @@
 #include <dc/sd.h>
 
 static void early_init(void) {
-	/* hardware_sys_mode() is not ready yet at KOS_INIT_EARLY time */
+	/* This runs before BSS is cleared and before IRQ/thread initialization.
+	   Neither hardware_sys_mode() nor g1_ata_select_device() is safe here:
+	   the latter reads a BSS device cache and can enter the scheduler.
+	   Restore the GD-ROM selection directly; KOS will then clear its cache
+	   to the same master-device value. No commands are issued by this hook. */
 	if((((*(volatile uint32_t *)0xA05F74B0) >> 4) & 0x0F) == HW_TYPE_RETAIL) {
-		g1_ata_select_device(G1_ATA_MASTER);
+		*(volatile uint8_t *)0xA05F7098 = G1_ATA_MASTER;
 	}
 }
 
@@ -41,7 +45,7 @@ pvr_init_params_t params = {
 	0
 };
 
-const char title[] = "DreamShell NeXT boot v"VERSION;
+const char title[] = "K-UI boot v"VERSION;
 
 
 int FileExists(const char *fn) {
@@ -87,16 +91,12 @@ int flashrom_get_region_only() {
 	}
 
 	if(region[2] == 0x58 || region[2] == 0x30) {
-		spiral_color = 0x44ed1800;
 		return FLASHROM_REGION_JAPAN;
 	} else if(region[2] == 0x59 || region[2] == 0x31) {
-		spiral_color = 0x44ed1800;
 		return FLASHROM_REGION_US;
 	} else if(region[2] == 0x5A || region[2] == 0x32) {
-		spiral_color = 0x443370d4;
 		return FLASHROM_REGION_EUROPE;
 	} else {
-		spiral_color = 0x44000000;
 		dbglog(DBG_ERROR, "%s: Unknown region code %02x\n", __func__, region[2]);
 		return FLASHROM_REGION_UNKNOWN;
 	}
@@ -157,17 +157,22 @@ int main(int argc, char **argv) {
 	dbgio_disable();
 
 	pvr_init(&params);
-	pvr_set_bg_color(192.0/255.0, 192.0/255.0, 192.0/255.0);
-	spiral_init();
-
-	menu_graphics_init();
+	pvr_set_bg_color(0.035f, 0.075f, 0.13f);
+	if(!menu_graphics_init()) {
+		pvr_shutdown();
+		vid_clear(9,19,33);
+		dbgio_enable();
+		dbgio_dev_select("fb");
+		dbglog(DBG_ERROR, "%s\nBoot menu graphics unavailable.\n"
+		       "Restart the console with your SD card inserted.\n", title);
+		while(1) thd_sleep(100);
+	}
 
 	while(1) {
 		menu_update();
 		pvr_wait_ready();
 		pvr_scene_begin();
 		pvr_list_begin(PVR_LIST_TR_POLY);
-		spiral_frame();
 		menu_frame();
 		pvr_list_finish();
 		pvr_scene_finish();

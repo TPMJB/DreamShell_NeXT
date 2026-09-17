@@ -75,7 +75,7 @@ static void scan_disc(void) {
             snprintf(result.type,sizeof(result.type),"%s",type==CD_GDROM?"GD-ROM":"MIL-CD");
             snprintf(result.state,sizeof(result.state),"%s",result.ready?"Ready to play":"Boot file missing");
             snprintf(result.message,sizeof(result.message),"%s",result.ready?
-                "A plays the disc. B returns to the menu. DreamShell closes when a game starts.":
+                "A plays the disc. B returns to the menu. K-UI closes when a game starts.":
                 "firmware/rungd.bin is missing or incomplete. Menu remains available.");
             publish(&result);
         } else report("DISC DRIVE","Read error","Could not read a valid Dreamcast header. Clean the disc, then retry.");

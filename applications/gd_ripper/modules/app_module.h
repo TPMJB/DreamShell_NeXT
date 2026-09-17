@@ -15,6 +15,7 @@ void gd_ripper_StartRip(GUI_Widget *widget);
 void gd_ripper_Verify(GUI_Widget *widget);
 void gd_ripper_Recover(GUI_Widget *widget);
 void gd_ripper_CancelRip(GUI_Widget *widget);
+void gd_ripper_Music(GUI_Widget *widget);
 void gd_ripper_Quit(GUI_Widget *widget);
 void gd_ripper_Advanced(GUI_Widget *widget);
 void gd_ripper_Toggle(GUI_Widget *widget);

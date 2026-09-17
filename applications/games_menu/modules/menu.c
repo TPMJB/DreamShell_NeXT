@@ -1902,6 +1902,7 @@ const char *GetNameCurrentTheme()
 
 ThemeStruct GetTheme(const char *theme_name)
 {
+    if(!strcmp(theme_name,"TPMJB NeXT")) theme_name=NEXT_THEME; /* Existing settings. */
 	ThemeStruct theme;
 
 	if (strcasecmp(theme_name, CUSTOM_THEME) == 0)
@@ -1954,6 +1955,7 @@ ThemeStruct GetTheme(const char *theme_name)
 
 void SetTheme(const char *theme_name)
 {
+    if(!strcmp(theme_name,"TPMJB NeXT")) theme_name=NEXT_THEME;
 	for (int i = 0; i < sizeof(ThemeList) / sizeof(ThemeList[0]); i++)
 	{
 		if (strcasecmp(theme_name, ThemeList[i].theme) == 0)

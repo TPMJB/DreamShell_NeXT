@@ -283,7 +283,12 @@ TOLUA_API void* tolua_clone (lua_State* L, void* value, lua_CFunction func)
   lua_pushstring(L,"tolua_gc");
   lua_rawget(L,LUA_REGISTRYINDEX);
   lua_pushlightuserdata(L,value);
-  lua_pushcfunction(L,func);
+  /* A NULL lua_CFunction still creates a callable Lua closure. Use a value
+   * marker for the default free() collector instead of calling address zero. */
+  if (func)
+    lua_pushcfunction(L,func);
+  else
+    lua_pushboolean(L,1);
   lua_rawset(L,-3);
   lua_pop(L,1);
   return value;
@@ -415,7 +420,10 @@ TOLUA_API void tolua_cclass (lua_State* L, const char* lname, const char* name, 
   lua_pushstring(L,lname);
   tolua_getmetatable(L,name);
   lua_pushstring(L,".collector");
-  lua_pushcfunction(L,col);
+  if (col)
+    lua_pushcfunction(L,col);
+  else
+    lua_pushnil(L);
   lua_rawset(L,-3);              /* store collector function into metatable */
   lua_rawset(L,-3);              /* assign class metatable to module */
 }

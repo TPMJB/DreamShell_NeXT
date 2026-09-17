@@ -1,4 +1,4 @@
-# DreamShell NeXT exFAT support
+# K-UI exFAT support
 
 NeXT 1.0 includes exFAT in bootloader **3.1**, the DreamShell core,
 standalone ISO Loader firmware **0.9.2**, and the optional HollySH BIOS loader.

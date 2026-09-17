@@ -4,7 +4,7 @@
 # http://www.dc-swat.ru
 #
 
-_SUBDIRS = main filemanager region_changer iso_loader \
+_SUBDIRS = filemanager region_changer iso_loader \
 			bios_flasher gd_ripper speedtest vmu_manager \
 			settings gdplay dreameye network games_menu \
 			mie_jvs arcade launch_app cart_ripper memtest

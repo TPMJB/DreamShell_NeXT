@@ -863,12 +863,14 @@ class GUI_Dialog : public GUI_Container
 		GUI_Callback *cancel_callback;
 
 		DialogMode mode;
+		int focused_button;
 
 		int original_h;
 		int original_y;
 
 		void ButtonClick(GUI_Object *sender);
 		void RelayoutButtons(void);
+		void FocusButton(int index);
 		GUI_Surface *CreateBackground(int w, int h);
 
 	public:

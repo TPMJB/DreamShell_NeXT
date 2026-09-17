@@ -7,18 +7,18 @@
     <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <surface name="bg" width="640" height="480">
-      <fill color="#101923" />
+      <fill color="#080F23" />
     </surface>
     <surface name="b116x32-normal" width="116" height="32">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b116x32-highlight" width="116" height="32">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="112" height="28" color="#472958" />
     </surface>
     <surface name="b116x32-pressed" width="116" height="32">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+      <fill x="2" y="2" width="112" height="28" color="#472958" />
     </surface>
     <surface name="b116x32-disabled" width="116" height="32">
       <fill color="#26313B" />
@@ -27,43 +27,43 @@
       <fill color="#1B2A39" />
     </surface>
     <surface name="b576x30-normal" width="576" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b576x30-highlight" width="576" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="572" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="572" height="26" color="#472958" />
     </surface>
     <surface name="b576x30-pressed" width="576" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="572" height="26" color="#155B71" />
+      <fill x="2" y="2" width="572" height="26" color="#472958" />
     </surface>
     <surface name="b576x30-disabled" width="576" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b186x30-normal" width="186" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b186x30-highlight" width="186" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="182" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="182" height="26" color="#472958" />
     </surface>
     <surface name="b186x30-pressed" width="186" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="182" height="26" color="#155B71" />
+      <fill x="2" y="2" width="182" height="26" color="#472958" />
     </surface>
     <surface name="b186x30-disabled" width="186" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b188x30-normal" width="188" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b188x30-highlight" width="188" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="184" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="184" height="26" color="#472958" />
     </surface>
     <surface name="b188x30-pressed" width="188" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="184" height="26" color="#155B71" />
+      <fill x="2" y="2" width="184" height="26" color="#472958" />
     </surface>
     <surface name="b188x30-disabled" width="188" height="30">
       <fill color="#26313B" />
@@ -72,66 +72,66 @@
       <fill color="#14212E" />
     </surface>
     <surface name="picker-row" width="556" height="28">
-      <fill color="#182838" />
+      <fill color="#141D36" />
     </surface>
     <surface name="picker-focus" width="556" height="28">
-      <fill color="#225765" />
+      <fill color="#472958" />
     </surface>
     <surface name="picker-select" width="556" height="28">
-      <fill color="#155B71" />
+      <fill color="#472958" />
     </surface>
     <surface name="b80x30-normal" width="80" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b80x30-highlight" width="80" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="76" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="76" height="26" color="#472958" />
     </surface>
     <surface name="b80x30-pressed" width="80" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="76" height="26" color="#155B71" />
+      <fill x="2" y="2" width="76" height="26" color="#472958" />
     </surface>
     <surface name="b80x30-disabled" width="80" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b116x30-normal" width="116" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b116x30-highlight" width="116" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="112" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="112" height="26" color="#472958" />
     </surface>
     <surface name="b116x30-pressed" width="116" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="112" height="26" color="#155B71" />
+      <fill x="2" y="2" width="112" height="26" color="#472958" />
     </surface>
     <surface name="b116x30-disabled" width="116" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b192x30-normal" width="192" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b192x30-highlight" width="192" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="188" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="188" height="26" color="#472958" />
     </surface>
     <surface name="b192x30-pressed" width="192" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="188" height="26" color="#155B71" />
+      <fill x="2" y="2" width="188" height="26" color="#472958" />
     </surface>
     <surface name="b192x30-disabled" width="192" height="30">
       <fill color="#26313B" />
     </surface>
     <surface name="b164x30-normal" width="164" height="30">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b164x30-highlight" width="164" height="30">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="160" height="26" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="160" height="26" color="#472958" />
     </surface>
     <surface name="b164x30-pressed" width="164" height="30">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="160" height="26" color="#155B71" />
+      <fill x="2" y="2" width="160" height="26" color="#472958" />
     </surface>
     <surface name="b164x30-disabled" width="164" height="30">
       <fill color="#26313B" />
@@ -140,12 +140,12 @@
       <fill color="#263749" />
     </surface>
     <surface name="progress-fill" width="576" height="4">
-      <fill color="#53E1E3" />
+      <fill color="#65E8F2" />
     </surface>
   </resources>
   <body width="640" height="480" background="bg" onload="export:NetworkApp_Init()" onopen="export:NetworkApp_Open()" onclose="export:NetworkApp_Close()" onunload="export:NetworkApp_Shutdown()">
     <label name="heading" text="Network" x="32" y="32" width="440" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="subtitle" text="DreamShell NeXT  /  Connections, services and startup preferences." x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="subtitle" text="K-UI  /  Connections, services and startup preferences." x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
     <input name="menu" type="button" x="492" y="32" width="116" height="32" onclick="export:NetworkApp_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
       <label name="menu-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
@@ -181,7 +181,7 @@
       <label name="action-2-caption" text="Options / Status" x="12" y="0" width="164" height="30" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
     <panel name="browser-panel" x="32" y="88" width="576" height="252" background="maintenance-panel">
-      <label name="picker-path" text="/" x="8" y="0" width="560" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+      <label name="picker-path" text="/" x="8" y="0" width="560" height="24" font="small" color="#65E8F2" align="left" valign="center" />
       <input name="up" type="button" x="0" y="28" width="80" height="30" onclick="export:NetworkApp_Up()" normal="b80x30-normal" highlight="b80x30-highlight" pressed="b80x30-pressed" disabled="b80x30-disabled">
         <label name="up-caption" text="Up" x="10" y="0" width="60" height="30" font="small" color="#EFF5FC" align="left" valign="center" />
       </input>
@@ -196,7 +196,7 @@
       </input>
       <filemanager name="file-picker" path="/" x="0" y="64" width="576" height="188" background="picker-bg" item_font="small" item_font_color="#EFF5FC" item_normal="picker-row" item_highlight="picker-focus" item_pressed="picker-select" item_disabled="picker-row" item_selected_normal="picker-select" item_selected_highlight="picker-focus" item_selected_pressed="picker-select" item_selected_disabled="picker-row" onclick="export:NetworkApp_Item()" />
     </panel>
-    <label name="status" text="Ready." x="32" y="344" width="576" height="20" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="status" text="Ready." x="32" y="344" width="576" height="20" font="small" color="#65E8F2" align="left" valign="center" />
     <label name="note" text="" x="32" y="365" width="576" height="18" font="tiny" color="#A7B9CB" align="left" valign="center" />
     <panel x="32" y="388" width="576" height="4" background="progress-bg" />
     <panel name="progress" x="32" y="388" width="576" height="4" background="progress-fill" />

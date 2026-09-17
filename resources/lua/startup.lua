@@ -33,12 +33,14 @@ local DreamShell = {
 	initialized = false,
 	
 	modules = {
-		--"tolua",
+		-- Lua keeps binding callbacks and userdata metatables after apps close.
+		-- Keep one session reference so app unload cannot free their code.
+		"tolua",
 		--"tolua_2plus",
-		--"luaDS",            -- Depends: tolua
+		"luaDS",            -- Depends: tolua
 		--"luaKOS",           -- Depends: tolua
-		--"luaSDL",           -- Depends: tolua
-		--"luaGUI",           -- Depends: tolua
+		"luaSDL",           -- Depends: tolua
+		"luaGUI",           -- Depends: tolua
 		--"luaMXML",          -- Depends: tolua
 		--"luaSTD",           -- Depends: tolua
 		--"sqlite3",
@@ -132,7 +134,7 @@ local DreamShell = {
 		local list = {};
 
 		for ent in lfs.dir(path) do
-			if ent ~= nil and ent.name ~= ".." and ent.name ~= "." and ent.attr ~= 0 then
+			if ent ~= nil and ent.name ~= ".." and ent.name ~= "." and ent.name ~= "main" and ent.attr ~= 0 then
 				table.insert(list, ent.name);
 			end
 		end

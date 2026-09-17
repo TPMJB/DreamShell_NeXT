@@ -60,16 +60,18 @@ typedef struct { uint32 flags; float x,y,z,u,v; uint32 argb,oargb; } pvr_vertex_
 #define PVR_CMD_VERTEX 1
 #define PVR_CMD_VERTEX_EOL 2
 #define PVR_LIST_TR_POLY 1
-#define PVR_TXRFMT_ARGB1555 0
-#define PVR_TXRFMT_NONTWIDDLED 0
+#define PVR_TXRFMT_ARGB1555 1
+#define PVR_TXRFMT_NONTWIDDLED 2
 #define PVR_FILTER_NONE 0
-#define PVR_PACK_COLOR(a,r,g,b) ((uint32)((a+r+g+b)*32))
+#define PVR_FILTER_BILINEAR 1
+#define PVR_PACK_COLOR(a,r,g,b) (((uint32)((a)*255)<<24)|((uint32)((r)*255)<<16)|((uint32)((g)*255)<<8)|(uint32)((b)*255))
 void pvr_poly_cxt_txr(pvr_poly_cxt_t *,int,int,int,int,void *,int);
 void pvr_poly_cxt_col(pvr_poly_cxt_t *,int);
 void pvr_poly_compile(pvr_poly_hdr_t *,pvr_poly_cxt_t *);
 void pvr_prim(const void *,size_t);
 pvr_ptr_t pvr_mem_malloc(size_t);
-void bfont_draw(void *,int,int,int);
+size_t bfont_draw_ex(void *,uint32,uint32,uint32,uint8,bool,uint32,bool,bool);
+void pvr_txr_load(const void *,pvr_ptr_t,size_t);
 extern const char title[];
 extern volatile int start_pressed;
 extern uint32 boot_detect_ms;

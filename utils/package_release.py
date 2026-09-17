@@ -8,21 +8,38 @@ import posixpath
 import struct
 import subprocess
 import xml.etree.ElementTree as ET
+import io
+import wave
+from generate_menu_music import TRACKS
 from zipfile import ZipFile, ZIP_DEFLATED
 from package_boot_branding import VERSION as BOOT_VERSION, verify_cdi
+from boot_disc import verify_boot_payload
 from build_provenance import validate_archive
 from release_docs import GUIDES, render_guide
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def release_app_xml(root=ROOT):
+    return sorted(p for p in (root/"applications").glob("*/app.xml") if p.parent.name != "main")
+
+
+def validate_app_set(names, root=ROOT):
+    if any(n.startswith("DS/apps/main/") for n in names):
+        raise ValueError("Retired Classic launcher is present in the K-UI build")
+    expected = {f"DS/apps/{p.parent.name}/app.xml" for p in release_app_xml(root)}
+    if not expected <= names:
+        raise ValueError(f"Missing standard apps: {sorted(expected - names)}")
+    return len(expected)
+
+
 def main():
     version = (ROOT/'VERSION').read_text().strip()
     if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', version):
         raise ValueError('VERSION must be a numeric release version')
-    output = ROOT/f'DreamShell-NeXT-v{version}.zip'
+    output = ROOT/f'K-UI-v{version}.zip'
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    info = dict(project='DreamShell NeXT', version=version, source_commit=commit,
+    info = dict(project='K-UI', version=version, source_commit=commit,
                 base_core='DreamShell 4.0.5 Beta 3', bootloader=BOOT_VERSION,
                 build_kind='complete integration build',
                 kallistios=(ROOT/'sdk/doc/KallistiOS.txt').read_text().strip(),
@@ -36,8 +53,8 @@ def main():
         'DS/doc/LICENSE', 'DS/doc/NOTICE', 'DS/lua/startup.lua',
         'host-tools/verify_gd_dump.py', 'host-tools/make_gd_redump_db.py',
         'exfat-guide.md', 'input-ui-guide.md', 'readback-guide.md',
-        'README-FIRST.md', 'upstream-review.md', f'DreamShell_bootloader_v{BOOT_VERSION}.cdi',
-        f'DreamShell-NeXT-v{version}.cdi',
+        'README-FIRST.md', 'upstream-review.md', f'K-UI_bootloader_v{BOOT_VERSION}.cdi',
+        f'K-UI-v{version}.cdi',
     }
     with ZipFile(ROOT/'DreamShell-dev.zip') as source:
         if source.testzip() is not None:
@@ -49,7 +66,11 @@ def main():
         if missing:
             raise ValueError(f'Incomplete full release: {sorted(missing)}')
         info['provenance'] = validate_archive(source, ROOT, commit, version)
-        verify_cdi(source.read(f'DreamShell_bootloader_v{BOOT_VERSION}.cdi'))
+        verify_cdi(source.read(f'K-UI_bootloader_v{BOOT_VERSION}.cdi'))
+        verify_boot_payload(source.read(f'K-UI_bootloader_v{BOOT_VERSION}.cdi'),
+                            '1DS_BOOT.BIN', (ROOT/'firmware/bootloader/bootloader.bin').read_bytes())
+        verify_boot_payload(source.read(f'K-UI-v{version}.cdi'),
+                            '1DS_CORE.BIN', source.read('DS/DS_CORE.BIN'))
         for path in names:
             if path.startswith('/') or '..' in Path(path).parts:
                 raise ValueError(f'Unsafe archive path: {path}')
@@ -76,7 +97,7 @@ def main():
         # Validate against the integrated source, not old release version
         # constants. A successful ZIP step must not hide stale app binaries/XML.
         versions = {}
-        for app_xml in sorted((ROOT/'applications').glob('*/app.xml')):
+        for app_xml in release_app_xml():
             app = app_xml.parent.name
             path = f'DS/apps/{app}/app.xml'
             xml = source.read(path)
@@ -93,15 +114,20 @@ def main():
                 if len(data)<1024 or data[:7]!=b'\x7fELF\x01\x01\x01' or int.from_bytes(data[18:20],'little')!=42:
                     raise ValueError(f'Invalid SH-4 module: {module_path}')
         info['app_versions'] = versions
+        for track_name in TRACKS:
+            data = source.read('DS/apps/launch_app/music/'+track_name)
+            if len(data) > 2*1024*1024:
+                raise ValueError(f'Music exceeds runtime memory limit: {track_name}')
+            with wave.open(io.BytesIO(data)) as track:
+                if (track.getnchannels(),track.getsampwidth(),track.getframerate()) != (1,2,22050):
+                    raise ValueError(f'Invalid bundled music: {track_name}')
+        info['music_tracks'] = list(TRACKS)
         for path in ('DS/apps/launch_app/music/menu.wav',
                      'DS/apps/vmu_manager/modules/app_vmu_manager.klf',
                      'DS/modules/isoldr.klf', 'DS/modules/isofs.klf'):
             if path not in names or len(source.read(path)) < 1024:
                 raise ValueError(f'Missing integrated component: {path}')
-        expected_apps = {f'DS/apps/{p.parent.name}/app.xml' for p in (ROOT/'applications').glob('*/app.xml')}
-        if not expected_apps <= names:
-            raise ValueError(f'Missing standard apps: {sorted(expected_apps-names)}')
-        info['packaged_apps'] = len(expected_apps)
+        info['packaged_apps'] = validate_app_set(names)
         if source.read('DS/NEXT_VERSION').decode().strip() != version:
             raise ValueError('Packaged version differs from source')
         for variant in ['DS_CORE.BIN', 'DEBUG_DS_CORE.BIN', 'EMU_DS_CORE.BIN']:

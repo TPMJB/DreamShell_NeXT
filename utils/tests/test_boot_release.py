@@ -13,8 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class BootTests(unittest.TestCase):
     def test_boot_disc_badge_preserves_bootstrap_code(self):
-        ip = (ROOT/'resources/IP.BIN').read_bytes()
         badge = (ROOT/'resources/boot-disc-badge.mr').read_bytes()
+        from utils.build_boot_disc_branding import inject_badge
+        ip = inject_badge((ROOT/'resources/IP.BIN').read_bytes(), badge)
         start, end = 0x3820, 0x3820 + 8192
         self.assertEqual(len(ip), 32768)
         self.assertEqual(badge[:2], b'MR')

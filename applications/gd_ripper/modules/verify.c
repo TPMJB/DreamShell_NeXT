@@ -646,16 +646,24 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
 		return summary->result;
 	}
 
-	buffer = (uint8_t *)memalign(32, VERIFY_BUFFER_SIZE);
-	if (!buffer) {
-		free(tracks);
-		return summary->result;
-	}
+    /* Saved stream CRCs do not read sectors: avoid the unused 36.75 KiB buffer. */
+    if (!streaming) {
+        buffer = (uint8_t *)memalign(32, VERIFY_BUFFER_SIZE);
+        if (!buffer) { free(tracks); return summary->result; }
+    }
     if (!streaming && gd_readback_begin(&diag, folder) != CMD_OK) {
         free(buffer); free(tracks); return summary->result;
     }
 	for (uint32_t index = 0; index < track_count; index++) {
 		int hash_status;
+        if (progress_cb) progress_cb(progress_data, tracks[index].filename,
+            index + 1, track_count, processed_bytes, total_bytes);
+        if (!*active) {
+            if (!streaming) gd_readback_end(&diag, sync_report);
+            free(buffer); free(tracks);
+            summary->result = GD_VERIFY_CANCELLED;
+            return summary->result;
+        }
         if (streaming) {
             char path[NAME_MAX];
             uint64_t saved_bytes = 0;
@@ -664,7 +672,10 @@ gd_verify_result_t gd_verify_dump_ex(const char *folder, const char *database_pa
             if (snprintf(path, sizeof(path), "%s/%s", folder, t->filename) < (int)sizeof(path) &&
                 gd_crc_restore(path, gd_crc_tag(t->number, t->start, t->sector_count,
                     t->sector_size), t->actual_size, t->sector_size, &saved_bytes, &t->crc32) &&
-                    saved_bytes == t->actual_size) hash_status = CMD_OK;
+                    saved_bytes == t->actual_size) {
+                hash_status = CMD_OK;
+                processed_bytes += t->actual_size;
+            }
         } else {
             hash_status = hash_track(folder, &tracks[index], buffer, &processed_bytes,
                 total_bytes, index + 1, track_count, active, progress_cb, progress_data,

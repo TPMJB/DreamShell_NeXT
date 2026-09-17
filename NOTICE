@@ -13,3 +13,5 @@ GD Ripper's tosec.db indexes factual track checksums and names from the TOSEC
 ISO Dreamcast US, JP and PAL catalogs (official 2025-03-13 release).
 Catalog author: Maddog and TOSEC contributors, https://www.tosecdev.org/.
 See applications/gd_ripper/redump-db.README for exact source DAT versions.
+
+Required Notice: K-UI enhancements and branding by TPMJB (https://github.com/TPMJB/DreamShell_NeXT).

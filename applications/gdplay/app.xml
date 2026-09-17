@@ -7,18 +7,18 @@
     <font name="tiny" size="12" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <font name="heading" size="24" src="../../fonts/ttf/arial_lite.ttf" type="ttf" />
     <surface name="bg" width="640" height="480">
-      <fill color="#101923" />
+      <fill color="#080F23" />
     </surface>
     <surface name="b116x32-normal" width="116" height="32">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b116x32-highlight" width="116" height="32">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="112" height="28" color="#472958" />
     </surface>
     <surface name="b116x32-pressed" width="116" height="32">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="112" height="28" color="#155B71" />
+      <fill x="2" y="2" width="112" height="28" color="#472958" />
     </surface>
     <surface name="b116x32-disabled" width="116" height="32">
       <fill color="#26313B" />
@@ -28,15 +28,15 @@
       <fill color="#1B2A39" />
     </surface>
     <surface name="b282x36-normal" width="282" height="36">
-      <fill color="#223548" />
+      <fill color="#202B48" />
     </surface>
     <surface name="b282x36-highlight" width="282" height="36">
-      <fill color="#53E1E3" />
-      <fill x="2" y="2" width="278" height="32" color="#155B71" />
+      <fill color="#F07DDC" />
+      <fill x="2" y="2" width="278" height="32" color="#472958" />
     </surface>
     <surface name="b282x36-pressed" width="282" height="36">
       <fill color="#ACFFFF" />
-      <fill x="2" y="2" width="278" height="32" color="#155B71" />
+      <fill x="2" y="2" width="278" height="32" color="#472958" />
     </surface>
     <surface name="b282x36-disabled" width="282" height="36">
       <fill color="#26313B" />
@@ -44,13 +44,13 @@
   </resources>
   <body width="640" height="480" background="bg" onload="export:gdplay_Init()" onopen="export:gdplay_Open()" onclose="export:gdplay_Close()" onunload="export:gdplay_Shutdown()">
     <label name="heading" text="GD Play" x="32" y="32" width="440" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
-    <label name="subtitle" text="DreamShell NeXT  /  Play an original disc" x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
+    <label name="subtitle" text="K-UI  /  Play an original disc" x="32" y="62" width="576" height="18" font="small" color="#A7B9CB" align="left" valign="center" />
     <input name="exit-btn" type="button" x="492" y="32" width="116" height="32" onclick="export:gdplay_Back()" normal="b116x32-normal" highlight="b116x32-highlight" pressed="b116x32-pressed" disabled="b116x32-disabled">
       <label name="exit-btn-caption" text="Menu" x="12" y="0" width="92" height="32" font="body" color="#EFF5FC" align="left" valign="center" />
     </input>
     <panel x="32" y="94" width="216" height="258" background="art-panel" />
     <image name="disc-image" src="disc-art" x="48" y="126" width="184" height="184" />
-    <label name="disc-type" text="DISC DRIVE" x="48" y="100" width="184" height="24" font="small" color="#53E1E3" align="left" valign="center" />
+    <label name="disc-type" text="DISC DRIVE" x="48" y="100" width="184" height="24" font="small" color="#65E8F2" align="left" valign="center" />
     <label name="disc-state" text="Checking disc..." x="48" y="318" width="184" height="26" font="body" color="#A7B9CB" align="left" valign="center" />
     <label name="title1-txt" text="Insert a Dreamcast disc" x="272" y="98" width="336" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />
     <label name="title2-txt" text="" x="272" y="128" width="336" height="28" font="heading" color="#EFF5FC" align="left" valign="center" />

@@ -6,8 +6,8 @@
   <entry app="File Manager" order="40" category="Files and storage" description="Browse your devices, copy and organize files, and open supported files and applications." />
   <entry app="VMU Manager" order="50" category="Save files" description="Browse your VMU, back up saves to storage, and restore saved games to a memory card." />
   <entry app="GD Play" order="60" category="Disc player" description="Play the disc in your Dreamcast's original GD-ROM drive." />
-  <entry app="Network" order="70" category="Connections" description="Configure your network connection and connect DreamShell to other devices." />
-  <entry app="Settings" order="80" category="System" description="Adjust DreamShell's startup, display, sound, and other system preferences." />
+  <entry app="Network" order="70" category="Connections" description="Configure your network connection and connect K-UI to other devices." />
+  <entry app="Settings" order="80" category="System" description="Adjust K-UI's startup, display, sound, and other system preferences." />
   <entry app="Dreameye" order="90" category="Camera" description="View and capture images with the Dreamcast Dreameye camera." />
   <entry app="Speedtest" order="100" category="Diagnostics" description="Measure transfer performance on your connected storage devices." />
   <entry app="Memtest" order="110" category="Diagnostics" description="Run memory checks to investigate possible Dreamcast hardware faults." />
@@ -16,5 +16,4 @@
   <entry app="Cart Ripper" order="140" category="Hardware tools" description="Dump cartridge data using a compatible cartridge interface." />
   <entry app="Arcade" order="150" category="Arcade tools" description="Configure arcade hardware and supported arcade game setups." />
   <entry app="MIE JVS" order="160" category="Arcade tools" description="Configure the MIE JVS interface for supported arcade controls and hardware." />
-  <entry app="Main" title="Classic launcher" order="190" category="System" description="Open DreamShell's classic desktop launcher." />
 </catalog>

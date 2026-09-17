@@ -1,4 +1,4 @@
-# DreamShell NeXT Games and ISO Loader
+# K-UI Games and ISO Loader
 
 The complete NeXT 1.0 package includes **ISO Loader 2.0.6**, **Games 1.0.3**,
 shared ISO Loader module **0.9.3**, ISOFS **1.8.1**, and standalone firmware

@@ -448,7 +448,7 @@ static void expt_fb_collect_dump(irq_context_t *irq_ctx, irq_t source) {
 	int i;
 
 	expt_fb_line_count = 0;
-	expt_fb_collect("=== DreamShell Catching Exception ===");
+	expt_fb_collect("=== K-UI Exception ===");
 
 	for (i = 15; i >= 0; i -= 2) {
 		if (i > 0) {
@@ -529,7 +529,7 @@ static void expt_timer_spin_sleep(int ms) {
 static void guard_irq_handler(irq_t source, irq_context_t *context, void *data) {
 
 	(void)data;
-	dbglog(DBG_INFO, "\n========== DreamShell Catching Exception ==========\n");
+	dbglog(DBG_INFO, "\n========== K-UI Exception ==========\n");
 
 	irq_context_t *irq_ctx = irq_get_context();
 

@@ -363,7 +363,7 @@ static int class_gc_event (lua_State* L)
       lua_pushvalue(L,1);            /* tolua_gc tolua_gc.u(func) u */
       lua_call(L,1,0);               /* tolua_gc */
     }
-    else if (lua_isuserdata(L,-1) && *((void**)lua_touserdata(L,-1))==NULL) {
+    else if (lua_isboolean(L,-1) && lua_toboolean(L,-1)) {
       /* free object */
       free(u);
       tolua_release(L,u);                /* unmap from tolua tables */

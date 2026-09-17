@@ -30,3 +30,5 @@ exports_stubs.c
 exports_gcc.c
 exports_gcc_stubs.c
 DS-*.png
+
+/applications/launch_app/music/*.wav

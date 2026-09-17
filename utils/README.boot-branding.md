@@ -1,20 +1,24 @@
-# DreamShell NeXT — bootloader 3.1
+# K-UI — bootloader 3.3
 
 This boot disc adds checked core loading, an immediate recovery menu, and
-settings you can edit on SD. The corner badge beside the SEGA startup screen
-shows DreamShell NeXT, TPMJB on the right, and **github.com/TPMJB** underneath.
+settings you can edit on SD. The corner badge on the SEGA startup screen uses
+native-size vector artwork with a visor profile, large K-UI lettering and
+`github.com/TPMJB`. The core splash uses the matching full artwork.
+The new 3.3 CDI retains the tested 3.2 recovery menu and font fix. A maintainer
+reported a freeze at the SEGA screen on the first K-UI disc. This remains an
+open hardware issue; the sharper badge is not a confirmed fix for that freeze.
 
 ## Install
 
-1. Extract `DreamShell_bootloader_v3.1.cdi` from the complete NeXT ZIP.
+1. Extract `K-UI_bootloader_v3.3.cdi` from the complete K-UI ZIP.
 2. Burn the CDI **as a disc image** onto a new CD-R using the same working
    image-burning method as your current DreamShell boot disc.
 3. Boot the Dreamcast with the new CD-R and your existing SD card.
 4. Optionally copy `boot.cfg.example` to `DS/boot.cfg` on SD and edit its settings.
 
 The boot logo lives on the CD. Copying this ZIP or its artwork to SD does not
-replace it. This is the NeXT FAT16/FAT32/exFAT-capable **3.1** bootloader;
-it loads the DreamShell installation already on your SD/IDE device.
+replace it. This is the K-UI FAT16/FAT32/exFAT-capable **3.3** bootloader;
+it loads the compatible DS installation already on your SD/IDE device.
 No BIOS flashing is required. To update apps and the core as well, follow the
 [complete installation guide](../docs/installation.md).
 
@@ -23,6 +27,14 @@ cover the CDI bootstrap and embedded image; a newly burned CD-R still needs a
 console boot check.
 
 ## Recovery menu
+
+Version **3.2** fixes the garbled recovery text and old background seen when
+booting without storage. This fix lives on the disc: copying files to SD cannot
+update an already-burned 3.1 disc.
+
+With no readable core, the screen explains where `DS/DS_CORE.BIN` belongs and
+shows **X Rescan**. Insert SD, press X, then select a core and press A. Connect
+IDE/CF before powering on. See the [layout previews](../docs/bootloader-preview/README.md).
 
 Hold **Start** during startup to open the menu. By default the first normal
 core boots immediately, with the original device discovery order. Opening
@@ -84,7 +96,10 @@ multiple of four bytes and between 4 bytes and 8 MiB. Existing gzip support
 also checks decompression errors and the gzip trailer/CRC. Raw images receive
 read/length checks; this does not add a raw-image checksum or authenticity check.
 
-The logo's RAM copy is freed after its synchronous transfer to video memory.
+The font atlas is built in aligned system RAM with explicit 16-bit colors,
+then uploaded synchronously to texture memory and freed. Padded glyph cells
+and filtered scaling preserve thin strokes in the recovery screen. The legacy
+animated logo is not loaded or drawn; the screen uses an opaque NeXT layout.
 The scrambled-core decoder allocates its large index table on the heap and
 handles allocation failure, removing its oversized stack allocation. Each
 menu worker is joined before execution or rescan results are published.
@@ -105,10 +120,12 @@ python3 utils/build_boot_disc_branding.py --makeip /path/to/kos/utils/makeip/mak
 ```
 
 This host step requires CairoSVG and Pillow. It uses KallistiOS's `makeip`
-encoder, enforces the MR image size limit, and replaces only the old logo
-region of the existing `resources/IP.BIN`. Normal builds use the committed
+encoder, validates every decoded MR pixel, enforces the image size limit, and
+replaces only the logo region in a build copy of `resources/IP.BIN`. Normal builds use the committed
 assets and do not need an image renderer. The package check reads the logo
 back from the generated CDI and verifies the surrounding bootstrap bytes.
+The complete packager also follows the ISO9660 boot-file entry in each CDI,
+descrambles its contents and compares it with the compiled executable.
 
 Branding and NeXT enhancements: **TPMJB**, https://github.com/TPMJB.
 Built on SWAT's DreamShell, KallistiOS, FatFs, and their contributors' work.

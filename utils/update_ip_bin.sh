@@ -33,6 +33,7 @@ if [ "$TARGET_DIR" != "." ] && [ ! -d "$TARGET_DIR" ]; then
     mkdir -p "$TARGET_DIR"
 fi
 cp "$SOURCE_IP" "$TARGET_IP"
+python3 "$(dirname "$0")/build_boot_disc_branding.py" --inject "$TARGET_IP" || exit 1
 
 BUILD_TYPE_STR=""
 case "$BUILD_TYPE" in
@@ -49,11 +50,11 @@ CURRENT_DATE=$(date +%Y%m%d)
 if [ "$IP_TYPE" = "bootloader" ]; then
     VERSION_FIELD="DS-BOOTLD"
     BIN_NAME_FIELD="1DS_BOOT.BIN    "
-    DESC_FIELD="Bootloader ${VER_MAJOR}.${VER_MINOR}"
+    DESC_FIELD="K-UI boot ${VER_MAJOR}.${VER_MINOR}"
 else
     VERSION_FIELD="DS-${VER_MAJOR}${VER_MINOR}${VER_MICRO}${BUILD_TYPE_STR}"
     BIN_NAME_FIELD="1DS_CORE.BIN    "
-    DESC_FIELD="DreamShell ${VER_MAJOR}.${VER_MINOR}"
+    DESC_FIELD="K-UI"
 fi
 
 # Create version string with null byte separator using printf directly
@@ -70,11 +71,11 @@ printf "%-16.16s" "$DESC_FIELD" | dd of="$TARGET_IP" bs=1 seek=128 count=16 conv
 if [ "$IP_TYPE" = "bootloader" ]; then
     VERSION_STRING="DS-BOOTLD.V${VER_MAJOR}.${VER_MINOR}${VER_MICRO}0"
     BIN_NAME="1DS_BOOT.BIN"
-    DESCRIPTION_STRING="Bootloader ${VER_MAJOR}.${VER_MINOR}"
+    DESCRIPTION_STRING="K-UI boot ${VER_MAJOR}.${VER_MINOR}"
 else
     VERSION_STRING="DS-${VER_MAJOR}${VER_MINOR}${VER_MICRO}${BUILD_TYPE_STR}.V${VER_MAJOR}.${VER_MINOR}${VER_MICRO}0"
     BIN_NAME="1DS_CORE.BIN"
-    DESCRIPTION_STRING="DreamShell ${VER_MAJOR}.${VER_MINOR}"
+    DESCRIPTION_STRING="K-UI"
 fi
 
 echo "Updated IP.BIN:"

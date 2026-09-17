@@ -54,7 +54,7 @@ static void refresh(void) {
         ma_row(4, "FTP server:  %s", self.ftp ? "Started  /  A to stop" : "Stopped  /  A to start");
         ma_row(5, "HTTP server:  %s", self.http ? "Started  /  A to stop" : "Stopped  /  A to start");
         ma_text(ui.detail[0], self.ftp ? "FTP: ftp://%s:21  /  guest access" : "FTP is stopped. Options chooses the initial folder for your FTP client.", self.ip);
-        ma_text(ui.detail[1], self.http ? "HTTP: http://%s:80  /  DreamShell web controls" : "Interface status does not establish Internet or DNS reachability.", self.ip);
+        ma_text(ui.detail[1], self.http ? "HTTP: http://%s:80  /  K-UI web controls" : "Interface status does not establish Internet or DNS reachability.", self.ip);
     }
     GUI_LabelSetText(GUI_ButtonGetCaption(ui.actions[0]), self.ethernet ? "Disconnect Ethernet" : "Connect Ethernet");
 }
@@ -153,7 +153,7 @@ static void row(int index, int step) {
             if(index == 4 ? self.ftp : self.http) command(action);
             else ma_ask(action, index == 4 ? "Start FTP server?" : "Start HTTP server?",
                 index == 4 ? "FTP allows guest read/write access to mounted files.\nThe selected folder is only the starting directory.\nUse a trusted local network.\n\nStart the server on port 21?" :
-                "The HTTP server exposes DreamShell web controls.\nUse a trusted local network.\n\nStart the server on port 80?");
+                "The HTTP server exposes K-UI web controls.\nUse a trusted local network.\n\nStart the server on port 80?");
         }
         return;
     }

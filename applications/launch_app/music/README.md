@@ -1,46 +1,59 @@
-# After Hours — DreamShell NeXT menu theme
+# K-UI synth soundtrack
 
-An original 24-second instrumental loop created for TPMJB's DreamShell NeXT:
-warm synthesizer chords, a soft FM bell melody and quiet bass at 80 BPM.
-Generated algorithmically with Codex assistance, without external samples,
-recordings, sound banks or borrowed melodies. This is not Sega game audio.
+Five original instrumental loops, synthesized on the build host with no external
+samples, recordings or sound banks:
 
-The editable composition and synthesizer are in `utils/generate_menu_music.py`.
-Run it with Python 3 to reproduce `menu.wav`. The build generates the WAV from
-this source; no large binary asset or additional Python package is required.
+| File | Track | Character | BPM |
+| --- | --- | --- | --- |
+| `menu.wav` | After Hours | Warm chords and FM bells | 80 |
+| `neon-circuit.wav` | Neon Circuit | Pulsing bass and bright arpeggios | 100 |
+| `orbital-drift.wav` | Orbital Drift | Spacious pads and sparse percussion | 80 |
+| `midnight-vector.wav` | Midnight Vector | Faster electro rhythm | 110 |
+| `chrome-horizon.wav` | Chrome Horizon | Warm major chords and synth lead | 90 |
 
-The generated recording and musical material may be used, modified and
-redistributed with DreamShell NeXT, including in public downloads. To the extent
-any rights exist in this generated material, no additional restrictions or
-attribution requirements are asserted. Existing source-code licenses remain
-unchanged.
+Created for TPMJB's K-UI with Codex assistance. The composition and synthesizer
+are in `utils/generate_menu_music.py`. Python 3's standard library reproduces all
+five WAVs during the build; no music service or decoder is required.
 
-## Controls
+A random track is selected when entering Launcher or GD Ripper. It loops until
+you leave the app. Off/On keeps that same cached track. Consecutive visits avoid
+repeats while the module remains loaded; a module reload can repeat a track.
+A missing/invalid selected file falls back to `menu.wav`.
 
-In Launch App, press **Y** (keyboard **M**) or click **Y Music** to cycle
-**15% → 30% → 50% → Off → 15%**. The level is relative to DreamShell's master
-volume. A new installation starts at 15%. Your preference is stored in
-`DS/apps/launch_app/music.cfg`. An asterisk means the preference could not be
-saved; the current session still uses your selection.
+## Controls and performance
 
-The music plays only in Launch App. It stops and releases its memory when an
-app or shortcut opens, so it does not overlap Games previews or GD Play, or run
-during ripping, flashing, benchmarks or a game. It restarts when you return.
+Press **Y**, keyboard **M**, or click **Y Music** to cycle
+**15% → 30% → 50% → 75% → 100% → Off**. The master volume still applies.
+`DS/apps/launch_app/music.cfg` stores the level. An asterisk means saving is
+pending or failed. App exit stops playback and frees the buffers.
 
-The 1,058,444-byte WAV is loaded once into RAM per visit. Playback makes no
-further storage reads. A missing/invalid track or unavailable audio stream
-leaves the launcher usable; the music label reports it unavailable.
+The five files total about 4.5 MiB on storage. Only one mono PCM16 WAV is cached:
+at most 1,058,444 bytes for these tracks, plus the existing audio buffers. There
+is no runtime synthesizer, additional decoder, crossfade or playlist streaming.
+Playback has the same CPU/AICA work as the single-track player.
 
-## Your own music
+GD Ripper loads music only from SD, IDE/CF or PC, never from the disc. Its drive
+operations block new music loads and preference writes; cached playback continues
+from RAM. If there is no cached track, the control shows queued until the drive
+operation finishes. Check throughput, sound and a known-good catalog CRC on the
+console before the full release.
 
-Replace `DS/apps/launch_app/music/menu.wav` with a RIFF WAV containing
-**uncompressed 16-bit PCM, mono, 8–44.1 kHz**, at most **2 MiB**. Choose a short
-track with matching beginning/end for a smooth loop. Example conversion:
+## Custom tracks
+
+Any listed filename can be replaced with a RIFF WAV: **mono, 16-bit PCM,
+8–44.1 kHz, at most 2 MiB**. For example:
 
 ```sh
 ffmpeg -i your-track.ogg -t 24 -ar 22050 -ac 1 -c:a pcm_s16le menu.wav
 ```
 
-Conversion does not automatically make a musical loop. Ogg/MP3 are input
-formats for conversion; the launcher itself reads WAV. Keep a copy of custom
-music before installing an update that supplies `menu.wav`.
+Choose matching musical endpoints for a smooth loop. Keep backups: installing
+an update overwrites all five supplied filenames. To hear only your own track,
+replace `menu.wav` and remove the other four; missing selections fall back to it.
+
+## Music permissions
+
+The generated musical material and recordings may be used, modified and
+redistributed with K-UI, including public downloads. To the extent rights exist
+in this generated material, no additional restrictions or attribution
+requirements are asserted. Existing source-code licenses remain unchanged.

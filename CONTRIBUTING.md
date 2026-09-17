@@ -1,11 +1,11 @@
-# Contributing to DreamShell NeXT
+# Contributing to K-UI
 
 Submit NeXT changes to `master` in
 [TPMJB/DreamShell_NeXT](https://github.com/TPMJB/DreamShell_NeXT).
 
 ## Contribution terms
 
-DreamShell NeXT does not require a separate contributor license agreement or
+K-UI does not require a separate contributor license agreement or
 copyright assignment. Contributors retain copyright in their contributions.
 
 By intentionally submitting a contribution for inclusion here, you offer it

@@ -1,4 +1,4 @@
-# DreamShell NeXT 1.0 utility guide
+# K-UI 1.0 utility guide
 
 The eight redesigned utilities now keep all controls, labels and file pickers
 within a 32-pixel inset on the native 640x480 display. Font sizes are unchanged.

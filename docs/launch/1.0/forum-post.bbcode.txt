@@ -1,0 +1,50 @@
+[b]K-UI 1.0 — Katana User Interface for Dreamcast[/b]
+
+[img]https://raw.githubusercontent.com/TPMJB/DreamShell_NeXT/k-ui-1.0/docs/launch/1.0/k-ui-release-banner.jpg[/img]
+
+I'm releasing K-UI 1.0, bringing the launcher, GD-ROM dumping work and redesigned utilities into one complete package. This is the project previously called DreamShell NeXT; K-UI is now the interface and release name.
+
+[b]What's included[/b]
+[list]
+[*]A coordinated launcher and utilities, controller navigation and stick-pointer support.
+[*]GD Ripper with Stop/Resume, CRC checkpoints, TOSEC/Redump-derived catalogs, saved-file verification and targeted recovery.
+[*]Games and ISO Loader, including shared Games folders, artwork and eligible CD-audio previews.
+[*]FAT16/FAT32/exFAT support in the core, bootloader and ISO Loader.
+[*]Two-pane File Manager, VMU Manager, Settings, GD Play, Network, Speedtest and Memtest, plus the maintenance utilities.
+[*]Fixed bootloader 3.3 with the insert-SD recovery screen and K-UI badge.
+[*]Five original synth loops in Launcher and GD Ripper. Music runs from RAM and is stopped/unloaded before CRC verification, then restored afterward.
+[/list]
+
+The recent test builds also corrected File Manager's Lua startup/cleanup crash, app reload and directory handling, confirmation selection and duplicate controller/mouse actions. The Classic launcher is excluded.
+
+[b]Download and installation[/b]
+[url=https://github.com/TPMJB/DreamShell_NeXT/releases/tag/k-ui-1.0]K-UI 1.0 release — download K-UI-v1.0.zip and SHA256SUMS[/url]
+
+Back up your current DS folder and personal files. Update the complete DS folder from the ZIP, replacing matching program files while preserving your settings, presets and dumps. Remove the old DS/apps/main folder if it remains. Keep each dump's CRC/recovery sidecars with it.
+
+For an SD update, reuse your already-working boot disc. New installations can use K-UI_bootloader_v3.3.cdi; the fixed bootloader is included. K-UI-v1.0.cdi is the full CD distribution. Burn CDI files as disc images. No BIOS flashing is required. Desktop host-tools stay on your computer.
+
+[url=https://github.com/TPMJB/DreamShell_NeXT/blob/k-ui-1.0/docs/installation.md]Installation and storage requirements[/url]
+
+[b]Testing and known issues[/b]
+
+The tested baseline passed the complete Dreamcast build, and my latest console app retest is working. An intermittent GD-ROM dumping crash remains unresolved, reported with MDK2. Ten follow-up completed-rip resume/CRC checks succeeded with music off/on; they were not ten new disc dumps. The logs do not establish a memory-exhaustion cause.
+
+If you hit that crash, please keep rip.log, kui-memory.log, the game/disc revision and a photo of the full exception screen. Include the release/build, storage hardware, filesystem and whether music was enabled.
+
+Compatibility varies. Bust-A-Move 4 on serial SD remains a known black-screen case. IDE/CF coexistence, firmware writes and arcade peripherals have limited or no new hardware coverage. The earlier Speedtest mismatch has better diagnostics, but its original cause wasn't established.
+
+[url=https://github.com/TPMJB/DreamShell_NeXT/blob/k-ui-1.0/docs/compatibility.md]Hardware results and limitations[/url]
+[url=https://github.com/TPMJB/DreamShell_NeXT/blob/k-ui-1.0/docs/screenshots/k-ui/README.md]App gallery — host-rendered layouts with sample data[/url]
+
+[b]Credits[/b]
+
+K-UI enhancements and branding are by TPMJB, built on SWAT's DreamShell, KallistiOS, FatFs and the other credited projects. Required notices and third-party licenses remain included. The branding change is not a claim that the underlying code was written from scratch.
+
+The banner is promotional artwork made with image-generation assistance. Downloads are free.
+
+[url=https://github.com/TPMJB/DreamShell_NeXT]Source and documentation[/url]
+[url=https://ko-fi.com/tpmjb]Optional support on Ko-fi[/url]
+
+Feedback and hardware reports are welcome.
+— TPMJB

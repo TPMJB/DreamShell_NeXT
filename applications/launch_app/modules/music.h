@@ -1,4 +1,4 @@
-/* Launcher-owned, RAM-backed music. No global audio shutdown. */
+/* App-owned, RAM-backed music. No global audio shutdown. */
 #ifndef NEXT_LAUNCHER_MUSIC_H
 #define NEXT_LAUNCHER_MUSIC_H
 #include <stddef.h>
@@ -7,5 +7,9 @@ void MenuMusicClose(void);
 void MenuMusicPoll(void);
 void MenuMusicCycle(void);
 void MenuMusicSuspend(int suspend);
+/* Hold on the ripper service thread around drive/storage work. RAM playback
+ * continues; track loads and preference writes wait until this is released. */
+void MenuMusicStorageLock(void);
+void MenuMusicStorageUnlock(void);
 void MenuMusicLabel(char *text, size_t size);
 #endif

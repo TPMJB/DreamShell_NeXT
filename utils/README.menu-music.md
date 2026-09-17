@@ -1,29 +1,62 @@
-# DreamShell NeXT — Launcher 2.1.0 music
+# K-UI synth soundtrack
 
-Launcher music is included in the complete NeXT 1.0 package. Follow the
-[installation guide](../docs/installation.md) and back up custom music before
-replacing program files. A working NeXT 3.0/3.1 boot disc can be reused.
+Five original instrumental loops, synthesized on the build host with no external
+samples, recordings or sound banks:
 
-**Launch App** now plays *After Hours*, an original 24-second synth loop made
-for this project. The new **Y Music** control cycles **15%, 30%, 50%, Off**;
-you can click it with a mouse or press **M** on a keyboard. The master volume
-still applies. The preference persists across restarts. A `*` after the label
-means the current selection could not be saved to the card.
+| File | Track | Character | BPM |
+| --- | --- | --- | --- |
+| `menu.wav` | After Hours | Warm chords and FM bells | 80 |
+| `neon-circuit.wav` | Neon Circuit | Pulsing bass and bright arpeggios | 100 |
+| `orbital-drift.wav` | Orbital Drift | Spacious pads and sparse percussion | 80 |
+| `midnight-vector.wav` | Midnight Vector | Faster electro rhythm | 110 |
+| `chrome-horizon.wav` | Chrome Horizon | Warm major chords and synth lead | 90 |
 
-Music plays while browsing the launcher. Opening an application or shortcut
-stops it and frees its buffers; returning to the launcher restarts it.
-This keeps it out of Games audio previews, GD Play, game launches and utility
-operations. The track is loaded into RAM once per visit, with no ongoing
-card reads during playback. Missing or unsupported audio leaves the menu usable.
+Created for TPMJB's K-UI with Codex assistance. The composition and synthesizer
+are in `utils/generate_menu_music.py`. Python 3's standard library reproduces all
+five WAVs during the build; no music service or decoder is required.
 
-For custom music, replace `DS/apps/launch_app/music/menu.wav`. Use uncompressed
-16-bit PCM WAV, mono, 8–44.1 kHz, no more than 2 MiB. The supplied theme is
-22.05 kHz and about 1 MB. Further instructions and the theme's provenance are
-in `DS/apps/launch_app/music/README.md`. Save a copy of custom music before
-installing any update that supplies a replacement `menu.wav`.
+A random track is selected when entering Launcher or GD Ripper. It loops until
+you leave the app. Off/On keeps that same cached track. Consecutive visits avoid
+repeats while the module remains loaded; a module reload can repeat a track.
+A missing/invalid selected file falls back to `menu.wav`.
 
-Validation includes host execution of the launcher and music code, sanitizer
-checks of WAV bounds and loop reads, saved preferences and resource cleanup,
-SH-4 compilation, and checks that every module import is exported by the
-pinned KOS/DreamShell core. A real Dreamcast test is still needed for sound
-quality, smooth playback while browsing and repeated app transitions.
+## Controls and performance
+
+Press **Y**, keyboard **M**, or click **Y Music** to cycle
+**15% → 30% → 50% → 75% → 100% → Off**. The master volume still applies.
+`DS/apps/launch_app/music.cfg` stores the level. An asterisk means saving is
+pending or failed. App exit stops playback and frees the buffers.
+
+The five files total about 4.5 MiB on storage. Only one mono PCM16 WAV is cached:
+at most 1,058,444 bytes for these tracks, plus the existing audio buffers. There
+is no runtime synthesizer, additional decoder, crossfade or playlist streaming.
+Playback has the same CPU/AICA work as the single-track player.
+
+GD Ripper loads music only from SD, IDE/CF or PC, never from the disc. Its drive
+operations block new music loads and preference writes; cached playback continues
+from RAM. If there is no cached track, the control shows queued until the drive
+operation finishes. Check throughput, sound and a known-good catalog CRC on the
+console before the full release.
+
+## Custom tracks
+
+Any listed filename can be replaced with a RIFF WAV: **mono, 16-bit PCM,
+8–44.1 kHz, at most 2 MiB**. For example:
+
+```sh
+ffmpeg -i your-track.ogg -t 24 -ar 22050 -ac 1 -c:a pcm_s16le menu.wav
+```
+
+Choose matching musical endpoints for a smooth loop. Keep backups: installing
+an update overwrites all five supplied filenames. To hear only your own track,
+replace `menu.wav` and remove the other four; missing selections fall back to it.
+
+## Music permissions
+
+The generated musical material and recordings may be used, modified and
+redistributed with K-UI, including public downloads. To the extent rights exist
+in this generated material, no additional restrictions or attribution
+requirements are asserted. Existing source-code licenses remain unchanged.
+
+The app music is compatible with an existing 3.2 boot disc. Burn the new 3.3 CDI
+only to receive the K-UI boot-disc branding. See the [installation guide](../docs/installation.md).
