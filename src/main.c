@@ -290,7 +290,7 @@ int InitDS() {
 	InitVideoHardware();
 	ShowLogo();
 
-	dbglog(DBG_INFO, "Initializing DreamShell Core...\n");
+	dbglog(DBG_INFO, "Initializing K-UI Core...\n");
 	vmu_draw_string(getenv("TITLE"));
 
 	SetConsoleDebug(1);
@@ -421,7 +421,7 @@ void ShutdownDS(bool quick) {
 #ifdef DS_PROF
 	_mcleanup();
 #endif
-	dbglog(DBG_INFO, "Shutting down DreamShell Core...\n");
+	dbglog(DBG_INFO, "Shutting down K-UI Core...\n");
 
 	char fn[NAME_MAX];
 	snprintf(fn, NAME_MAX, "%s/lua/shutdown.lua", getenv("PATH"));

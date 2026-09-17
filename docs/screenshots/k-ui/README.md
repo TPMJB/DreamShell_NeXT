@@ -1,6 +1,6 @@
-# K-UI candidate app previews
+# K-UI app previews
 
-These are host layout previews from the candidate source with sample data,
+These are host layout previews from the K-UI source with sample data,
 not photographs or emulator/hardware captures. Boot recovery uses a substitute
 host font; the console uses the BIOS font. Splash and badge artwork is converted
 from the approved production images.

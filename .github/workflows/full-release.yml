@@ -10,7 +10,7 @@ on:
         default: false
 
 concurrency:
-  group: dreamshell-next-release-${{ github.ref }}
+  group: kui-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -164,7 +164,7 @@ jobs:
           path: /usr/local/dc/kos/kos-ports
           key: kos-ports-${{ runner.os }}-${{ steps.ports.outputs.sha }}-${{ hashFiles('sdk/doc/KallistiOS.txt', 'sdk/toolchain/Makefile.cfg') }}
 
-      - name: Build complete DreamShell bundle
+      - name: Build complete K-UI bundle
         run: bash .github/scripts/dev-build.sh release
 
       - name: Validate and seal complete build
@@ -203,12 +203,20 @@ jobs:
           test "$current" = "$GITHUB_SHA" || { echo 'Source branch changed during the build; refusing to publish stale files.'; exit 1; }
           existing="$(git ls-remote --tags origin "refs/tags/k-ui-${version}")"
           test -z "$existing" || { echo 'Release tag already exists; refusing to overwrite it.'; exit 1; }
-          cp RELEASE-NOTES.md /tmp/next-release-notes.md
+          python3 - <<'PY_NOTES'
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'utils')
+          from release_docs import render_guide
+          Path('/tmp/kui-release-notes.md').write_bytes(
+              render_guide(Path('.'), 'README-FIRST.md', os.environ['GITHUB_SHA'], public=True))
+          PY_NOTES
           printf '\nBuilt from [%s](%s/%s/commit/%s). [Build and test results](%s/%s/actions/runs/%s).\n' \
             "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" \
-            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/next-release-notes.md
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/kui-release-notes.md
           # Upload assets as a draft first; publish only once both uploads finish.
           gh release create "k-ui-$version" "K-UI-v${version}.zip" SHA256SUMS \
             --draft --title "K-UI ${version} — by TPMJB" \
-            --target "$GITHUB_SHA" --notes-file /tmp/next-release-notes.md
+            --target "$GITHUB_SHA" --notes-file /tmp/kui-release-notes.md
           gh release edit "k-ui-$version" --draft=false --latest

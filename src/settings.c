@@ -238,7 +238,7 @@ static int SaveSettingsVMU() {
 	memset(&pkg, 0, sizeof(pkg));
 
 	strcpy(pkg.desc_short, getenv("VERSION"));
-	strcpy(pkg.desc_long, "DreamShell Settings");
+	strcpy(pkg.desc_long, "K-UI Settings");
 	strcpy(pkg.app_id, "DreamShell");
 
 	pkg.icon_cnt = 1;

@@ -1,24 +1,23 @@
 # Building K-UI
 
-The K-UI 1.0 test candidate is on **`codex/k-ui`**. It includes bootloader 3.3
-and the complete DS folder. Build it with publication disabled; console testing
-comes before the full release. Old `1.0` and `v1.0.0` tags are preserved milestones.
+K-UI **1.0** is approved for release from the reviewed **`master`** branch.
+The release tag is **k-ui-1.0**. Old `1.0` and `v1.0.0` tags remain historical
+milestones and must not be moved or reused.
 
 ## GitHub Actions
 
-1. Open **Actions → Full NeXT release → Run workflow** (`full-release.yml`).
-   The Actions list uses the name from `master`; runs from this branch are
-   named **Full K-UI release**.
-2. Select `codex/k-ui`. Leave **Publish a GitHub release** unchecked for testing.
-3. After success, download the `K-UI-v1.0` artifact. Its ZIP contains
-   `DS`, both CDI images, guides and host tools directly, without another ZIP inside.
+1. Open **Actions → Full K-UI release → Run workflow** (`full-release.yml`).
+2. Select **master**. For the public release, check **Publish a GitHub release**.
+   Leave it unchecked only when you want a test artifact.
+3. After success, the release contains **K-UI-v1.0.zip** and **SHA256SUMS**.
+   The workflow also uploads the `K-UI-v1.0` artifact, with the complete `DS`
+   folder, both CDI images, guides and host tools.
 4. Record the run URL and source commit when reporting console results.
 
-After console approval and merging the candidate into `master`, publish from `master`: run the workflow with
-**Publish a GitHub release** selected. It builds and checks the source, uploads
-the ZIP and checksum as a draft, then publishes tag **k-ui-1.0**. It rejects an
-existing tag and refuses publication if the branch changed during the build.
-The old `v1.0.0` tag is preserved. Publication requires repository write access.
+The workflow builds and validates the exact commit, uploads the archive and
+checksum as a draft, then publishes **k-ui-1.0**. It rejects existing tags and
+refuses publication if `master` changed during the build. Publication requires
+repository write access. Merging the source alone does not publish the release.
 
 Pushes to `master` and pull requests targeting it run the host checks workflow. They
 do not rebuild the toolchain, produce disc images, or publish releases. Historical
@@ -50,7 +49,8 @@ its `prepare` step recreates `/usr/local/dc/kos/kos` at the pinned revision.
 ```sh
 git clone --recurse-submodules https://github.com/TPMJB/DreamShell_NeXT.git
 cd DreamShell_NeXT
-git checkout codex/k-ui
+git checkout master
+# To reproduce the published release once available: git checkout k-ui-1.0
 ```
 
 Install the packages listed in `.github/workflows/full-release.yml`, including

@@ -1,54 +1,40 @@
-# K-UI 1.0 release preparation
+# K-UI 1.0 release checklist
 
-`codex/k-ui` is the candidate; merge to `master` after console approval. `VERSION` is **1.0**; the intended release
-tag is **k-ui-1.0** and the complete archive is `K-UI-v1.0.zip`.
-The older tag `v1.0.0` is a historical development milestone preceding 0.9 and
-0.9.1. It is not the upcoming 1.0 release and must not be moved or reused.
+Release version **1.0**, tag **k-ui-1.0**, archive **K-UI-v1.0.zip**.
+Historical `1.0` and `v1.0.0` tags must not be moved or reused.
 
-## Source preparation
+## Completed evidence
 
-- [x] Include the complete 0.9.1 source, FatFs fixes and all integrated apps.
-- [x] Include GD Ripper 2.2.4 recovery reporting while retaining Games destinations.
-- [x] Include TPMJB build attribution and the current screenshots/Ko-fi links.
-- [x] Replace the inherited CLA process with the NeXT contribution policy.
-- [x] Retain upstream and third-party licenses and required notices.
-- [x] Provide current install/build guides and an explicit compatibility record.
+- [x] Integrated app/core/loader changes and fixed bootloader 3.3.
+- [x] Complete build of tested baseline `62a5fbce9e0af69a48f726cd62f77147491d0c44`:
+  [successful run](https://github.com/TPMJB/DreamShell_NeXT/actions/runs/35180819886).
+  Includes host checks, storage interoperability, SH-4 compilation/linking,
+  runtime imports, full package validation and both CDI checks.
+- [x] Maintainer confirms the fixed disc reaches the recovery menu and boots
+  after SD insertion. The working disc can be reused for SD updates.
+- [x] Maintainer approves full release after reporting the latest app retest
+  working apart from an intermittent, unreproduced disc-dumping crash.
+- [x] Record that crash and the limits of the ten successful resume/CRC checks.
+- [x] Update release notes, installation/build instructions, K-UI presentation,
+  visible shell/save labels and announcement drafts.
+- [x] Retain upstream and third-party licenses, required notices, and compatible
+  internal identifiers, settings and saved-rip formats.
 
-## Release gates
+Detailed firmware-write tests, every game/device combination and arcade
+peripherals were not individually reported. Do not infer blanket coverage from
+the maintainer's general app retest. See [compatibility](compatibility.md).
 
-- [ ] Test K-UI 3.3 boot artwork/recovery, all app labels/focus states, and the
-  five-track selection on real hardware. Older 3.2 feedback does not validate
-  the new artwork or playlist.
-- [ ] Rename the GitHub repository to `K-UI` and update canonical links after
-  the rename. Existing repo links remain live while this branch is tested.
+## Publication
 
+- [ ] Merge the release preparation into `master` after its checks pass.
+- [ ] Run **Full K-UI release** from **master** with **Publish a GitHub release**
+  selected. Merging alone does not trigger a full build or create a release.
+- [ ] Verify that `k-ui-1.0` is public, with `K-UI-v1.0.zip` and `SHA256SUMS`,
+  and that its notes identify the final source commit and successful build run.
+- [ ] Publish the [Reddit/forum drafts](launch/1.0/README.md) after the download
+  exists. Keep the known issue and credits; use real console media where available.
 
-- [x] Run the full host suite on the K-UI candidate: all 168 tests passed
-  on 2026-09-16, including Linux FAT32/exFAT, boot artwork, playlist lifecycle,
-  font upload, geometry and recovery checks. CI uses the sanitizer defaults; local LeakSanitizer detection is
-  disabled for the host environment.
-- [ ] Run **Full K-UI release** from `codex/k-ui` with publication disabled; retain
-  the successful run URL and exact source commit.
-- [ ] Confirm complete SH-4 build, runtime imports, package contents, attribution
-  records, and both CDI checks pass in that run.
-- [x] Record maintainer feedback for bootloader 3.2: "New bootloader works great!"
-  (2026-09-16). Detailed cases below still need individual results.
-- [ ] Complete detailed bootloader checks with no SD: check readable K-UI recovery text, insert SD,
-  press X, then A to boot; also check Start-held recovery and a failed core load.
-- [ ] On the candidate, check Settings save/reboot, GD Play disc changes/exit,
-  ISO Loader navigation and launching a known-working game from Games.
-- [ ] Check rip destination discovery, recovery counts across reopen, a file copy
-  and a VMU backup/restore with nonessential data. Reuse existing known-good dumps.
-- [ ] Test launcher Off/On and 75%/100% controls; compare a known-good rip with
-  music on/off for catalog CRC, throughput and sound. The 3.2 CD can be reused.
-- [ ] Record hardware results or remaining limitations in `compatibility.md`.
-- [ ] Review `RELEASE-NOTES.md`; its claims must match the completed checks.
-- [ ] When ready to publish, run the same workflow from the reviewed `master`
-  commit with publication enabled. It refuses an existing `k-ui-1.0` tag or a source
-  branch that changes during the build.
-- [ ] After publication, update the README's stable download/source links to `k-ui-1.0`.
-
-The default workflow action produces an artifact without a GitHub release or tag.
-Pushing a source or documentation change does not run the full Dreamcast build.
-Firmware writes and every possible hardware combination are not requirements
-for this candidate test; the documented limits must remain visible.
+The repository URL stays `TPMJB/DreamShell_NeXT` for continuity. A repository
+rename is not a release gate. Publication refuses an existing release tag and a
+source branch that changes during the build. The workflow's default remains
+an unpublished test artifact.

@@ -1,8 +1,9 @@
 # Installing K-UI
 
-The current published download is [NeXT 0.9.1](https://github.com/TPMJB/DreamShell_NeXT/releases/tag/0.9.1).
-The `codex/k-ui` branch prepares **1.0**. A build artifact is a test build until a
-versioned GitHub release is published. Use the files and notes from the same build.
+Get the complete package from [GitHub Releases](https://github.com/TPMJB/DreamShell_NeXT/releases).
+For **K-UI 1.0**, choose tag **k-ui-1.0** and download **K-UI-v1.0.zip** when
+publication completes. A build artifact is not a published release. Use the
+files and notes from the same build; GitHub's source ZIP is not an installation.
 
 ## Files in a complete download
 
@@ -10,7 +11,7 @@ versioned GitHub release is published. Use the files and notes from the same bui
 | --- | --- |
 | `DS/` | Complete installation for your SD or IDE/CF device. |
 | `K-UI_bootloader_v3.3.cdi` | Boot CD that loads `DS` from storage. |
-| `K-UI-v1.0.cdi` | Full CD distribution for this prepared version. |
+| `K-UI-v1.0.cdi` | Full CD distribution for this version. |
 | `boot.cfg.example` | Optional boot menu/device settings; copy to `DS/boot.cfg` only when wanted. |
 | `host-tools/` | Python verification and recovery tools for your computer. |
 | `build-info.json`, `SHA256SUMS` | Source/version information and file checksums. |
@@ -20,7 +21,7 @@ versioned GitHub release is published. Use the files and notes from the same bui
 Use a Dreamcast serial SD adapter or compatible G1-ATA/IDE hardware. FAT16,
 FAT32 and exFAT are supported on 512-byte-sector devices with an MBR primary
 partition or a whole-device volume. GPT and devices at or above 2 TiB are not
-supported. GDEMU's card is not ordinary writable SD storage for DreamShell.
+supported. GDEMU's card is not ordinary writable SD storage for K-UI.
 See [the exFAT guide](../utils/README.exfat.md) for details.
 
 1. Download a complete package and verify its outer ZIP against the release's
@@ -28,7 +29,7 @@ See [the exFAT guide](../utils/README.exfat.md) for details.
 2. Copy `DS` to the root of your prepared device, so the core is at
    `DS/DS_CORE.BIN`. Copy the whole folder so apps, modules and firmware match.
 3. Safely eject the device and connect it with the Dreamcast powered off.
-4. Boot using a compatible NeXT boot disc. For a new installation, burn the
+4. Boot using a compatible boot disc. For a new installation, burn the
    included bootloader CDI **as a disc image**, not as a file on a data CD.
 
 No BIOS flashing is required. The normal console core is `DS_CORE.BIN`;
@@ -43,7 +44,8 @@ the DEBUG and EMU variants are optional diagnostic files.
    `DS/apps/launch_app/music/menu.wav` replaces custom music at that path.
 3. Merge the new package's entire `DS` folder onto the device, replacing matching
    program files. Restore your personal files from the backup as appropriate.
-   Do not restore old program modules over the new ones.
+   Do not restore old program modules over the new ones. Remove `DS/apps/main`
+   if it remains from an older install; it is the retired Classic launcher.
 4. Safely eject, reboot, and check the app versions and `DS/NEXT_VERSION`.
 
 Existing dumps need no conversion. Keep each dump's descriptor, tracks and all
@@ -52,7 +54,8 @@ to make an incomplete dump appear complete.
 
 ## Do I need another CD?
 
-A working NeXT **3.0 or 3.1** boot disc can load the updated `DS` folder.
+An already-working boot disc, including the fixed **K-UI 3.3** disc, can load
+the updated `DS` folder. Earlier working NeXT 3.0/3.1/3.2 discs can also be reused.
 Burning the included 3.3 disc is optional for those installations; it includes
 the current boot reader fixes, recovery menu and TPMJB startup badge.
 The 3.2 disc fixes garbled recovery text and the old background when no core is
@@ -62,7 +65,7 @@ change the code on an existing CD-R.
 An old bootloader that cannot read exFAT needs updating before it can boot an
 exFAT device. Updating `DS` cannot change that disc's filesystem reader or logo.
 
-If you run DreamShell entirely from CD, burn the full distribution CDI to
+If you run K-UI entirely from CD, burn the full distribution CDI to
 update the files on the disc. Files that must be saved still need writable storage.
 
 ## Rip a disc and find it in Games

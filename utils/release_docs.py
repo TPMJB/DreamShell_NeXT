@@ -30,7 +30,7 @@ SOURCE_OUTPUTS.update({'LICENSE': 'DS/doc/LICENSE', 'NOTICE': 'DS/doc/NOTICE'})
 LINK = re.compile(r'(?P<prefix>!?\[[^\]\n]*\]\()(?P<url>[^\s)]+)(?P<suffix>\))')
 
 
-def render_guide(root, output, commit):
+def render_guide(root, output, commit, public=False):
     source = GUIDES[output]
     text = (root / source).read_text()
 
@@ -42,7 +42,9 @@ def render_guide(root, output, commit):
         target = posixpath.normpath(posixpath.join(posixpath.dirname(source), unquote(parts.path)))
         if target.startswith('../') or target.startswith('/') or not (root / target).exists():
             raise ValueError(f'Broken source documentation link in {source}: {url}')
-        if target in SOURCE_OUTPUTS:
+        if match['prefix'].startswith('!'):
+            rendered = f'https://raw.githubusercontent.com/TPMJB/DreamShell_NeXT/{commit}/{quote(target, safe="/")}'
+        elif target in SOURCE_OUTPUTS and not public:
             rendered = posixpath.relpath(SOURCE_OUTPUTS[target], posixpath.dirname(output) or '.')
         else:
             kind = 'tree' if (root / target).is_dir() else 'blob'

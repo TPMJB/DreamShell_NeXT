@@ -23,7 +23,7 @@ python3 utils/build_provenance.py
 cat romdisk/next-build.json
 ```
 
-The official NeXT release packager explicitly rejects missing contributor
+The official K-UI release packager explicitly rejects missing contributor
 notices, changed or missing packaged licensing documents, stale build identities,
 and cores whose embedded record differs from the packaged record. Existing
 checks still validate the boot badge and core logo against the source assets.
@@ -40,5 +40,5 @@ not a signature, access restriction, or proof that a binary has not been modifie
 someone with the source can change or remove it. Published release hashes and
 commit history provide additional comparison evidence.
 
-These additions first enter the complete NeXT package with 1.0. Published
+These additions first enter the complete K-UI package with 1.0. Published
 0.9.1 binaries, tags, and release assets remain unchanged.

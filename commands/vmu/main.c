@@ -252,7 +252,7 @@ int main(int argc, char *argv[]) {
 		if(vmu) {
 
 			ds_printf("DS_PROCESS: Convert %s to VMU file...\n", file);
-			strcpy(pkg.desc_short, "DreamShell File");
+			strcpy(pkg.desc_short, "K-UI File");
 			memset(info, 0, sizeof(info));
 
 			if(preinfo == NULL) {

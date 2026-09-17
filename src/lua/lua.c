@@ -179,7 +179,7 @@ int LuaDo(int type, const char *str_or_file, lua_State *lu) {
 		if(type == LUA_DO_FILE) {
 			res = dofile(lu, str_or_file);
 		} else if(type == LUA_DO_STRING) {
-			res = dostring(lu, str_or_file, "=(DreamShell)");
+			res = dostring(lu, str_or_file, "=(K-UI)");
 		} else if(type == LUA_DO_LIBRARY) {
 			res = dolibrary(lu, str_or_file);
 		} else  {

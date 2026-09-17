@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 
 	OpenLog();
 	printf(NULL);
-	printf("DreamShell NeXT | TPMJB\n");
+	printf("K-UI | TPMJB\n");
 	printf(DEV_NAME" game loader v"VERSION"\n");
 
 	malloc_init(1);
