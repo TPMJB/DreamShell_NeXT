@@ -129,7 +129,7 @@ def documents(manifest, output):
                'The boot recovery preview uses a substitute host font. Promotional frames and captions sit outside the app UI. '
                'K-UI is by TPMJB, built on SWAT\'s DreamShell and the credited upstream projects.')
     guide = ['# K-UI 1.0 — tool-by-tool showcase', '', preface, '',
-             'This repeats the individual-app format of the [NeXT 0.9 gallery](https://github.com/TPMJB/DreamShell_NeXT/blob/74f82fc98918249f3a08aec56e43ee90d8e340bb/docs/screenshots/README.md), '
+             'This repeats the individual-app format of the [NeXT 0.9 gallery](https://github.com/TPMJB/DreamShell_NeXT/blob/8bcc59cb3567f9b16a5d59a98a904cb20212c802/docs/screenshots/README.md), '
              'with the K-UI identity and current feature explanations.', '',
              '![K-UI overview](00-k-ui-overview.jpg)', '',
              '## Suggested Reddit gallery', '',
