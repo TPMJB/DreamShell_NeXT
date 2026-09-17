@@ -2,6 +2,7 @@
  * the input thread remains available for modal confirmation and keyboard input. */
 #include "ui_logic.h"
 #include <dc/maple/keyboard.h>
+#include "../../pointer_input.h"
 
 enum { UI_UP=1, UI_DOWN, UI_LEFT, UI_RIGHT, UI_ACTIVATE, UI_BACK, UI_COPY,
        UI_TOOLS, UI_WIDGET, UI_ENTRY, UI_PREVIEW, UI_DELETE };
@@ -14,7 +15,7 @@ static struct {
     GUI_Widget *pending_widget, *focus;
     dirent_fm_t pending_entry, selected_entry;
     bool selected, preview_only, allow_browse, exit_pending;
-    int analog[2], repeat_dir;
+    int repeat_dir;
     uint64_t repeat_at, poll_at;
 } ui;
 
@@ -67,11 +68,11 @@ static int ui_nodes(ui_node_t *out) {
 static void ui_highlight(void) {
     ui_node_t nodes[20]; int n=ui_nodes(nodes), found=0;
     for(int i=0;i<n;++i) {
-        GUI_WidgetClearFlags(nodes[i].w,WIDGET_INSIDE);
+        if(!utility_pointer) GUI_WidgetClearFlags(nodes[i].w,WIDGET_INSIDE);
         if(nodes[i].w==ui.focus) found=1;
     }
     if(!found) ui.focus=n?nodes[0].w:NULL;
-    if(ui.focus) GUI_WidgetSetFlags(ui.focus,WIDGET_INSIDE);
+    if(ui.focus && !utility_pointer) GUI_WidgetSetFlags(ui.focus,WIDGET_INSIDE);
     GUI_LabelSetTextColor(ui_widget("left-title"),ui.focus==self.filebrowser?83:231,ui.focus==self.filebrowser?225:238,ui.focus==self.filebrowser?227:244);
     GUI_LabelSetTextColor(ui_widget("right-title"),ui.focus==self.filebrowser2?83:231,ui.focus==self.filebrowser2?225:238,ui.focus==self.filebrowser2?227:244);
 }
@@ -364,7 +365,7 @@ static void *ui_service(void *arg) {
         }
         uint64_t now=timer_ms_gettime64();
         if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
-            ui.repeat_dir=0; ui.analog[0]=ui.analog[1]=0;
+            ui.repeat_dir=0;
         }
         if(!ui.busy && !ConsoleIsVisible() && !GUI_ScreenGetFocusWidget(GUI_GetScreen()) && ui.repeat_dir && now>=ui.repeat_at) {
             ui_queue(ui.repeat_dir,NULL,NULL); ui.repeat_at=now+150;
@@ -381,11 +382,15 @@ static void ui_input(void *event,void *param,int action) {
     if(action!=EVENT_ACTION_UPDATE || !e || !(self.m_App->state&APP_STATE_OPENED)) return;
     if(e->type==SDL_USEREVENT && e->user.code==UI_EXIT_EVENT) { e->type=SDL_NOEVENT; VMU_Manager_Exit(NULL); return; }
     if(ConsoleIsVisible() || (e->type==SDL_KEYDOWN && (e->key.keysym.sym==SDLK_F1 || e->key.keysym.sym==SDLK_PRINT || (e->key.keysym.mod&(KMOD_CTRL|KMOD_ALT))))) return;
+    utility_pointer_event(e);
+    if(e->type==SDL_NOEVENT) return;
+    if(utility_pointer) ui.repeat_dir=0;
     if(GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         ui.repeat_dir=0; GUI_ScreenEvent(GUI_GetScreen(),e,0,0); e->type=SDL_NOEVENT; return;
     }
     int job=0,button=-1;
-    if(e->type==SDL_JOYBUTTONDOWN) button=e->jbutton.button;
+    if(e->type==SDL_JOYBUTTONDOWN &&
+       (e->jbutton.button!=SDL_DC_A || !utility_pointer)) button=e->jbutton.button;
     if(e->type==SDL_KEYDOWN) {
         switch(e->key.keysym.sym) {
             case SDLK_UP:job=UI_UP;break; case SDLK_DOWN:job=UI_DOWN;break;
@@ -410,11 +415,6 @@ static void ui_input(void *event,void *param,int action) {
     if(e->type==SDL_JOYHATMOTION && !e->jhat.hat) {
         job=e->jhat.value&SDL_HAT_UP?UI_UP:e->jhat.value&SDL_HAT_DOWN?UI_DOWN:e->jhat.value&SDL_HAT_LEFT?UI_LEFT:e->jhat.value&SDL_HAT_RIGHT?UI_RIGHT:0;
         ui.repeat_dir=job; ui.repeat_at=timer_ms_gettime64()+400;
-    } else if(e->type==SDL_JOYAXISMOTION && e->jaxis.axis<=1) {
-        int dir=e->jaxis.value < -48?-1:e->jaxis.value>48?1:0, axis=e->jaxis.axis;
-        if(dir && dir!=ui.analog[axis]) job=axis?(dir<0?UI_UP:UI_DOWN):(dir<0?UI_LEFT:UI_RIGHT);
-        if(!dir) ui.repeat_dir=0; else if(job) { ui.repeat_dir=job; ui.repeat_at=timer_ms_gettime64()+400; }
-        ui.analog[axis]=dir;
     }
     if(button==SDL_DC_A) job=UI_ACTIVATE;
     else if(button==SDL_DC_B) job=UI_BACK;
@@ -437,7 +437,7 @@ static void ui_init(void) {
 void VMU_Manager_Open(App_t *app) {
     (void)app;
     if(!ui.input || !ui.worker) { ui_status("Unable to start the VMU manager."); return; }
-    GUI_DisableInput(); SDL_DC_EmulateMouse(SDL_FALSE);
+    GUI_DisableInput(); utility_pointer_open();
     GUI_ScreenSetJoySelectState(GUI_GetScreen(),0); SetEventActive(ui.input,1);
     ui.repeat_dir=0; ui.poll_at=0;
     ui_refresh();

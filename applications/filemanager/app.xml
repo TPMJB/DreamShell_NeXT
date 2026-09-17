@@ -3,6 +3,7 @@
   <resources>
     <module src="../../modules/tolua.klf" />
     <module src="../../modules/luaDS.klf" />
+    <module src="../../modules/luaSDL.klf" />
     <module src="../../modules/luaGUI.klf" />
     <script type="text/lua" src="lua/main.lua" />
     <module src="modules/app_filemanager.klf" />

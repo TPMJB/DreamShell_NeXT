@@ -1057,7 +1057,9 @@ end
 
 function FileManager:showError(str)
 	print(str .. "\n");
-	self:ShowDialog("Error", GUI.DIALOG_MODE_ALERT, nil, "[color=red]" .. str .. "[/color]");
+	if self.modal.widget then
+		self:ShowDialog("Error", GUI.DIALOG_MODE_ALERT, nil, "[color=red]" .. str .. "[/color]");
+	end
 	return false;
 end
 
@@ -1164,6 +1166,7 @@ function FileManager:Initialize()
 			self:tooltip(nil);
 		end
 	end
+	return self.app ~= nil;
 end
 
 

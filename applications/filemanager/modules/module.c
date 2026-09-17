@@ -3,7 +3,9 @@
 #include "../../utility_ui.h"
 DEFAULT_MODULE_EXPORTS(app_filemanager);
 static struct { App_t *app; Event_t *input; GUI_Widget *panes[2],*dialog,*actions[13]; int toolbar,focus; } self;
-static void run(const char *code) { LuaDo(LUA_DO_STRING,code,self.app->lua); }
+static int run(const char *code) {
+    return self.app && self.app->lua ? LuaDo(LUA_DO_STRING,code,self.app->lua) : LUA_ERRRUN;
+}
 static int pane(void) {
     lua_State *L=self.app->lua;
     int top=lua_gettop(L),value=0;
@@ -74,18 +76,33 @@ static void input(void *event,void *param,int action) {
 }
 void FileManagerApp_Init(App_t *app) {
     memset(&self,0,sizeof(self)); self.app=app;
-    char code[100]; snprintf(code,sizeof(code),"THIS_APP_ID=%lu; FileManager:Initialize()",(unsigned long)app->id); run(code);
-    lua_register(app->lua,"FileManagerPump",pump);
+    if(!app || !app->lua) goto failed;
     self.panes[0]=APP_GET_WIDGET("filemgr-top"); self.panes[1]=APP_GET_WIDGET("filemgr-bottom");
     self.dialog=APP_GET_WIDGET("modal-dialog");
+    if(!self.panes[0] || !self.panes[1] || !self.dialog) goto failed;
     const char *names[]={"copy-btn","rename-btn","mkdir-btn","delete-btn","archive-btn","mount-btn","up-top","device-top","refresh-top","up-bottom","device-bottom","refresh-bottom","exit-btn"};
-    for(int i=0;i<13;i++) self.actions[i]=APP_GET_WIDGET(names[i]);
+    for(int i=0;i<13;i++) {
+        self.actions[i]=APP_GET_WIDGET(names[i]);
+        if(!self.actions[i]) goto failed;
+    }
+    char code[160];
+    snprintf(code,sizeof(code),"THIS_APP_ID=%lu; FileManager.app=nil; assert(FileManager:Initialize(), 'File Manager resources unavailable')",(unsigned long)app->id);
+    if(run(code)) goto failed;
+    lua_register(app->lua,"FileManagerPump",pump);
     self.input=AddEvent("NextFileManagerInput",EVENT_TYPE_INPUT,EVENT_PRIO_DEFAULT,input,NULL);
-    if(self.input) SetEventActive(self.input,0);
+    if(!self.input) goto failed;
+    SetEventActive(self.input,0);
+    return;
+failed:
+    if(app) app->state &= ~APP_STATE_READY;
+    ds_printf("DS_ERROR: File Manager initialization failed; application was not opened.\n");
 }
-void FileManagerApp_Open(App_t *app) { (void)app; utility_open(self.input); toolbar(0); run("FileManager:tooltip(nil)"); }
+void FileManagerApp_Open(App_t *app) { (void)app; if(!self.input) return; utility_open(self.input); toolbar(0); run("FileManager:tooltip(nil)"); }
 void FileManagerApp_Close(App_t *app) { (void)app; utility_close(self.input); }
 void FileManagerApp_Shutdown(App_t *app) {
     (void)app; utility_remove(&self.input); run("FileManager:Shutdown()");
-    lua_pushnil(self.app->lua); lua_setglobal(self.app->lua,"FileManagerPump"); self.app=NULL;
+    if(self.app && self.app->lua) {
+        lua_pushnil(self.app->lua); lua_setglobal(self.app->lua,"FileManagerPump");
+    }
+    self.app=NULL;
 }

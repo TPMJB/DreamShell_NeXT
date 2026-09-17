@@ -24,6 +24,7 @@
 #include "destination.h"
 #include "music.h"
 #include "memory_stats.h"
+#include "../../pointer_input.h"
 
 DEFAULT_MODULE_EXPORTS(app_gd_ripper);
 
@@ -150,7 +151,6 @@ static struct self {
     bool crc_failed;
     char failure_detail[208];
     const char *failure_stage;
-    int analog_x, analog_y;
     memory_meter_t memory;
     bool memory_buffer_logged, verification_music_suspended;
     uint32_t memory_verify_track;
@@ -2486,7 +2486,7 @@ int create_gdi_file(char *dst_folder, char *dst_file, char *text, int disc_type)
 void gd_ripper_Open(void) {
     if (!self.input_event) return;
     GUI_DisableInput();
-    SDL_DC_EmulateMouse(SDL_FALSE);
+    utility_pointer_open();
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SetEventActive(self.input_event, 1);
     select_page(0);
@@ -2776,6 +2776,8 @@ static void input_event(void *event, void *param, int action) {
     if (ConsoleIsVisible() || (e->type == SDL_KEYDOWN &&
         (e->key.keysym.sym == SDLK_F1 || e->key.keysym.sym == SDLK_PRINT ||
          (e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT))))) return;
+    utility_pointer_event(e);
+    if(e->type == SDL_NOEVENT) return;
     /* Let text entry / DreamShell's keyboard process actual typing. */
     if (GUI_ScreenGetFocusWidget(GUI_GetScreen())) {
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
@@ -2785,13 +2787,9 @@ static void input_event(void *event, void *param, int action) {
     if (e->type == SDL_JOYHATMOTION && e->jhat.hat == 0) {
         if (e->jhat.value & (SDL_HAT_UP | SDL_HAT_LEFT)) focus_step(-1);
         else if (e->jhat.value & (SDL_HAT_DOWN | SDL_HAT_RIGHT)) focus_step(1);
-    } else if (e->type == SDL_JOYAXISMOTION) {
-        int dir = e->jaxis.value < -48 ? -1 : e->jaxis.value > 48 ? 1 : 0;
-        int *old = e->jaxis.axis == 0 ? &self.analog_x : &self.analog_y;
-        if (e->jaxis.axis <= 1) { if (dir && dir != *old) focus_step(dir); *old = dir; }
     } else if (e->type == SDL_JOYBUTTONDOWN) {
         if (e->jbutton.button == SDL_DC_Y) gd_ripper_Music(NULL);
-        else if (e->jbutton.button == SDL_DC_A) activate_focus();
+        else if (e->jbutton.button == SDL_DC_A && !utility_pointer) activate_focus();
         else if (e->jbutton.button == SDL_DC_B) {
             if (self.busy) gd_ripper_CancelRip(NULL);
             else if (self.page == 1 && folder_root(self.folders.path) && strlen(self.folders.path) > (size_t)folder_root(self.folders.path))
@@ -2808,7 +2806,7 @@ static void input_event(void *event, void *param, int action) {
             default: GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0); break;
         }
     } else if (e->type == SDL_MOUSEMOTION || e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP || e->type >= SDL_USEREVENT) {
-        /* Real mouse remains optional; the controller never moves a pointer. */
+        /* Stick and real mouse clicks share the same GUI path. */
         GUI_ScreenEvent(GUI_GetScreen(), e, 0, 0);
     }
     e->type = SDL_NOEVENT; /* The app owns this input; do not replay it globally. */

@@ -18,7 +18,7 @@ static const char *map_path(const char *p) {
 static GUI_Widget widgets[128];
 static char widget_names[128][64];
 static GUI_Widget *focused;
-static int screen_events;
+static int screen_events, pointer_enabled, pointer_clicks;
 static int nw, drive_fd = -1, read_calls, injected, fault, clicks;
 static uint32_t mode = 2352;
 static int auto_test, music_storage_locked, music_cycles, music_opened;
@@ -59,7 +59,7 @@ SDL_Rect GUI_FontGetTextSize(void *f, const char *s) { (void)f; return (SDL_Rect
 GUI_Widget *GUI_ButtonGetCaption(GUI_Widget *w) { return w; }
 GUI_Screen *GUI_GetScreen(void) { return host_widget("screen"); }
 GUI_Widget *GUI_ScreenGetFocusWidget(GUI_Screen *s) { (void)s; return focused; }
-void GUI_ScreenEvent(GUI_Screen *s,const SDL_Event *e,int x,int y) {(void)s;(void)e;(void)x;(void)y;screen_events++;}
+void GUI_ScreenEvent(GUI_Screen *s,const SDL_Event *e,int x,int y) {(void)s;(void)x;(void)y;screen_events++;if(e->type==SDL_MOUSEBUTTONUP) pointer_clicks++;}
 void GUI_ScreenSetJoySelectState(GUI_Screen *s,int v) {(void)s;(void)v;}
 void GUI_WidgetClicked(GUI_Widget *w,int x,int y) {(void)w;(void)x;(void)y;clicks++;}
 void GUI_LabelSetText(GUI_Widget *w,const char *t) {if(w) snprintf(w->text,sizeof(w->text),"%s",t);}
@@ -75,8 +75,8 @@ const char *GUI_TextEntryGetText(GUI_Widget *w) {return w?w->text:"";}
 void GUI_ProgressBarSetPosition(GUI_Widget *w,double v) {(void)w;(void)v;}
 void GUI_CardStackShowIndex(GUI_Widget *w,int i) {(void)w;(void)i;}
 void GUI_EnableInput(void) {}
-void GUI_DisableInput(void) {}
-void SDL_DC_EmulateMouse(SDL_bool v) {(void)v;}
+void GUI_DisableInput(void) {pointer_enabled=0;}
+void SDL_DC_EmulateMouse(SDL_bool v) {pointer_enabled=v;}
 int OpenMainApp(void) {return 0;}
 int ConsoleIsVisible(void) {return 0;}
 Event_t *AddEvent(const char *n,int t,int p,Event_func *f,void *a) {(void)n;(void)t;(void)p;(void)f;(void)a;return NULL;}
@@ -252,6 +252,29 @@ int main(int argc,char **argv) {
         focused = NULL; e.type = SDL_MOUSEBUTTONUP;
         input_event(NULL,&e,EVENT_ACTION_UPDATE);
         assert(screen_events == 2 && e.type == SDL_NOEVENT);
+        self.input_event=(Event_t *)1; gd_ripper_Open(); assert(pointer_enabled);
+        e=(SDL_Event){.type=SDL_JOYAXISMOTION}; e.jaxis.axis=0; e.jaxis.value=100;
+        int old_focus=self.focus, old_clicks=clicks, old_pointer=pointer_clicks;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE); assert(self.focus==old_focus);
+        e=(SDL_Event){.type=SDL_JOYBUTTONDOWN}; e.jbutton.button=SDL_DC_A;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE); assert(clicks==old_clicks);
+        e=(SDL_Event){.type=SDL_MOUSEBUTTONDOWN}; e.button.button=SDL_BUTTON_LEFT;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        e=(SDL_Event){.type=SDL_JOYBUTTONUP}; e.jbutton.button=SDL_DC_A;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        e=(SDL_Event){.type=SDL_MOUSEBUTTONUP}; e.button.button=SDL_BUTTON_LEFT;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE); assert(pointer_clicks==old_pointer+1);
+        e=(SDL_Event){.type=SDL_JOYHATMOTION}; e.jhat.value=SDL_HAT_DOWN;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        e=(SDL_Event){.type=SDL_JOYBUTTONDOWN}; e.jbutton.button=SDL_DC_A;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE); assert(clicks==old_clicks+1);
+        old_pointer=pointer_clicks;
+        e=(SDL_Event){.type=SDL_MOUSEBUTTONDOWN}; e.button.button=SDL_BUTTON_LEFT;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        e=(SDL_Event){.type=SDL_JOYBUTTONUP}; e.jbutton.button=SDL_DC_A;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE);
+        e=(SDL_Event){.type=SDL_MOUSEBUTTONUP}; e.button.button=SDL_BUTTON_LEFT;
+        input_event(NULL,&e,EVENT_ACTION_UPDATE); assert(pointer_clicks==old_pointer);
         puts("ok"); return 0;
     }
     if (!strcmp(argv[1], "folders")) {

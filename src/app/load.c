@@ -8,6 +8,15 @@
 
 
 #include "ds.h"
+#include "memory_stats.h"
+
+/* Persist the last startup step for the reported File Manager reboot. */
+static void TraceAppLoad(App_t *app, const char *stage, const char *detail) {
+    char phase[72];
+    if(strcmp(app->name, "File Manager")) return;
+    snprintf(phase, sizeof(phase), "load-%s:%.48s", stage, detail ? detail : "");
+    MemoryStatsAppEvent(phase, app->name);
+}
 
 //#define DEBUG 1
 
@@ -123,6 +132,7 @@ int LoadApp(App_t *app, int build) {
 
 	ds_printf("DS_PROCESS: Loading app %s ...\n", app->name);
 	app->state |= APP_STATE_PROCESS;
+	TraceAppLoad(app, "xml", app->fn);
 
 	if(app->xml == NULL) {
 
@@ -170,6 +180,7 @@ int LoadApp(App_t *app, int build) {
 	ds_printf("DS_PROCESS: Loading app resources...\n");
 #endif
 
+	TraceAppLoad(app, "body", "created");
 	app->resources = listMake();
 	app->elements = listMake();
 
@@ -190,6 +201,7 @@ int LoadApp(App_t *app, int build) {
 		}
 	}
 
+	TraceAppLoad(app, "resources", "complete");
 	app->state |= APP_STATE_LOADED;
 
 	if(build) {
@@ -285,6 +297,7 @@ app_ready:
 		app->state &= ~APP_STATE_PROCESS;
 		app->state |= APP_STATE_READY;
 
+		TraceAppLoad(app, "onload", onload);
 		if(onload != NULL) {
 
 #ifdef APP_LOAD_DEBUG
@@ -292,7 +305,7 @@ app_ready:
 #endif
 
 			if(!strncmp(onload, "export:", 7)) {
-				CallAppExportFunc(app, onload);
+				if(!CallAppExportFunc(app, onload)) app->state &= ~APP_STATE_READY;
 			}
 			else if(!strncmp(onload, "console:", 8)) {
 				dsystem_buff(onload + 8);
@@ -300,7 +313,8 @@ app_ready:
 			else {
 
 				SetupAppLua(app);
-				LuaDo(LUA_DO_STRING, onload, app->lua);
+				if(!app->lua || LuaDo(LUA_DO_STRING, onload, app->lua))
+					app->state &= ~APP_STATE_READY;
 			}
 		}
 	} else {
@@ -309,7 +323,8 @@ app_ready:
 		ds_printf("DS_WARNING: Can't find <body> in app.xml, GUI screen will not be changed.\n");
 	}
 
-	return 1;
+	TraceAppLoad(app, "ready", (app->state & APP_STATE_READY) ? "yes" : "failed");
+	return (app->state & APP_STATE_READY) != 0;
 }
 
 
@@ -1005,6 +1020,8 @@ static void parseAppSurfaceBezier(App_t *app, mxml_node_t *node, GUI_Surface *su
 
 
 static int parseAppResource(App_t *app, mxml_node_t *node) {
+    TraceAppLoad(app, "resource", FindXmlAttr("src", node,
+        FindXmlAttr("name", node, node->value.element.name)));
 
 	if(node->value.element.name[0] == '!')
 		return 1;
@@ -1315,6 +1332,7 @@ static int parseAppTheme(App_t *app, mxml_node_t *node) {
 }
 
 static GUI_Widget *parseAppElement(App_t *app, mxml_node_t *node, SDL_Rect *parent) {
+    TraceAppLoad(app, "widget", FindXmlAttr("name", node, node->value.element.name));
 
 	int x, y, w, h;
 	GUI_Widget *widget;

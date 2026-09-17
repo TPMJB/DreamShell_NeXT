@@ -5,30 +5,11 @@
 enum { UI_NONE, UI_UP, UI_DOWN, UI_LEFT, UI_RIGHT, UI_OK, UI_BACK,
        UI_X, UI_Y, UI_START };
 
-static int utility_pointer, utility_native_a, utility_mouse_event, utility_mouse_button;
+#include "pointer_input.h"
 
 static int utility_key(SDL_Event *e) {
-    /* SDL queues A/B's emulated mouse event immediately after the joystick
-     * event. Suppress that duplicate when a native command handled the button,
-     * including its release after a dialog closes. Real mouse clicks still work. */
-    int duplicate = utility_mouse_event, button = utility_mouse_button;
-    utility_mouse_event = 0;
-    if(duplicate && e->type == duplicate && e->button.button == button) {
-        e->type = SDL_NOEVENT;
-        return UI_NONE;
-    }
-    if(e->type == SDL_MOUSEMOTION && (e->motion.xrel || e->motion.yrel))
-        utility_pointer = 1;
-    if(e->type == SDL_JOYAXISMOTION && e->jaxis.axis < 2 &&
-       (e->jaxis.value < -12 || e->jaxis.value > 12)) utility_pointer = 1;
-    if(e->type == SDL_JOYBUTTONDOWN && e->jbutton.button == SDL_DC_A)
-        utility_native_a = !utility_pointer;
-    if((e->type == SDL_JOYBUTTONDOWN || e->type == SDL_JOYBUTTONUP) &&
-       (e->jbutton.button == SDL_DC_B ||
-        (e->jbutton.button == SDL_DC_A && utility_native_a))) {
-        utility_mouse_event = e->type == SDL_JOYBUTTONDOWN ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
-        utility_mouse_button = e->jbutton.button == SDL_DC_A ? SDL_BUTTON_LEFT : SDL_BUTTON_RIGHT;
-    }
+    utility_pointer_event(e);
+    if(e->type == SDL_NOEVENT) return UI_NONE;
     if(e->type == SDL_JOYHATMOTION && e->jhat.hat == 0) {
         if(e->jhat.value) utility_pointer = 0;
         if(e->jhat.value & SDL_HAT_UP) return UI_UP;
@@ -97,9 +78,8 @@ static inline void utility_dialog(SDL_Event *e, int key) {
 
 static void utility_open(Event_t *event) {
     if(!event) return;
-    utility_pointer = utility_native_a = utility_mouse_event = 0;
     GUI_DisableInput();
-    SDL_DC_EmulateMouse(SDL_TRUE);
+    utility_pointer_open();
     GUI_ScreenSetJoySelectState(GUI_GetScreen(), 0);
     SetEventActive(event, 1);
 }
