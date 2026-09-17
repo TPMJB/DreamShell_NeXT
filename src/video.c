@@ -606,6 +606,18 @@ void SDL_DS_Blit_Cursor() {
 }
 
 
+/* Keep frame uploads out of KOS's large-range whole-cache tag walk. Only
+ * write back cache lines intersecting this framebuffer before starting DMA. */
+static void WritebackFramebuffer(const void *buffer, size_t bytes) {
+	uintptr_t line = (uintptr_t)buffer & ~(uintptr_t)31;
+	uintptr_t end = (uintptr_t)buffer + bytes;
+
+	if (!bytes) return;
+	for (; line < end; line += 32) {
+		dcache_wback_line((void *)line);
+	}
+}
+
 static void *VideoThread(void *ptr) {
 
 	while(video_inited) {
@@ -622,7 +634,7 @@ static void *VideoThread(void *ptr) {
 
 			if(screen_changed) {
 				if(video_dma) {
-					dcache_wback_range((uintptr_t)sdl_dc_buftex, sdl_dc_wtex * sdl_dc_htex * 2);
+					WritebackFramebuffer(sdl_dc_buftex, (size_t)sdl_dc_wtex * sdl_dc_htex * 2);
 					do {
 						int rs = pvr_txr_load_dma(sdl_dc_buftex, sdl_dc_memtex,
 							sdl_dc_wtex * sdl_dc_htex * 2, 1, NULL, 0);
