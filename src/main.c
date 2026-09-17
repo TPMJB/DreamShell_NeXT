@@ -181,6 +181,7 @@ int InitDS() {
 
 	char fn[NAME_MAX], bf[32];
 	int tmpi;
+	int startup_result = 0;
 	uint8_t *tmpb;
 	uint64_t tmpd;
 	Settings_t *settings;
@@ -371,17 +372,17 @@ int InitDS() {
 
 	if(settings->startup[0] == '/') {
 		snprintf(fn, NAME_MAX, "%s%s", getenv("PATH"), settings->startup);
-		LuaDo(LUA_DO_FILE, fn, GetLuaState());
+		startup_result = LuaDo(LUA_DO_FILE, fn, GetLuaState());
 	}
 	else if(settings->startup[0] == '#') {
 		dsystem_buff(settings->startup);
 	}
 	else if(settings->startup[0] != 0) {
-		LuaDo(LUA_DO_STRING, settings->startup, GetLuaState());
+		startup_result = LuaDo(LUA_DO_STRING, settings->startup, GetLuaState());
 	}
 	else {
 		snprintf(fn, NAME_MAX, "%s/lua/startup.lua", getenv("PATH"));
-		LuaDo(LUA_DO_FILE, fn, GetLuaState());
+		startup_result = LuaDo(LUA_DO_FILE, fn, GetLuaState());
 	}
 
 #ifdef DS_DEBUG
@@ -395,6 +396,11 @@ int InitDS() {
 #endif
 
 	HideLogo();
+	/* A failed startup otherwise leaves only the empty GUI and its cursor. */
+	if(startup_result != 0) {
+		ds_printf("DS_ERROR: K-UI startup failed (Lua status %d). Check the messages above.\n", startup_result);
+		ShowConsole();
+	}
 
 #ifdef DS_PROF
 	{
